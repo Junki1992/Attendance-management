@@ -1,6 +1,6 @@
-
 import { db } from "@/lib/firebase/firebase";
 import { collection, doc, getDocs, setDoc, deleteDoc, query, where, Timestamp } from "firebase/firestore";
+import { getAllStaff, StaffItem } from "@/services/userService";
 
 export interface Shift {
     id?: string;
@@ -142,4 +142,22 @@ export const confirmShifts = async (year: number, month: number) => {
 
     await Promise.all(promises);
     return Array.from(affectedUserIds);
+};
+
+/** 対象月に1件も submitted/confirmed のシフトがないスタッフを返す */
+export const getUnsubmittedStaff = async (
+    year: number,
+    month: number
+): Promise<StaffItem[]> => {
+    const [staffList, shifts] = await Promise.all([
+        getAllStaff(),
+        getAllShifts(year, month),
+    ]);
+    const submitted = new Set<string>();
+    shifts.forEach((s) => {
+        if (s.status === "submitted" || s.status === "confirmed") {
+            submitted.add(s.userId);
+        }
+    });
+    return staffList.filter((s) => !submitted.has(s.id));
 };

@@ -21,21 +21,13 @@ export default function StaffDashboard() {
                 </div>
 
                 <div className="card">
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>確定シフト</h3>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>確定シフトを見る</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        次回出勤: 1月24日 09:00 - 18:00
+                        確定済みのシフトと勤務時間・概算給与を確認できます。
                     </p>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <span style={{
-                            padding: '0.25rem 0.5rem',
-                            backgroundColor: 'var(--secondary)',
-                            color: 'white',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: '0.8rem'
-                        }}>
-                            確認済み
-                        </span>
-                    </div>
+                    <Link href="/staff/confirmed-shifts" className="btn btn-outline">
+                        確定シフトを確認
+                    </Link>
                 </div>
 
                 <div className="card">

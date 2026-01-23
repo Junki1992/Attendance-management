@@ -37,13 +37,13 @@ export default function AdminLayout({
                 zIndex: 10
             }}>
                 <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Shift Admin</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>管理画面</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <span>{user.name}</span>
                         <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            <Link href="/admin" style={{ textDecoration: 'none', color: '#e0e7ff' }}>Home</Link>
-                            <Link href="/admin/shifts" style={{ textDecoration: 'none', color: '#e0e7ff' }}>Shift Grid</Link>
-                            <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff' }}>Chat</Link>
+                            <Link href="/admin" style={{ textDecoration: 'none', color: '#e0e7ff' }}>ホーム</Link>
+                            <Link href="/admin/shifts" style={{ textDecoration: 'none', color: '#e0e7ff' }}>シフト表</Link>
+                            <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff' }}>チャット</Link>
                             <button 
                                 onClick={handleLogout}
                                 style={{ 
@@ -56,7 +56,7 @@ export default function AdminLayout({
                                     fontSize: '0.8rem'
                                 }}
                             >
-                                Logout
+                                ログアウト
                             </button>
                         </nav>
                     </div>

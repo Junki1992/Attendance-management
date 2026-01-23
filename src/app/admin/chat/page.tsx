@@ -1,19 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ChatWindow from "@/components/ChatWindow";
-
-// Mock Staff List (Same as in shifts page)
-const STAFF_LIST = [
-    { id: "staff-456", name: "アルバイト 花子" },
-    { id: "1", name: "佐藤 一郎" },
-    { id: "2", name: "鈴木 次郎" },
-];
+import { getAllStaff, StaffItem } from "@/services/userService";
 
 export default function AdminChatPage() {
+    const [staffList, setStaffList] = useState<StaffItem[]>([]);
     const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
-    const selectedStaff = STAFF_LIST.find(s => s.id === selectedStaffId);
+    useEffect(() => {
+        getAllStaff().then(setStaffList);
+    }, []);
+
+    const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
 
     return (
         <div style={{ display: 'flex', gap: '1rem', height: 'calc(100vh - 100px)' }}>
@@ -31,7 +30,7 @@ export default function AdminChatPage() {
                     スタッフ一覧
                 </div>
                 <div style={{ flex: 1, overflowY: 'auto' }}>
-                    {STAFF_LIST.map(staff => (
+                    {staffList.map(staff => (
                         <div 
                             key={staff.id}
                             onClick={() => setSelectedStaffId(staff.id)}

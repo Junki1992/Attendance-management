@@ -1,6 +1,5 @@
-
 import { db } from "@/lib/firebase/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, setDoc, query, where } from "firebase/firestore";
 
 export interface UserProfile {
     uid: string;
@@ -29,4 +28,31 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 export const saveUserProfile = async (user: UserProfile) => {
     const docRef = doc(db, "users", user.uid);
     await setDoc(docRef, user, { merge: true });
+};
+
+export interface StaffItem {
+    id: string;
+    name: string;
+}
+
+/** users の role='staff' 一覧。 Firestore に staff がいない場合のフォールバック用にモックを返す */
+export const getAllStaff = async (): Promise<StaffItem[]> => {
+    const q = query(
+        collection(db, "users"),
+        where("role", "==", "staff")
+    );
+    const snap = await getDocs(q);
+    const list: StaffItem[] = [];
+    snap.forEach((d) => {
+        const data = d.data();
+        list.push({ id: d.id, name: data.name || "（名前なし）" });
+    });
+    if (list.length === 0) {
+        return [
+            { id: "staff-456", name: "アルバイト 花子" },
+            { id: "1", name: "佐藤 一郎" },
+            { id: "2", name: "鈴木 次郎" },
+        ];
+    }
+    return list;
 };

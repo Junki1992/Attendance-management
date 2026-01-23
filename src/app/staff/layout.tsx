@@ -49,7 +49,7 @@ export default function StaffLayout({
                 zIndex: 10
             }}>
                 <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>Staff Portal</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>スタッフ用</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <span>{user.name}</span>
                         <div style={{ position: 'relative' }}>
@@ -87,9 +87,10 @@ export default function StaffLayout({
                             {showNotifications && <NotificationList onClose={() => setShowNotifications(false)} />}
                         </div>
                         <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                            <Link href="/staff" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>Home</Link>
-                            <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>Shifts</Link>
-                            <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>Chat</Link>
+                            <Link href="/staff" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>ホーム</Link>
+                            <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>シフト提出</Link>
+                            <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>確定シフト</Link>
+                            <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>チャット</Link>
                             <button 
                                 onClick={handleLogout}
                                 style={{ 
@@ -102,7 +103,7 @@ export default function StaffLayout({
                                     fontSize: '0.8rem'
                                 }}
                             >
-                                Logout
+                                ログアウト
                             </button>
                         </nav>
                     </div>

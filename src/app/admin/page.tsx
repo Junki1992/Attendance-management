@@ -9,14 +9,12 @@ export default function AdminDashboard() {
 
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
                 <div className="card">
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>シフト管理</h3>
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>シフト表</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        1月のシフト提出状況: <strong>80%</strong> (12/15名)
-                        <br />
-                        <small>※未提出者に催促通知を送れます</small>
+                        提出状況の確認、未提出者への催促、確定と通知、CSVコピーができます。
                     </p>
                     <Link href="/admin/shifts" className="btn btn-primary">
-                        シフト表を確認・編集
+                        シフト表を開く
                     </Link>
                 </div>
 
