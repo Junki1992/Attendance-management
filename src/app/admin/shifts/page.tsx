@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAllShifts, Shift } from "@/services/shiftService";
+import { getAllShifts, confirmShifts } from "@/services/shiftService";
+import { createNotification } from "@/services/notificationService";
 
 // Mock User List (In reality, fetch from 'users' collection)
 const STAFF_LIST = [
-    { id: "staff-456", name: "アルバイト 花子 (You)" }, // Matches AuthContext mock
-    { id: "1", name: "佐藤 一郎" }, // Legacy mocks
+    { id: "staff-456", name: "アルバイト 花子 (You)" },
+    { id: "1", name: "佐藤 一郎" },
     { id: "2", name: "鈴木 次郎" },
 ];
 
@@ -17,17 +18,13 @@ export default function AdminShiftGrid() {
     // Data: UserID -> Day -> Hours (number)
     const [shiftData, setShiftData] = useState<{ [key: string]: number }>({});
     const [loading, setLoading] = useState(true);
+    const [confirming, setConfirming] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Fetch for Year 2026, Month 0 (January) as per current mock context
-                const year = 2026; // or get current year
-                const month = 0;   // or get current month
-
-                // Assuming we want to show current month context. 
-                // The staff view was using "new Date()" which is Jan 2026 according to system time?
-                // Wait, system time is 2026-01-23. So yes, Jan 2026.
+                const year = 2026;
+                const month = 0;
 
                 const shifts = await getAllShifts(year, month);
 
@@ -44,10 +41,8 @@ export default function AdminShiftGrid() {
                     const [endH, endM] = s.endTime.split(':').map(Number);
 
                     let hours = (endH + endM / 60) - (startH + startM / 60);
-                    // Handle break deduction? Assuming 1h break for >6h shift
                     if (hours > 6) hours -= 1;
 
-                    // Round to 1 decimal for display
                     if (hours > 0) map[key] = Math.round(hours * 10) / 10;
                 });
 
@@ -64,10 +59,32 @@ export default function AdminShiftGrid() {
 
     const getShift = (uid: string, day: number) => shiftData[`${uid}-${day}`] || 0;
 
-    // 36 Agreement Logic (Simplified)
+    const handleConfirm = async () => {
+        if (!confirm("今月のシフトを確定し、スタッフへ通知を送りますか？")) return;
+
+        setConfirming(true);
+        try {
+            const affectedUserIds = await confirmShifts(2026, 0); // Hardcoded for demo
+
+            // Send notifications
+            const notifPromises = affectedUserIds.map(uid =>
+                createNotification(uid, 'shift_confirmed', '1月のシフトが確定しました。確認してください。')
+            );
+
+            await Promise.all(notifPromises);
+
+            alert(`${affectedUserIds.length}名のスタッフに通知を送りました！`);
+        } catch (error) {
+            console.error(error);
+            alert("確定処理に失敗しました");
+        } finally {
+            setConfirming(false);
+        }
+    };
+
+    // 36 Agreement Logic
     const isDailyOver = (hours: number) => hours > 8;
     const isWeeklyOver = (uid: string) => {
-        // Just summing all hours for mock demo
         let total = 0;
         DAYS.forEach(d => total += getShift(uid, d));
         return total > 40;
@@ -79,7 +96,13 @@ export default function AdminShiftGrid() {
                 <h2 style={{ fontSize: '1.5rem' }}>2026年 1月 シフト表</h2>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <button className="btn btn-outline">CSVコピー</button>
-                    <button className="btn btn-primary">確定して通知</button>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleConfirm}
+                        disabled={loading || confirming}
+                    >
+                        {confirming ? "処理中..." : "確定して通知"}
+                    </button>
                 </div>
             </div>
 

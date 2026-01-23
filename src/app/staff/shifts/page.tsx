@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
+import { getUserProfile } from "@/services/userService";
 
 // Helper to get days in month
 function getDaysInMonth(year: number, month: number) {
@@ -21,13 +22,21 @@ export default function ShiftCalendar() {
     // Local state for UI: Day -> Display String
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
     const [loading, setLoading] = useState(false);
+    const [hourlyWage, setHourlyWage] = useState(1000);
 
-    // Fetch shifts on mount
+    // Fetch shifts and user profile
     useEffect(() => {
         if (!user) return;
 
-        const fetchShifts = async () => {
+        const init = async () => {
             try {
+                // 1. Fetch Profile
+                const profile = await getUserProfile(user.uid);
+                if (profile && profile.hourlyWage) {
+                    setHourlyWage(profile.hourlyWage);
+                }
+
+                // 2. Fetch Shifts
                 const data = await getUserShifts(user.uid, year, month);
                 const shiftMap: { [key: number]: string } = {};
                 data.forEach(s => {
@@ -40,11 +49,11 @@ export default function ShiftCalendar() {
                 });
                 setShifts(shiftMap);
             } catch (error) {
-                console.error("Failed to fetch shifts", error);
+                console.error("Failed to fetch data", error);
             }
         };
 
-        fetchShifts();
+        init();
     }, [user, year, month]);
 
     const handleShiftClick = (day: number) => {
@@ -112,12 +121,32 @@ export default function ShiftCalendar() {
         }
     };
 
+    // Calculate Estimated Salary
+    const calculateSalary = () => {
+        let totalHours = 0;
+        Object.values(shifts).forEach(label => {
+            if (!label || label === "OFF" || !label.includes("-")) return;
+            const [start, end] = label.split(" - ");
+            const [sH, sM] = start.split(":").map(Number);
+            const [eH, eM] = end.split(":").map(Number);
+            let hours = (eH + eM/60) - (sH + sM/60);
+            if (hours > 6) hours -= 1; // 1h break
+            if (hours > 0) totalHours += hours;
+        });
+        return Math.floor(totalHours * hourlyWage);
+    };
+
     const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
 
     return (
         <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ fontSize: '1.25rem' }}>{year}年 {month + 1}月</h3>
+                <div>
+                   <h3 style={{ fontSize: '1.25rem' }}>{year}年 {month + 1}月</h3>
+                   <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                       概算給与: <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
+                   </div>
+                </div>
                 <button
                     className="btn btn-primary"
                     onClick={handleSave}

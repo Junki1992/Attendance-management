@@ -89,3 +89,24 @@ export const deleteShift = async (userId: string, date: string) => {
         throw error;
     }
 };
+
+export const confirmShifts = async (year: number, month: number) => {
+    // 1. Get all shifts for the month
+    const shifts = await getAllShifts(year, month);
+    const affectedUserIds = new Set<string>();
+
+    // 2. Update each shift in parallel
+    // (Ideally use WriteBatch for atomicity, but simple loops for now)
+    const promises = shifts.map(async (shift) => {
+        if (shift.status === 'confirmed') return; // Skip if already confirmed
+
+        const docId = `${shift.userId}_${shift.date}`;
+        const shiftRef = doc(db, "shifts", docId);
+
+        affectedUserIds.add(shift.userId);
+        return setDoc(shiftRef, { status: 'confirmed' }, { merge: true });
+    });
+
+    await Promise.all(promises);
+    return Array.from(affectedUserIds);
+};
