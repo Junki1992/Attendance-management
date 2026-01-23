@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 
 // Helper to get days in month
 function getDaysInMonth(year: number, month: number) {
@@ -8,6 +10,7 @@ function getDaysInMonth(year: number, month: number) {
 }
 
 export default function ShiftCalendar() {
+    const { user } = useAuth();
     const [currentDate] = useState(new Date());
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth(); // 0-indexed
@@ -15,22 +18,98 @@ export default function ShiftCalendar() {
     const daysInMonth = getDaysInMonth(year, month);
     const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-    // Mock initial shifts state
+    // Local state for UI: Day -> Display String
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
+    const [loading, setLoading] = useState(false);
+
+    // Fetch shifts on mount
+    useEffect(() => {
+        if (!user) return;
+
+        const fetchShifts = async () => {
+            try {
+                const data = await getUserShifts(user.uid, year, month);
+                const shiftMap: { [key: number]: string } = {};
+                data.forEach(s => {
+                    const day = parseInt(s.date.split('-')[2], 10);
+                    if (s.startTime === "00:00" && s.endTime === "00:00") {
+                        shiftMap[day] = "OFF";
+                    } else {
+                        shiftMap[day] = `${s.startTime} - ${s.endTime}`;
+                    }
+                });
+                setShifts(shiftMap);
+            } catch (error) {
+                console.error("Failed to fetch shifts", error);
+            }
+        };
+
+        fetchShifts();
+    }, [user, year, month]);
 
     const handleShiftClick = (day: number) => {
-        // Determine next state: blank -> 09:00-18:00 -> 10:00-19:00 -> blank (simplified)
+        // Determine next state: blank -> 09:00 - 18:00 -> 10:00 - 19:00 -> OFF -> blank
         const current = shifts[day];
         let next = "";
         if (!current) next = "09:00 - 18:00";
         else if (current === "09:00 - 18:00") next = "10:00 - 19:00";
         else if (current === "10:00 - 19:00") next = "OFF";
-        else next = "";
+        else next = ""; // Blank (delete)
 
         setShifts(prev => ({
             ...prev,
             [day]: next
         }));
+    };
+
+    const handleSave = async () => {
+        if (!user) return;
+        setLoading(true);
+        try {
+            // Iterate over all days in the month (or just modified ones if we tracked dirtiness, but saving all is safer for consistency)
+            // Actually, we only have data in `shifts` map. Keys absent mean "no shift" or "unchanged blank".
+            // To be correct, we should iterate over the `shifts` map and save/update.
+            // Note: If a user clears a shift (sets to ""), we might need to delete it or set status to something.
+            // For now, let's just save what is visible.
+
+            const promises = Object.entries(shifts).map(async ([dayStr, label]) => {
+                const day = parseInt(dayStr, 10);
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                let start = "";
+                let end = "";
+
+                if (label === "OFF") {
+                    start = "00:00";
+                    end = "00:00";
+                } else if (label.includes("-")) {
+                    const parts = label.split(" - ");
+                    start = parts[0];
+                    end = parts[1];
+                } else {
+                    // Empty ("") or invalid -> Delete
+                    return deleteShift(user.uid, dateStr);
+                }
+
+                const shiftData: Shift = {
+                    userId: user.uid,
+                    date: dateStr,
+                    startTime: start,
+                    endTime: end,
+                    status: 'submitted', // Auto-submit for now
+                };
+
+                return saveShift(shiftData);
+            });
+
+            await Promise.all(promises);
+            alert("シフトを保存しました！");
+        } catch (error) {
+            console.error("Error saving:", error);
+            alert("保存に失敗しました");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
@@ -39,7 +118,13 @@ export default function ShiftCalendar() {
         <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <h3 style={{ fontSize: '1.25rem' }}>{year}年 {month + 1}月</h3>
-                <button className="btn btn-primary">提出内容を保存</button>
+                <button
+                    className="btn btn-primary"
+                    onClick={handleSave}
+                    disabled={loading}
+                >
+                    {loading ? "保存中..." : "提出内容を保存"}
+                </button>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', backgroundColor: 'var(--border)', border: '1px solid var(--border)' }}>
@@ -50,7 +135,7 @@ export default function ShiftCalendar() {
                     </div>
                 ))}
 
-                {/* Calendar Grid (Simplified: starts from Day 1, ignoring week start offset for MVP) */}
+                {/* Calendar Grid */}
                 {daysArray.map(day => {
                     const date = new Date(year, month, day);
                     const dow = date.getDay();
