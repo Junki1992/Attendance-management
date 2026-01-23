@@ -77,13 +77,14 @@ export default function ShiftCalendar() {
                                 <div style={{
                                     backgroundColor: shifts[day] === 'OFF' ? '#F3F4F6' : '#EEF2FF',
                                     color: shifts[day] === 'OFF' ? '#4B5563' : '#4F46E5',
-                                    padding: '0.25rem',
+                                    padding: '0.1rem',
                                     borderRadius: '4px',
-                                    fontSize: '0.75rem',
+                                    fontSize: '0.7rem',
                                     textAlign: 'center',
-                                    fontWeight: 500
+                                    fontWeight: 500,
+                                    lineHeight: '1.2'
                                 }}>
-                                    {shifts[day]}
+                                    {shifts[day] === 'OFF' ? 'OFF' : '9-18'}
                                 </div>
                             )}
                         </div>

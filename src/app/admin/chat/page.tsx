@@ -16,12 +16,31 @@ const MOCK_MESSAGES = [
 ];
 
 export default function AdminChatPage() {
-    const [selectedUser, setSelectedUser] = useState<number | null>(1); // Default to first user
+    const [selectedUser, setSelectedUser] = useState<number | null>(null); // Default null for mobile-first
 
     return (
-        <div style={{ display: 'flex', height: 'calc(100vh - 100px)', gap: '1rem' }}>
+        <div className="chat-container" style={{ display: 'flex', height: 'calc(100vh - 100px)', gap: '1rem' }}>
+            <style jsx>{`
+        .sidebar { display: flex; width: 300px; }
+        .chat-area { display: flex; flex: 1; }
+        .back-btn { display: none; }
+
+        @media (max-width: 768px) {
+          .chat-container { gap: 0; }
+          .sidebar { 
+            width: 100%; 
+            display: ${selectedUser ? 'none' : 'flex'}; 
+          }
+          .chat-area { 
+            width: 100%; 
+            display: ${selectedUser ? 'flex' : 'none'}; 
+          }
+          .back-btn { display: inline-flex; margin-right: 0.5rem; }
+        }
+      `}</style>
+
             {/* Sidebar: User List */}
-            <div className="card" style={{ width: '300px', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="card sidebar" style={{ padding: 0, overflow: 'hidden', flexDirection: 'column' }}>
                 <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface-hover)' }}>
                     <h3 style={{ fontSize: '1rem' }}>スタッフ一覧</h3>
                 </div>
@@ -56,10 +75,13 @@ export default function AdminChatPage() {
             </div>
 
             {/* Main: Chat Area */}
-            <div className="card" style={{ flex: 1, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="card chat-area" style={{ padding: 0, flexDirection: 'column', overflow: 'hidden' }}>
                 {selectedUser ? (
                     <>
                         <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <button className="btn btn-outline back-btn" onClick={() => setSelectedUser(null)} style={{ padding: '0.25rem 0.5rem' }}>
+                                ←
+                            </button>
                             <span style={{ fontWeight: 600 }}>
                                 {MOCK_USERS.find(u => u.id === selectedUser)?.name}
                             </span>
@@ -72,7 +94,7 @@ export default function AdminChatPage() {
                             {MOCK_MESSAGES.map(msg => {
                                 const isMe = msg.sender === 'admin';
                                 return (
-                                    <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
+                                    <div key={msg.id} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                                         <div style={{
                                             backgroundColor: isMe ? 'var(--primary)' : 'white',
                                             color: isMe ? 'white' : 'var(--text-main)',
