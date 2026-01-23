@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
 
@@ -12,6 +12,7 @@ export default function AdminLayout({
 }) {
     const { user, loading, logout } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
 
     const handleLogout = async () => {
         await logout();
@@ -25,6 +26,8 @@ export default function AdminLayout({
     }, [user, loading, router]);
 
     if (loading || !user) return <div className="p-4 text-center">Loading...</div>;
+
+    const isWide = pathname === "/admin/chat";
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -43,7 +46,9 @@ export default function AdminLayout({
                         <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                             <Link href="/admin" style={{ textDecoration: 'none', color: '#e0e7ff' }}>ホーム</Link>
                             <Link href="/admin/shifts" style={{ textDecoration: 'none', color: '#e0e7ff' }}>シフト表</Link>
+                            <Link href="/admin/shift-change-requests" style={{ textDecoration: 'none', color: '#e0e7ff' }}>変更申請</Link>
                             <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff' }}>チャット</Link>
+                            <Link href="/admin/settings" style={{ textDecoration: 'none', color: '#e0e7ff' }}>設定</Link>
                             <button 
                                 onClick={handleLogout}
                                 style={{ 
@@ -62,7 +67,14 @@ export default function AdminLayout({
                     </div>
                 </div>
             </header>
-            <main className="container" style={{ flex: 1, padding: '2rem 1rem' }}>
+            <main
+                className={isWide ? '' : 'container'}
+                style={{
+                    flex: 1,
+                    padding: '2rem 1rem',
+                    ...(isWide && { maxWidth: '1600px', margin: '0 auto', width: '100%' }),
+                }}
+            >
                 {children}
             </main>
         </div>

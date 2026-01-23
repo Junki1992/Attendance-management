@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import NotificationList from "@/components/NotificationList";
@@ -14,6 +14,7 @@ export default function StaffLayout({
 }) {
     const { user, loading, logout } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
     const [showNotifications, setShowNotifications] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
 
@@ -37,6 +38,8 @@ export default function StaffLayout({
     }, [user]);
 
     if (loading || !user) return <div className="p-4 text-center">Loading...</div>;
+
+    const isWide = pathname === "/staff/shifts" || pathname === "/staff/confirmed-shifts" || pathname === "/staff/chat";
 
     return (
         <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -109,7 +112,14 @@ export default function StaffLayout({
                     </div>
                 </div>
             </header>
-            <main className="container" style={{ flex: 1, padding: '2rem 1rem' }}>
+            <main
+                className={isWide ? '' : 'container'}
+                style={{
+                    flex: 1,
+                    padding: '2rem 1rem',
+                    ...(isWide && { maxWidth: '1600px', margin: '0 auto', width: '100%' }),
+                }}
+            >
                 {children}
             </main>
         </div>

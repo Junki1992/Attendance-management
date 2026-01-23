@@ -1,5 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, doc, getDoc, getDocs, setDoc, query, where } from "firebase/firestore";
+import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
+import { collection, doc, setDoc, query, where } from "firebase/firestore";
 
 export interface UserProfile {
     uid: string;
@@ -15,14 +16,29 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
     if (docSnap.exists()) {
         const data = docSnap.data();
-        // Ensure hourlyWage exists or default it
         return {
-            hourlyWage: 1000,
-            ...data
+            ...data,
+            uid: docRef.id,
+            hourlyWage: data?.hourlyWage ?? 1000,
         } as UserProfile;
     } else {
         return null;
     }
+};
+
+export interface CreateUserParams {
+    uid: string;
+    email: string;
+    name: string;
+    role: "admin" | "staff";
+    hourlyWage?: number;
+}
+
+/** Firestore の users/{uid} を作成。登録直後に呼ぶ。 */
+export const createUser = async (params: CreateUserParams): Promise<void> => {
+    const { uid, email, name, role, hourlyWage = 1000 } = params;
+    const docRef = doc(db, "users", uid);
+    await setDoc(docRef, { email, name, role, hourlyWage });
 };
 
 export const saveUserProfile = async (user: UserProfile) => {

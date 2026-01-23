@@ -1,6 +1,8 @@
 import { db } from "@/lib/firebase/firebase";
-import { collection, doc, getDocs, setDoc, deleteDoc, query, where, Timestamp } from "firebase/firestore";
-import { getAllStaff, StaffItem } from "@/services/userService";
+import { getDocs } from "@/lib/firebase/firestoreHelpers";
+import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot } from "firebase/firestore";
+import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
+import { isPastSubmitDeadline } from "@/services/settingsService";
 
 export interface Shift {
     id?: string;
@@ -10,21 +12,29 @@ export interface Shift {
     endTime: string; // HH:mm
     status: 'draft' | 'submitted' | 'confirmed';
     hourlyWage?: number; // Optional snapshot of wage at time of shift
+    /** 締切後に管理者が編集した場合 true */
+    editedAfterDeadline?: boolean;
 }
 
-export const saveShift = async (shift: Shift) => {
-    // ID strategy: userId_date to ensure one shift per day per user
+export type SaveShiftOptions = { byAdmin?: boolean };
+
+export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promise<string> => {
     const docId = `${shift.userId}_${shift.date}`;
     const shiftRef = doc(db, "shifts", docId);
+
+    let editedAfterDeadline: boolean | undefined;
+    if (options?.byAdmin) {
+        const [y, m] = shift.date.split("-").map(Number);
+        const past = await isPastSubmitDeadline(y, m - 1); // m は 1-12 → 0-indexed
+        editedAfterDeadline = past;
+    }
 
     const data = {
         ...shift,
         updatedAt: Timestamp.now(),
+        ...(editedAfterDeadline !== undefined && { editedAfterDeadline }),
     };
 
-    // If it's a new entry, add createdAt (effectively handling upsert logic partially, 
-    // though strict create vs update separation requires reading first or using merge)
-    // For simplicity, we just set merge: true to update fields or create if missing.
     try {
         await setDoc(shiftRef, data, { merge: true });
         return docId;
@@ -59,12 +69,6 @@ export const getUserShifts = async (userId: string, year: number, month: number)
     });
     return shifts;
 };
-
-import { onSnapshot } from "firebase/firestore";
-
-// ... existing imports
-
-// ... existing saveShift, getUserShifts
 
 export const getAllShifts = async (year: number, month: number) => {
     // ... existing implementation
@@ -142,6 +146,48 @@ export const confirmShifts = async (year: number, month: number) => {
 
     await Promise.all(promises);
     return Array.from(affectedUserIds);
+};
+
+function calcHoursForShift(s: Shift): number {
+    if (s.startTime === "00:00" && s.endTime === "00:00") return 0;
+    const [sH, sM] = s.startTime.split(":").map(Number);
+    const [eH, eM] = s.endTime.split(":").map(Number);
+    let h = eH + eM / 60 - (sH + sM / 60);
+    if (h > 6) h -= 1;
+    return h > 0 ? h : 0;
+}
+
+export interface MonthlyWorkSummaryRow {
+    userId: string;
+    name: string;
+    totalHours: number;
+    hourlyWage: number;
+    salary: number;
+}
+
+/** 確定シフトベースの月別・スタッフ別 勤務時間と給与 */
+export const getMonthlyWorkSummary = async (year: number, month: number): Promise<MonthlyWorkSummaryRow[]> => {
+    const shifts = await getAllShifts(year, month);
+    const confirmed = shifts.filter((s) => s.status === "confirmed");
+    const uids = [...new Set(confirmed.map((s) => s.userId))];
+
+    const rows: MonthlyWorkSummaryRow[] = [];
+    for (const uid of uids) {
+        const profile = await getUserProfile(uid);
+        const wage = profile?.hourlyWage ?? 1000;
+        const totalHours = confirmed
+            .filter((s) => s.userId === uid)
+            .reduce((sum, s) => sum + calcHoursForShift(s), 0);
+        rows.push({
+            userId: uid,
+            name: profile?.name ?? uid,
+            totalHours: Math.round(totalHours * 10) / 10,
+            hourlyWage: wage,
+            salary: Math.floor(totalHours * wage),
+        });
+    }
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    return rows;
 };
 
 /** 対象月に1件も submitted/confirmed のシフトがないスタッフを返す */

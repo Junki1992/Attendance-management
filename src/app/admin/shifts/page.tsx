@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   confirmShifts,
+  saveShift,
   subscribeAllShifts,
   getUnsubmittedStaff,
+  getMonthlyWorkSummary,
   Shift,
 } from "@/services/shiftService";
 import { getAllStaff, StaffItem } from "@/services/userService";
-import { createNotification } from "@/services/notificationService";
+import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
 
 function calcHours(s: Shift): number | "OFF" {
   if (s.startTime === "00:00" && s.endTime === "00:00") return "OFF";
@@ -32,6 +34,10 @@ export default function AdminShiftGrid() {
   const [reminding, setReminding] = useState(false);
   const [csvCopied, setCsvCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmedNotifs, setConfirmedNotifs] = useState<Notification[]>([]);
+  const [workSummary, setWorkSummary] = useState<{ userId: string; name: string; totalHours: number; hourlyWage: number; salary: number }[]>([]);
+  const [editingCell, setEditingCell] = useState<{ userId: string; day: number } | null>(null);
+  const [savingCell, setSavingCell] = useState(false);
 
   const lastDay = new Date(year, month + 1, 0).getDate();
   const DAYS = Array.from({ length: lastDay }, (_, i) => i + 1);
@@ -42,6 +48,14 @@ export default function AdminShiftGrid() {
 
   useEffect(() => {
     getUnsubmittedStaff(year, month).then(setUnsubmitted);
+  }, [year, month]);
+
+  useEffect(() => {
+    getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
+  }, [year, month]);
+
+  useEffect(() => {
+    getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => setWorkSummary([]));
   }, [year, month]);
 
   useEffect(() => {
@@ -96,6 +110,8 @@ export default function AdminShiftGrid() {
           )
         )
       );
+      getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
+      getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
       alert(`${affectedUserIds.length}名のスタッフに通知を送りました！`);
     } catch (e) {
       console.error(e);
@@ -170,8 +186,56 @@ export default function AdminShiftGrid() {
     return t > 40;
   };
 
+  const alert36 = useMemo(() => {
+    const daily: { name: string; day: number; hours: number }[] = [];
+    const weekly: { name: string; total: number }[] = [];
+    staffList.forEach((s) => {
+      let total = 0;
+      DAYS.forEach((d) => {
+        const h = getShift(s.id, d);
+        total += h;
+        if (h > 8) daily.push({ name: s.name, day: d, hours: h });
+      });
+      if (total > 40) weekly.push({ name: s.name, total });
+    });
+    return { daily, weekly };
+  }, [staffList, DAYS, getShift]);
+
   return (
     <div>
+      {/* 36協定アラート（最上部に常設） */}
+      <div
+        className="card"
+        style={{
+          marginBottom: "1rem",
+          borderColor: alert36.daily.length > 0 || alert36.weekly.length > 0 ? "#F59E0B" : "var(--border)",
+          backgroundColor: alert36.daily.length > 0 || alert36.weekly.length > 0 ? "#FFFBEB" : "var(--surface)",
+        }}
+      >
+        <h3 style={{ fontSize: "1rem", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span>36協定アラート</span>
+          {(alert36.daily.length > 0 || alert36.weekly.length > 0) && <span style={{ color: "var(--destructive)" }}>⚠️ 要確認</span>}
+        </h3>
+        {alert36.daily.length === 0 && alert36.weekly.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", margin: 0 }}>1日8時間超・週40時間超の該当者はありません</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.875rem" }}>
+            {alert36.daily.length > 0 && (
+              <div>
+                <strong>1日8時間超過:</strong>{" "}
+                {alert36.daily.map((x) => `${x.name} ${month + 1}/${x.day} (${x.hours}h)`).join("、")}
+              </div>
+            )}
+            {alert36.weekly.length > 0 && (
+              <div>
+                <strong>週40時間超過（月合計）:</strong>{" "}
+                {alert36.weekly.map((x) => `${x.name} ${x.total}h`).join("、")}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 未提出者リスト */}
       {unsubmitted.length > 0 && (
         <div
@@ -352,25 +416,32 @@ export default function AdminShiftGrid() {
                       )}
                     </td>
                     {DAYS.map((d) => {
-                      const hours = getShift(user.id, d);
-                      const isOver = isDailyOver(hours);
+                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                      const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr);
+                      const h = shift ? calcHours(shift) : 0;
+                      const numHours = h === "OFF" ? 0 : (h as number);
+                      const isOver = isDailyOver(numHours);
+                      const hasData = !!shift;
+                      const isEditedLate = !!shift?.editedAfterDeadline;
+                      const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : hasData ? "クリックで編集" : "";
                       return (
                         <td
                           key={d}
+                          onClick={hasData ? () => setEditingCell({ userId: user.id, day: d }) : undefined}
                           style={{
                             border: "1px solid var(--border)",
                             textAlign: "center",
                             backgroundColor: isOver
                               ? "#FEE2E2"
-                              : hours > 0
+                              : numHours > 0
                                 ? "#EEF2FF"
                                 : "transparent",
-                            color: isOver ? "#EF4444" : "inherit",
-                            cursor: "default",
+                            color: isOver || isEditedLate ? "#B91C1C" : "inherit",
+                            cursor: hasData ? "pointer" : "default",
                           }}
-                          title={isOver ? "1日8時間超過" : ""}
+                          title={cellTitle}
                         >
-                          {hours > 0 ? hours : ""}
+                          {h === "OFF" ? "OFF" : numHours > 0 ? numHours : ""}
                         </td>
                       );
                     })}
@@ -394,6 +465,142 @@ export default function AdminShiftGrid() {
           </table>
         )}
       </div>
+
+      {/* 確定通知の既読状況 */}
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h3 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>確定通知の既読状況（直近）</h3>
+        {confirmedNotifs.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>確定通知はまだありません</p>
+        ) : (
+          <table style={{ width: "100%", fontSize: "0.8rem", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>既読</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>通知日時</th>
+              </tr>
+            </thead>
+            <tbody>
+              {confirmedNotifs.map((n) => (
+                <tr key={n.id}>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)" }}>
+                    {staffList.find((s) => s.id === n.userId)?.name || n.userId}
+                  </td>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>
+                    <span style={{ color: n.read ? "var(--secondary)" : "var(--destructive)", fontWeight: 500 }}>
+                      {n.read ? "既読" : "未読"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+                    {n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString("ja-JP") : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* 月別給与集計（確定シフトベース） */}
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h3 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>{year}年{month + 1}月 給与集計</h3>
+        {workSummary.length === 0 ? (
+          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>確定シフトがないため、集計はありません</p>
+        ) : (
+          <table style={{ width: "100%", fontSize: "0.8rem", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>勤務時間</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>時給</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>給与</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workSummary.map((r) => (
+                <tr key={r.userId}>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)" }}>{r.name}</td>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>{r.totalHours}h</td>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>¥{r.hourlyWage.toLocaleString()}</td>
+                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right", fontWeight: 500 }}>¥{r.salary.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* セル編集モーダル（管理者・締切後編集は赤字で表示） */}
+      {editingCell && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => !savingCell && setEditingCell(null)}
+        >
+          <div
+            className="card"
+            style={{ minWidth: "280px", maxWidth: "90%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>
+              {month + 1}月{editingCell.day}日　{staffList.find((s) => s.id === editingCell.userId)?.name ?? editingCell.userId}
+            </h3>
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "1rem" }}>希望の勤務に変更（締切後は赤字で記録）</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {[
+                { label: "09:00-18:00", start: "09:00", end: "18:00" },
+                { label: "10:00-19:00", start: "10:00", end: "19:00" },
+                { label: "OFF", start: "00:00", end: "00:00" },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  className="btn btn-outline"
+                  disabled={savingCell}
+                  onClick={async () => {
+                    setSavingCell(true);
+                    try {
+                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
+                      await saveShift(
+                        {
+                          userId: editingCell.userId,
+                          date: dateStr,
+                          startTime: opt.start,
+                          endTime: opt.end,
+                          status: "confirmed",
+                        },
+                        { byAdmin: true }
+                      );
+                      setEditingCell(null);
+                    } catch (e) {
+                      console.error(e);
+                      alert("更新に失敗しました");
+                    } finally {
+                      setSavingCell(false);
+                    }
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <button
+              className="btn btn-outline"
+              style={{ marginTop: "1rem", width: "100%" }}
+              onClick={() => setEditingCell(null)}
+              disabled={savingCell}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

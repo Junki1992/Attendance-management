@@ -61,6 +61,11 @@ a {
   padding: 0 1rem;
 }
 
+/* カレンダー・チャット用：PCで幅を広く */
+.container-wide {
+  max-width: 1600px;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 import { getUserProfile } from "@/services/userService";
+import { isPastSubmitDeadline } from "@/services/settingsService";
 
 // Helper to get days in month
 function getDaysInMonth(year: number, month: number) {
@@ -23,24 +24,25 @@ export default function ShiftCalendar() {
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
+    const [deadlinePassed, setDeadlinePassed] = useState(false);
 
-    // Fetch shifts and user profile
+    // Fetch shifts, user profile, and 締切 check
     useEffect(() => {
         if (!user) return;
 
         const init = async () => {
             try {
-                // 1. Fetch Profile
-                const profile = await getUserProfile(user.uid);
-                if (profile && profile.hourlyWage) {
-                    setHourlyWage(profile.hourlyWage);
-                }
+                const [profile, data, past] = await Promise.all([
+                    getUserProfile(user.uid),
+                    getUserShifts(user.uid, year, month),
+                    isPastSubmitDeadline(year, month),
+                ]);
+                if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
+                setDeadlinePassed(past);
 
-                // 2. Fetch Shifts
-                const data = await getUserShifts(user.uid, year, month);
                 const shiftMap: { [key: number]: string } = {};
-                data.forEach(s => {
-                    const day = parseInt(s.date.split('-')[2], 10);
+                data.forEach((s) => {
+                    const day = parseInt(s.date.split("-")[2], 10);
                     if (s.startTime === "00:00" && s.endTime === "00:00") {
                         shiftMap[day] = "OFF";
                     } else {
@@ -57,6 +59,7 @@ export default function ShiftCalendar() {
     }, [user, year, month]);
 
     const handleShiftClick = (day: number) => {
+        if (deadlinePassed) return;
         // Determine next state: blank -> 09:00 - 18:00 -> 10:00 - 19:00 -> OFF -> blank
         const current = shifts[day];
         let next = "";
@@ -72,15 +75,9 @@ export default function ShiftCalendar() {
     };
 
     const handleSave = async () => {
-        if (!user) return;
+        if (!user || deadlinePassed) return;
         setLoading(true);
         try {
-            // Iterate over all days in the month (or just modified ones if we tracked dirtiness, but saving all is safer for consistency)
-            // Actually, we only have data in `shifts` map. Keys absent mean "no shift" or "unchanged blank".
-            // To be correct, we should iterate over the `shifts` map and save/update.
-            // Note: If a user clears a shift (sets to ""), we might need to delete it or set status to something.
-            // For now, let's just save what is visible.
-
             const promises = Object.entries(shifts).map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -91,12 +88,11 @@ export default function ShiftCalendar() {
                 if (label === "OFF") {
                     start = "00:00";
                     end = "00:00";
-                } else if (label.includes("-")) {
+                } else if (label.includes(" - ")) {
                     const parts = label.split(" - ");
-                    start = parts[0];
-                    end = parts[1];
+                    start = parts[0] ?? "";
+                    end = parts[1] ?? "";
                 } else {
-                    // Empty ("") or invalid -> Delete
                     return deleteShift(user.uid, dateStr);
                 }
 
@@ -105,7 +101,7 @@ export default function ShiftCalendar() {
                     date: dateStr,
                     startTime: start,
                     endTime: end,
-                    status: 'submitted', // Auto-submit for now
+                    status: 'submitted',
                 };
 
                 return saveShift(shiftData);
@@ -140,23 +136,39 @@ export default function ShiftCalendar() {
 
     return (
         <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            {deadlinePassed && (
+                <div
+                    style={{
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                        backgroundColor: "#FEF3C7",
+                        border: "1px solid #F59E0B",
+                        borderRadius: "var(--radius-md)",
+                        color: "#92400E",
+                        fontWeight: 500,
+                    }}
+                >
+                    この月のシフト提出は締め切りを過ぎているため、編集できません。
+                </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                 <div>
-                   <h3 style={{ fontSize: '1.25rem' }}>{year}年 {month + 1}月</h3>
-                   <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                       概算給与: <span style={{ fontWeight: 'bold', color: 'var(--primary)' }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
-                   </div>
+                    <h3 style={{ fontSize: "1.25rem" }}>{year}年 {month + 1}月</h3>
+                    <div style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                        概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
+                    </div>
                 </div>
                 <button
                     className="btn btn-primary"
                     onClick={handleSave}
-                    disabled={loading}
+                    disabled={loading || deadlinePassed}
                 >
-                    {loading ? "保存中..." : "提出内容を保存"}
+                    {loading ? "保存中..." : deadlinePassed ? "締切済" : "提出内容を保存"}
                 </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', backgroundColor: 'var(--border)', border: '1px solid var(--border)' }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "1px", backgroundColor: "var(--border)", border: "1px solid var(--border)", opacity: deadlinePassed ? 0.85 : 1 }}>
                 {/* Headers */}
                 {dayOfWeek.map(d => (
                     <div key={d} style={{ backgroundColor: 'var(--surface-hover)', padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
@@ -175,13 +187,13 @@ export default function ShiftCalendar() {
                             key={day}
                             onClick={() => handleShiftClick(day)}
                             style={{
-                                backgroundColor: 'var(--surface)',
-                                minHeight: '100px',
-                                padding: '0.5rem',
-                                cursor: 'pointer',
-                                color: isWeekend ? 'var(--destructive)' : 'inherit',
-                                position: 'relative',
-                                transition: 'background-color 0.2s'
+                                backgroundColor: "var(--surface)",
+                                minHeight: "100px",
+                                padding: "0.5rem",
+                                cursor: deadlinePassed ? "default" : "pointer",
+                                color: isWeekend ? "var(--destructive)" : "inherit",
+                                position: "relative",
+                                transition: "background-color 0.2s",
                             }}
                             className="calendar-cell"
                         >

@@ -1,5 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getDoc } from "@/lib/firebase/firestoreHelpers";
+import { doc, setDoc } from "firebase/firestore";
 
 export interface AppSettings {
   /** シフト提出締切日（1〜28。当月の何日までに提出か） */

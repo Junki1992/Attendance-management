@@ -4,6 +4,11 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, Shift } from "@/services/shiftService";
 import { getUserProfile } from "@/services/userService";
+import {
+  createShiftChangeRequest,
+  getMyShiftChangeRequests,
+  ShiftChangeRequest,
+} from "@/services/shiftChangeRequestService";
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -25,21 +30,35 @@ export default function StaffConfirmedShiftsPage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [hourlyWage, setHourlyWage] = useState(1000);
   const [loading, setLoading] = useState(true);
+  const [myRequests, setMyRequests] = useState<ShiftChangeRequest[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [modalDate, setModalDate] = useState("");
+  const [modalHope, setModalHope] = useState("09:00-18:00");
+  const [modalReason, setModalReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   const lastDay = getDaysInMonth(year, month);
   const daysArray = Array.from({ length: lastDay }, (_, i) => i + 1);
+
+  const loadRequests = () => {
+    if (!user) return;
+    getMyShiftChangeRequests(user.uid).then(setMyRequests).catch(() => {});
+  };
 
   useEffect(() => {
     if (!user) return;
     const load = async () => {
       setLoading(true);
       try {
-        const [profile, data] = await Promise.all([
+        const [profile, data, reqs] = await Promise.all([
           getUserProfile(user.uid),
           getUserShifts(user.uid, year, month),
+          getMyShiftChangeRequests(user.uid),
         ]);
         if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
         setShifts(data.filter((s) => s.status === "confirmed"));
+        setMyRequests(reqs);
       } catch (e) {
         console.error(e);
       } finally {
@@ -78,6 +97,45 @@ export default function StaffConfirmedShiftsPage() {
 
   const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
 
+  const openModal = () => {
+    setModalDate(shifts[0]?.date ?? "");
+    setModalHope("09:00-18:00");
+    setModalReason("");
+    setModalError("");
+    setShowModal(true);
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!user || !modalDate.trim() || !modalReason.trim()) {
+      setModalError("対象日と理由を入力してください。");
+      return;
+    }
+    setSubmitting(true);
+    setModalError("");
+    try {
+      const [start, end] =
+        modalHope === "OFF"
+          ? ["00:00", "00:00"]
+          : modalHope.split("-").map((s) => s.trim());
+      await createShiftChangeRequest(user.uid, modalDate, start, end, modalReason.trim());
+      loadRequests();
+      setShowModal(false);
+    } catch (e: unknown) {
+      setModalError(e instanceof Error ? e.message : "送信に失敗しました");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatHope = (r: ShiftChangeRequest) => {
+    if (r.requestedStartTime === "00:00" && r.requestedEndTime === "00:00") return "OFF";
+    return `${r.requestedStartTime}-${r.requestedEndTime}`;
+  };
+  const formatDate = (d: string) => {
+    const [y, m, day] = d.split("-");
+    return `${parseInt(m, 10)}/${day}`;
+  };
+
   if (!user) return null;
 
   return (
@@ -111,13 +169,108 @@ export default function StaffConfirmedShiftsPage() {
             ›
           </button>
         </div>
-        <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-          勤務合計: <strong>{totalHours.toFixed(1)}h</strong>
-          {" / "}
-          概算給与: <strong style={{ color: "var(--primary)" }}>¥{salary.toLocaleString()}</strong>（時給
-          ¥{hourlyWage}）
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+            勤務合計: <strong>{totalHours.toFixed(1)}h</strong>
+            {" / "}
+            概算給与: <strong style={{ color: "var(--primary)" }}>¥{salary.toLocaleString()}</strong>（時給
+            ¥{hourlyWage}）
+          </div>
+          <button
+            className="btn btn-outline"
+            onClick={openModal}
+            disabled={loading || shifts.length === 0}
+          >
+            変更申請
+          </button>
         </div>
       </div>
+
+      {myRequests.length > 0 && (
+        <div style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
+          <strong>変更申請の状況:</strong>{" "}
+          {myRequests.slice(0, 5).map((r) => (
+            <span key={r.id} style={{ marginRight: "0.5rem" }}>
+              {formatDate(r.date)}→{formatHope(r)}{" "}
+              <span style={{ color: r.status === "pending" ? "#F59E0B" : r.status === "approved" ? "var(--secondary)" : "var(--text-muted)" }}>
+                {r.status === "pending" ? "申請中" : r.status === "approved" ? "承認" : "却下"}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => !submitting && setShowModal(false)}
+        >
+          <div
+            className="card"
+            style={{ width: "90%", maxWidth: "400px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: "1rem" }}>変更申請</h3>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>対象の日</label>
+              <select
+                value={modalDate}
+                onChange={(e) => setModalDate(e.target.value)}
+                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+              >
+                <option value="">選択</option>
+                {shifts.map((s) => {
+                  const [, m, d] = s.date.split("-");
+                  return (
+                    <option key={s.date} value={s.date}>
+                      {parseInt(m, 10)}/{d}日 {s.startTime === "00:00" ? "OFF" : `${s.startTime}-${s.endTime}`}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>希望する時刻</label>
+              <select
+                value={modalHope}
+                onChange={(e) => setModalHope(e.target.value)}
+                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+              >
+                <option value="09:00-18:00">09:00-18:00</option>
+                <option value="10:00-19:00">10:00-19:00</option>
+                <option value="OFF">OFF（休み希望）</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>理由（必須）</label>
+              <textarea
+                value={modalReason}
+                onChange={(e) => setModalReason(e.target.value)}
+                rows={3}
+                placeholder="例: 用事が入ったため"
+                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", resize: "vertical" }}
+              />
+            </div>
+            {modalError && <p style={{ color: "var(--destructive)", fontSize: "0.875rem", marginBottom: "0.5rem" }}>{modalError}</p>}
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button className="btn btn-outline" onClick={() => setShowModal(false)} disabled={submitting}>
+                キャンセル
+              </button>
+              <button className="btn btn-primary" onClick={handleSubmitRequest} disabled={submitting}>
+                {submitting ? "送信中..." : "送信"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ padding: "2rem", textAlign: "center" }}>読み込み中...</div>

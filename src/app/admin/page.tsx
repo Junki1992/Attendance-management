@@ -19,22 +19,40 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="card">
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>変更申請</h3>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                        確定後のシフト変更申請を承認・却下できます。承認するとシフト表に反映されます。
+                    </p>
+                    <Link href="/admin/shift-change-requests" className="btn btn-outline">
+                        申請一覧を開く
+                    </Link>
+                </div>
+
+                <div className="card">
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>36協定アラート</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        現在、<strong>2名</strong>のスタッフが週40時間を超えるシフトになっています。
+                        シフト表で8h超・週40h超を確認できます。
                     </p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--destructive)' }}>
-                        ⚠️ 要確認
-                    </div>
+                    <Link href="/admin/shifts" style={{ fontSize: '0.875rem' }}>シフト表で確認 →</Link>
                 </div>
 
                 <div className="card">
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>チャット</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        スタッフからの連絡: <strong>3件</strong>
+                        スタッフからの連絡を確認できます。
                     </p>
                     <Link href="/admin/chat" className="btn btn-outline">
                         メッセージを確認
+                    </Link>
+                </div>
+
+                <div className="card">
+                    <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>設定</h3>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                        シフト提出の締切日（各月の何日までか）を変更できます。
+                    </p>
+                    <Link href="/admin/settings" className="btn btn-outline">
+                        設定を開く
                     </Link>
                 </div>
             </div>

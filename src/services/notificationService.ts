@@ -1,6 +1,6 @@
-
 import { db } from "@/lib/firebase/firebase";
-import { collection, addDoc, getDocs, updateDoc, doc, query, where, orderBy, Timestamp, onSnapshot } from "firebase/firestore";
+import { getDocs } from "@/lib/firebase/firestoreHelpers";
+import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot } from "firebase/firestore";
 
 export interface Notification {
     id?: string;
@@ -66,4 +66,16 @@ export const markAsRead = async (notificationId: string) => {
     await updateDoc(notifRef, {
         read: true
     });
+};
+
+/** 管理者用: シフト確定通知の一覧（既読状況の確認）。Firestore に (type, createdAt) の複合インデックスが必要 */
+export const getShiftConfirmedNotifications = async (limitCount = 50): Promise<Notification[]> => {
+    const q = query(
+        collection(db, "notifications"),
+        where("type", "==", "shift_confirmed"),
+        orderBy("createdAt", "desc"),
+        limit(limitCount)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Notification));
 };
