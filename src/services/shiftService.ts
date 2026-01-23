@@ -60,7 +60,14 @@ export const getUserShifts = async (userId: string, year: number, month: number)
     return shifts;
 };
 
+import { onSnapshot } from "firebase/firestore";
+
+// ... existing imports
+
+// ... existing saveShift, getUserShifts
+
 export const getAllShifts = async (year: number, month: number) => {
+    // ... existing implementation
     const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
     const lastDay = new Date(year, month + 1, 0).getDate();
     const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
@@ -77,6 +84,32 @@ export const getAllShifts = async (year: number, month: number) => {
         shifts.push({ id: doc.id, ...doc.data() } as Shift);
     });
     return shifts;
+};
+
+export const subscribeAllShifts = (
+    year: number, 
+    month: number, 
+    callback: (shifts: Shift[]) => void
+) => {
+    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+
+    const q = query(
+        collection(db, "shifts"),
+        where("date", ">=", startStr),
+        where("date", "<=", endStr)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const shifts: Shift[] = [];
+        snapshot.forEach((doc) => {
+            shifts.push({ id: doc.id, ...doc.data() } as Shift);
+        });
+        callback(shifts);
+    }, (error) => {
+        console.warn("Shift subscription error:", error);
+    });
 };
 
 export const deleteShift = async (userId: string, date: string) => {

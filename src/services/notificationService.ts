@@ -1,6 +1,6 @@
 
 import { db } from "@/lib/firebase/firebase";
-import { collection, addDoc, getDocs, updateDoc, doc, query, where, orderBy, Timestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, updateDoc, doc, query, where, orderBy, Timestamp, onSnapshot } from "firebase/firestore";
 
 export interface Notification {
     id?: string;
@@ -25,7 +25,10 @@ export const createNotification = async (userId: string, type: Notification['typ
     }
 };
 
+
+
 export const getUserNotifications = async (userId: string) => {
+    // ... same as before
     const q = query(
         collection(db, "notifications"),
         where("userId", "==", userId),
@@ -38,6 +41,24 @@ export const getUserNotifications = async (userId: string) => {
         notifications.push({ id: doc.id, ...doc.data() } as Notification);
     });
     return notifications;
+};
+
+export const subscribeNotifications = (userId: string, callback: (notifications: Notification[]) => void) => {
+    const q = query(
+        collection(db, "notifications"),
+        where("userId", "==", userId),
+        orderBy("createdAt", "desc")
+    );
+    
+    return onSnapshot(q, (snapshot) => {
+        const notifications: Notification[] = [];
+        snapshot.forEach((doc) => {
+            notifications.push({ id: doc.id, ...doc.data() } as Notification);
+        });
+        callback(notifications);
+    }, (error) => {
+        console.warn("Notification subscription error:", error);
+    });
 };
 
 export const markAsRead = async (notificationId: string) => {

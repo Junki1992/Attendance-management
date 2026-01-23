@@ -2,22 +2,39 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import NotificationList from "@/components/NotificationList";
+import { subscribeNotifications } from "@/services/notificationService";
 
 export default function StaffLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
-    const { user, loading } = useAuth();
+    const { user, loading, logout } = useAuth();
     const router = useRouter();
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    const handleLogout = async () => {
+        await logout();
+        router.push('/login');
+    };
 
     useEffect(() => {
         if (!loading && (!user || user.role !== 'staff')) {
             router.push('/login');
         }
     }, [user, loading, router]);
+
+    useEffect(() => {
+        if (!user) return;
+        const unsubscribe = subscribeNotifications(user.uid, (notifs) => {
+            setUnreadCount(notifs.filter(n => !n.read).length);
+        });
+        return () => unsubscribe();
+    }, [user]);
 
     if (loading || !user) return <div className="p-4 text-center">Loading...</div>;
 
@@ -35,10 +52,58 @@ export default function StaffLayout({
                     <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>Staff Portal</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <span>{user.name}</span>
-                        <nav style={{ display: 'flex', gap: '1rem' }}>
+                        <div style={{ position: 'relative' }}>
+                            <button 
+                                onClick={() => setShowNotifications(!showNotifications)}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '1.2rem',
+                                    padding: '0.25rem',
+                                    position: 'relative'
+                                }}
+                            >
+                                🔔
+                                {unreadCount > 0 && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        right: 0,
+                                        backgroundColor: 'var(--destructive)',
+                                        color: 'white',
+                                        fontSize: '0.6rem',
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}>
+                                        {unreadCount}
+                                    </span>
+                                )}
+                            </button>
+                            {showNotifications && <NotificationList onClose={() => setShowNotifications(false)} />}
+                        </div>
+                        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                             <Link href="/staff" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>Home</Link>
                             <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>Shifts</Link>
                             <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)' }}>Chat</Link>
+                            <button 
+                                onClick={handleLogout}
+                                style={{ 
+                                    background: 'transparent', 
+                                    border: '1px solid var(--border)', 
+                                    color: 'var(--text-main)', 
+                                    padding: '0.25rem 0.75rem', 
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem'
+                                }}
+                            >
+                                Logout
+                            </button>
                         </nav>
                     </div>
                 </div>

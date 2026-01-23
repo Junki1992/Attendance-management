@@ -10,8 +10,13 @@ export default function AdminLayout({
 }: {
     children: React.ReactNode
 }) {
-    const { user, loading } = useAuth();
+    const { user, loading, logout } = useAuth();
     const router = useRouter();
+
+    const handleLogout = async () => {
+        await logout();
+        router.push('/login');
+    };
 
     useEffect(() => {
         if (!loading && (!user || user.role !== 'admin')) {
@@ -35,10 +40,24 @@ export default function AdminLayout({
                     <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Shift Admin</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <span>{user.name}</span>
-                        <nav style={{ display: 'flex', gap: '1rem' }}>
+                        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                             <Link href="/admin" style={{ textDecoration: 'none', color: '#e0e7ff' }}>Home</Link>
                             <Link href="/admin/shifts" style={{ textDecoration: 'none', color: '#e0e7ff' }}>Shift Grid</Link>
                             <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff' }}>Chat</Link>
+                            <button 
+                                onClick={handleLogout}
+                                style={{ 
+                                    background: 'transparent', 
+                                    border: '1px solid #e0e7ff', 
+                                    color: '#e0e7ff', 
+                                    padding: '0.25rem 0.75rem', 
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem'
+                                }}
+                            >
+                                Logout
+                            </button>
                         </nav>
                     </div>
                 </div>

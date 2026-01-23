@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getAllShifts, confirmShifts } from "@/services/shiftService";
+import { confirmShifts, subscribeAllShifts } from "@/services/shiftService";
 import { createNotification } from "@/services/notificationService";
 
 // Mock User List (In reality, fetch from 'users' collection)
@@ -19,60 +19,62 @@ export default function AdminShiftGrid() {
     const [shiftData, setShiftData] = useState<{ [key: string]: number }>({});
     const [loading, setLoading] = useState(true);
     const [confirming, setConfirming] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchData = async () => {
+        const year = 2026;
+        const month = 0;
+
+        const unsubscribe = subscribeAllShifts(year, month, (shifts) => {
             try {
-                const year = 2026;
-                const month = 0;
-
-                const shifts = await getAllShifts(year, month);
-
                 const map: { [key: string]: number } = {};
-
+                
                 shifts.forEach(s => {
                     if (s.startTime === "00:00" && s.endTime === "00:00") return; // OFF
-
+                    
                     const day = parseInt(s.date.split('-')[2], 10);
                     const key = `${s.userId}-${day}`;
-
+                    
                     // Calculate hours
                     const [startH, startM] = s.startTime.split(':').map(Number);
                     const [endH, endM] = s.endTime.split(':').map(Number);
-
+                    
                     let hours = (endH + endM / 60) - (startH + startM / 60);
                     if (hours > 6) hours -= 1;
-
+                    
                     if (hours > 0) map[key] = Math.round(hours * 10) / 10;
                 });
-
+                
                 setShiftData(map);
-            } catch (error) {
-                console.error("Failed to fetch all shifts", error);
+                setError(null);
+            } catch (error: any) {
+                console.error("Error processing shifts", error);
+                setError(error.message);
             } finally {
                 setLoading(false);
             }
-        };
+        });
 
-        fetchData();
+        // Cleanup listener on unmount
+        return () => unsubscribe();
     }, []);
 
     const getShift = (uid: string, day: number) => shiftData[`${uid}-${day}`] || 0;
 
     const handleConfirm = async () => {
         if (!confirm("今月のシフトを確定し、スタッフへ通知を送りますか？")) return;
-
+        
         setConfirming(true);
         try {
             const affectedUserIds = await confirmShifts(2026, 0); // Hardcoded for demo
-
+            
             // Send notifications
-            const notifPromises = affectedUserIds.map(uid =>
+            const notifPromises = affectedUserIds.map(uid => 
                 createNotification(uid, 'shift_confirmed', '1月のシフトが確定しました。確認してください。')
             );
-
+            
             await Promise.all(notifPromises);
-
+            
             alert(`${affectedUserIds.length}名のスタッフに通知を送りました！`);
         } catch (error) {
             console.error(error);
@@ -96,8 +98,8 @@ export default function AdminShiftGrid() {
                 <h2 style={{ fontSize: '1.5rem' }}>2026年 1月 シフト表</h2>
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <button className="btn btn-outline">CSVコピー</button>
-                    <button
-                        className="btn btn-primary"
+                    <button 
+                        className="btn btn-primary" 
                         onClick={handleConfirm}
                         disabled={loading || confirming}
                     >
@@ -105,6 +107,12 @@ export default function AdminShiftGrid() {
                     </button>
                 </div>
             </div>
+
+            {error && (
+                <div style={{ padding: '1rem', backgroundColor: '#FEE2E2', color: '#B91C1C', marginBottom: '1rem', borderRadius: '0.5rem' }}>
+                    エラー: {error}
+                </div>
+            )}
 
             {loading ? (
                 <div style={{ padding: '2rem', textAlign: 'center' }}>読み込み中...</div>
@@ -153,7 +161,7 @@ export default function AdminShiftGrid() {
                                                     textAlign: 'center',
                                                     backgroundColor: isOver ? '#FEE2E2' : (hours > 0 ? '#EEF2FF' : 'transparent'),
                                                     color: isOver ? '#EF4444' : 'inherit',
-                                                    cursor: 'pointer'
+                                                    cursor: 'default'
                                                 }}
                                                 title={isOver ? '1日8時間超過' : ''}
                                             >
