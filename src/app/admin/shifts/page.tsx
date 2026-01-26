@@ -101,6 +101,13 @@ export default function AdminShiftGrid() {
     setConfirming(true);
     try {
       const affectedUserIds = await confirmShifts(year, month);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[admin/shifts] handleConfirm: affectedUserIds", affectedUserIds);
+      }
+      if (affectedUserIds.length === 0) {
+        alert("確定するシフトがありませんでした。");
+        return;
+      }
       await Promise.all(
         affectedUserIds.map((uid) =>
           createNotification(
@@ -114,7 +121,7 @@ export default function AdminShiftGrid() {
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
       alert(`${affectedUserIds.length}名のスタッフに通知を送りました！`);
     } catch (e) {
-      console.error(e);
+      console.error("[admin/shifts] handleConfirm: error", e);
       alert("確定処理に失敗しました");
     } finally {
       setConfirming(false);

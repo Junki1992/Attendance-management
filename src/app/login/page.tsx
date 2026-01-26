@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+// 本番環境では false。開発環境でのみ有効化する場合は .env.local に NEXT_PUBLIC_ENABLE_MOCK_LOGIN=1 を設定
+const ENABLE_MOCK_LOGIN = process.env.NEXT_PUBLIC_ENABLE_MOCK_LOGIN === "1";
 
 /** Firebase Auth のエラーコードを日本語に */
 function authErrorToMessage(code: string): string {
@@ -19,6 +21,12 @@ function authErrorToMessage(code: string): string {
         "auth/network-request-failed": "ネットワークエラーです。接続を確認してください",
         "auth/api-key-not-valid": "API キーが無効です。.env.local の NEXT_PUBLIC_FIREBASE_API_KEY を、Firebase コンソール「プロジェクトの設定」→「全般」の Web API キーと一致させ、修正後に開発サーバーを再起動してください。",
         "auth/configuration-not-found": "Auth の設定が見つかりません。NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN を「プロジェクトID.firebaseapp.com」にしてください（firebasestorage.app ではない）。認証で「メール/パスワード」が有効かも確認し、修正後に開発サーバーを再起動してください。",
+        // Firestore のエラー
+        "permission-denied": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。",
+        "missing-or-insufficient-permissions": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。",
+        "firestore-permission-denied": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。",
+        // プロフィールが見つからない
+        "user-profile-not-found": "ユーザープロフィールが見つかりません。Firestore の `users/{uid}` ドキュメントが存在しない可能性があります。以下のいずれかの方法で対処してください：1) Firebase コンソール → Authentication → ユーザー タブから該当ユーザーを削除してから新規登録をやり直す、2) Firebase コンソール → Firestore Database → データ タブで `users/{uid}` ドキュメントを手動で作成する（`email`, `name`, `role` フィールドに \"staff\" または \"admin\"、`hourlyWage` フィールドに `1000` を設定）。",
     };
     const known = m[code];
     if (known) return known;
@@ -27,6 +35,9 @@ function authErrorToMessage(code: string): string {
     }
     if (code.includes("configuration-not-found")) {
         return "Auth の設定が見つかりません。NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN を「プロジェクトID.firebaseapp.com」にしてください（firebasestorage.app ではない）。認証で「メール/パスワード」が有効かも確認し、修正後に開発サーバーを再起動してください。";
+    }
+    if (code.includes("permission-denied") || code.includes("missing-or-insufficient-permissions")) {
+        return "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。";
     }
     return "ログインに失敗しました";
 }
@@ -178,35 +189,37 @@ export default function LoginPage() {
                     </Link>
                 </p>
 
-                <details
-                    style={{ marginTop: "1.5rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}
-                    open={devOpen}
-                    onToggle={(e) => setDevOpen((e.target as HTMLDetailsElement).open)}
-                >
-                    <summary style={{ fontSize: "0.8rem", color: "var(--text-muted)", cursor: "pointer" }}>
-                        開発・検証用：パスワードなしでログイン
-                    </summary>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
-                        <button
-                            type="button"
-                            className="btn btn-outline"
-                            style={{ width: "100%", fontSize: "0.875rem" }}
-                            onClick={() => handleMockLogin("admin")}
-                            disabled={submitting}
-                        >
-                            管理者（モック）
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-outline"
-                            style={{ width: "100%", fontSize: "0.875rem" }}
-                            onClick={() => handleMockLogin("staff")}
-                            disabled={submitting}
-                        >
-                            スタッフ（モック）
-                        </button>
-                    </div>
-                </details>
+                {ENABLE_MOCK_LOGIN && (
+                    <details
+                        style={{ marginTop: "1.5rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}
+                        open={devOpen}
+                        onToggle={(e) => setDevOpen((e.target as HTMLDetailsElement).open)}
+                    >
+                        <summary style={{ fontSize: "0.8rem", color: "var(--text-muted)", cursor: "pointer" }}>
+                            開発・検証用：パスワードなしでログイン
+                        </summary>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.75rem" }}>
+                            <button
+                                type="button"
+                                className="btn btn-outline"
+                                style={{ width: "100%", fontSize: "0.875rem" }}
+                                onClick={() => handleMockLogin("admin")}
+                                disabled={submitting}
+                            >
+                                管理者（モック）
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-outline"
+                                style={{ width: "100%", fontSize: "0.875rem" }}
+                                onClick={() => handleMockLogin("staff")}
+                                disabled={submitting}
+                            >
+                                スタッフ（モック）
+                            </button>
+                        </div>
+                    </details>
+                )}
             </div>
         </div>
     );

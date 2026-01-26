@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ChatMessage, sendMessageWithRoom, subscribeMessages } from "@/services/chatService";
 import { useAuth } from "@/context/AuthContext";
+import { markMessageNotificationsAsRead } from "@/services/notificationService";
 
 interface ChatWindowProps {
     className?: string;
@@ -18,6 +19,13 @@ export default function ChatWindow({ className, partnerName, partnerId }: ChatWi
 
     useEffect(() => {
         if (!user || !partnerId) return;
+
+        const roomId = [user.uid, partnerId].sort().join("_");
+        
+        // チャット画面を開いた時に、このチャットルームのメッセージ通知を既読にする
+        markMessageNotificationsAsRead(user.uid, roomId).catch((err) => {
+            console.error("[ChatWindow] Failed to mark notifications as read:", err);
+        });
 
         const unsubscribe = subscribeMessages(user.uid, partnerId, (msgs) => {
             setMessages(msgs);

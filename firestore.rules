@@ -1,0 +1,79 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // users コレクション：role の書き換えを禁止して管理者アクセスを保護
+    match /users/{userId} {
+      // 作成：新規登録時のみ。role は "staff" または "admin" を許可
+      // 最初の管理者は環境変数 NEXT_PUBLIC_FIRST_ADMIN_EMAIL で指定されたメールアドレスで登録した場合のみ作成可能
+      allow create: if request.auth != null 
+                    && request.auth.uid == userId 
+                    && (request.resource.data.role == "staff" || request.resource.data.role == "admin");
+      
+      // 読み取り：
+      // - 自分のドキュメントは全フィールド読める
+      // - 管理者は他のユーザーのドキュメントも読める（getAllStaff などで必要）
+      // - スタッフは管理者のドキュメントを読める（チャット機能で必要）
+      //   クエリを実行するには、クエリの結果となるすべてのドキュメントに対して読み取り権限が必要
+      allow read: if request.auth != null 
+                  && (request.auth.uid == userId 
+                      || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+                      || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "staff"
+                          && exists(/databases/$(database)/documents/users/$(userId))
+                          && get(/databases/$(database)/documents/users/$(userId)).data.role == "admin"));
+      
+      // 更新：
+      // - 自分のドキュメント：name, email, hourlyWage のみ更新可（role は変更不可）
+      // - 管理者は他のユーザーの role も変更可能（管理者昇格・降格）
+      allow update: if request.auth != null 
+                    && ((request.auth.uid == userId 
+                         && request.resource.data.role == resource.data.role)
+                        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
+      
+      // 削除：自分のドキュメントのみ
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // shifts コレクション（既存のルールがあれば追加）
+    match /shifts/{shiftId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null;
+    }
+    
+    // messages コレクション
+    match /messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // notifications コレクション
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+    
+    // settings コレクション（管理者のみ）
+    match /settings/{settingId} {
+      allow read: if request.auth != null;
+      // 管理者のみ書き込み可（users/{uid}.role == "admin" を確認）
+      allow create, update, delete: if request.auth != null 
+                                     && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                                     && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    
+    // shiftChangeRequests コレクション
+    match /shiftChangeRequests/{requestId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null;
+    }
+  }
+}

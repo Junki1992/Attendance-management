@@ -1,6 +1,7 @@
 
 import { db } from "@/lib/firebase/firebase";
 import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timestamp } from "firebase/firestore";
+import { createNotification } from "@/services/notificationService";
 
 export interface ChatMessage {
     id?: string;
@@ -91,6 +92,21 @@ export const sendMessageWithRoom = async (text: string, senderId: string, receiv
             roomId,
             createdAt: Timestamp.now(),
         });
+        
+        // メッセージ通知を作成（受信者に通知）
+        try {
+            await createNotification(
+                receiverId,
+                "message",
+                `${senderName || "Unknown"}さんからメッセージが届きました`,
+                senderId,
+                senderName,
+                roomId
+            );
+        } catch (notifError) {
+            // 通知作成失敗はログに記録するが、メッセージ送信は成功とする
+            console.error("[chatService] Failed to create notification:", notifError);
+        }
     } catch (error) {
         console.error("Error sending message:", error);
         throw error;

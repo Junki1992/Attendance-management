@@ -1,17 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { Notification, subscribeNotifications, markAsRead } from "@/services/notificationService";
 
 export default function NotificationList({ onClose }: { onClose: () => void }) {
     const { user } = useAuth();
+    const router = useRouter();
     const [notifications, setNotifications] = useState<Notification[]>([]);
     
     useEffect(() => {
         if (!user) return;
         
+        if (process.env.NODE_ENV === "development") {
+            console.log("[NotificationList] Subscribing to notifications for user:", user.uid);
+        }
+        
         const unsubscribe = subscribeNotifications(user.uid, (data) => {
+            if (process.env.NODE_ENV === "development") {
+                console.log("[NotificationList] Received notifications:", data.length);
+            }
             setNotifications(data);
         });
         
@@ -22,7 +31,32 @@ export default function NotificationList({ onClose }: { onClose: () => void }) {
         if (!n.read && n.id) {
             await markAsRead(n.id);
         }
-        // Optional: navigate to relevant page if needed
+        
+        // 通知タイプに応じて適切なページに遷移
+        if (!user) return;
+        
+        onClose(); // 通知一覧を閉じる
+        
+        if (n.type === 'shift_confirmed') {
+            // シフト確定通知 → 確定シフトページ
+            if (user.role === 'staff') {
+                router.push('/staff/confirmed-shifts');
+            } else if (user.role === 'admin') {
+                router.push('/admin/shifts');
+            }
+        } else if (n.type === 'remind_submit') {
+            // シフト提出催促通知 → シフト提出ページ
+            if (user.role === 'staff') {
+                router.push('/staff/shifts');
+            }
+        } else if (n.type === 'message') {
+            // メッセージ通知 → チャットページ
+            if (user.role === 'staff') {
+                router.push('/staff/chat');
+            } else if (user.role === 'admin') {
+                router.push('/admin/chat');
+            }
+        }
     };
 
     return (
@@ -70,7 +104,7 @@ export default function NotificationList({ onClose }: { onClose: () => void }) {
                                     color: n.read ? 'var(--text-muted)' : 'var(--primary)',
                                     fontSize: '0.75rem' 
                                 }}>
-                                    {n.type === 'shift_confirmed' ? 'シフト確定' : 'お知らせ'}
+                                    {n.type === 'shift_confirmed' ? 'シフト確定' : n.type === 'message' ? 'メッセージ' : 'お知らせ'}
                                 </span>
                                 {!n.read && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--primary)' }}></span>}
                             </div>

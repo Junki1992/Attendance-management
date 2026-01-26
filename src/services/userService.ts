@@ -87,3 +87,65 @@ export const getAllStaff = async (): Promise<StaffItem[]> => {
     }
     return list;
 };
+
+/** 全ユーザー一覧を取得（管理者用） */
+export const getAllUsers = async (): Promise<UserProfile[]> => {
+    const snap = await getDocs(collection(db, "users"));
+    const list: UserProfile[] = [];
+    snap.forEach((d) => {
+        const data = d.data();
+        list.push({
+            uid: d.id,
+            email: data.email || "",
+            name: data.name || "（名前なし）",
+            role: data.role === "admin" ? "admin" : "staff",
+            hourlyWage: data.hourlyWage ?? 1000,
+        });
+    });
+    return list;
+};
+
+/** ユーザーのロールを更新（管理者用） */
+export const updateUserRole = async (uid: string, role: "admin" | "staff"): Promise<void> => {
+    const docRef = doc(db, "users", uid);
+    await setDoc(docRef, { role }, { merge: true });
+};
+
+/** 管理者のUIDを取得 */
+export const getAdminId = async (): Promise<string | null> => {
+    // 環境変数で管理者のUIDが指定されている場合はそれを使用
+    const adminUidFromEnv = process.env.NEXT_PUBLIC_ADMIN_UID?.trim();
+    if (adminUidFromEnv) {
+        return adminUidFromEnv;
+    }
+    
+    // 環境変数が設定されていない場合、Firestoreから取得を試みる
+    // ただし、スタッフはクエリを実行できないため、管理者のみが実行可能
+    try {
+        const q = query(
+            collection(db, "users"),
+            where("role", "==", "admin")
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            return null;
+        }
+        // 最初の管理者のUIDを返す
+        return snap.docs[0].id;
+    } catch (err) {
+        // クエリが失敗した場合（スタッフが実行した場合など）、null を返す
+        if (process.env.NODE_ENV === "development") {
+            console.warn("[userService] getAdminId: query failed, use NEXT_PUBLIC_ADMIN_UID env var", err);
+        }
+        return null;
+    }
+};
+
+/** 管理者のプロフィールを取得（最初に見つかった管理者を返す） */
+export const getAdminProfile = async (): Promise<UserProfile | null> => {
+    const adminId = await getAdminId();
+    if (!adminId) {
+        return null;
+    }
+    return await getUserProfile(adminId);
+};

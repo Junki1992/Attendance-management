@@ -230,7 +230,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             devInfo("[Auth] login: signInWithEmailAndPassword", { ms: Math.round(nowMs() - tAuth0), uid: firebaseUser.uid });
 
             const tProfile0 = nowMs();
-            const profile = await getUserProfileDeduped(firebaseUser.uid);
+            let profile: UserProfileOrNull = null;
+            try {
+                profile = await getUserProfileDeduped(firebaseUser.uid);
+            } catch (err: unknown) {
+                const code = (err as { code?: string })?.code ?? "";
+                const message = (err as { message?: string })?.message ?? "";
+                devError("[Auth] login: getUserProfile failed", { code, message, uid: firebaseUser.uid });
+                // Firestore権限エラーの場合
+                if (code === "permission-denied" || code === "missing-or-insufficient-permissions") {
+                    try {
+                        await signOut(auth);
+                    } catch {
+                        // ignore
+                    }
+                    const firestoreError = new Error("firestore-permission-denied");
+                    (firestoreError as { code?: string }).code = code;
+                    throw firestoreError;
+                }
+                // その他のエラーは再スロー
+                throw err;
+            }
             devInfo("[Auth] login: getUserProfile", { ms: Math.round(nowMs() - tProfile0), uid: firebaseUser.uid, found: !!profile });
             if (profile && (profile.role === "admin" || profile.role === "staff")) {
                 const u: User = {
@@ -252,7 +272,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
             userRef.current = null;
             setUser(null);
-            throw new Error("user-profile-not-found");
+            const profileError = new Error("user-profile-not-found");
+            (profileError as { code?: string }).code = "user-profile-not-found";
+            throw profileError;
+        } catch (err: unknown) {
+            // Firebase Auth のエラーはそのまま再スロー
+            const code = (err as { code?: string })?.code ?? "";
+            if (code.startsWith("auth/")) {
+                throw err;
+            }
+            // Firestore のエラーやプロフィールが見つからないエラーも再スロー
+            throw err;
         } finally {
             setLoading(false);
             devInfo("[Auth] login: done", { totalMs: Math.round(nowMs() - t0) });
@@ -270,15 +300,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             devInfo("[Auth] register: createUserWithEmailAndPassword", { ms: Math.round(nowMs() - tAuth0), uid: firebaseUser.uid });
             // onAuthStateChanged で profile 未作成を短くリトライするための印
             setJustRegisteredUid(firebaseUser.uid);
+            
+            // 環境変数で指定された最初の管理者のメールアドレスと一致する場合のみ管理者として作成
+            const firstAdminEmail = process.env.NEXT_PUBLIC_FIRST_ADMIN_EMAIL?.trim().toLowerCase();
+            const isFirstAdmin = firstAdminEmail && email.trim().toLowerCase() === firstAdminEmail;
+            const role: "admin" | "staff" = isFirstAdmin ? "admin" : "staff";
+            
             const tDb0 = nowMs();
-            await createUser({
-                uid: firebaseUser.uid,
-                email: email.trim(),
-                name: name.trim(),
-                role: "staff",
-                hourlyWage: 1000,
-            });
-            devInfo("[Auth] register: createUser(users/{uid})", { ms: Math.round(nowMs() - tDb0), uid: firebaseUser.uid });
+            try {
+                await createUser({
+                    uid: firebaseUser.uid,
+                    email: email.trim(),
+                    name: name.trim(),
+                    role,
+                    hourlyWage: 1000,
+                });
+                devInfo("[Auth] register: createUser(users/{uid})", { ms: Math.round(nowMs() - tDb0), uid: firebaseUser.uid, role });
+            } catch (err: unknown) {
+                const code = (err as { code?: string })?.code ?? "";
+                const message = (err as { message?: string })?.message ?? "";
+                devError("[Auth] register: createUser failed", { code, message, uid: firebaseUser.uid, role });
+                // Firestore権限エラーの場合、Firebase Authenticationのユーザーは作成済みなので削除する必要がある
+                if (code === "permission-denied" || code === "missing-or-insufficient-permissions") {
+                    try {
+                        await signOut(auth);
+                        devWarn("[Auth] register: signed out due to Firestore permission error");
+                    } catch {
+                        // ignore
+                    }
+                }
+                throw err;
+            }
         } finally {
             setLoading(false);
             devInfo("[Auth] register: done", { totalMs: Math.round(nowMs() - t0) });

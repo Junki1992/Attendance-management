@@ -12,7 +12,7 @@ function getSignupErrorMessage(err: unknown): string {
     const code = (err as { code?: string })?.code ?? "";
     const msg = (err as { message?: string })?.message ?? "";
     const m: Record<string, string> = {
-        "auth/email-already-in-use": "このメールアドレスは既に登録されています",
+        "auth/email-already-in-use": "このメールアドレスは既に登録されています。Firestore の権限エラーで登録に失敗した場合、Firebase コンソール → Authentication → ユーザー タブから該当ユーザーを削除してから再度登録してください。",
         "auth/weak-password": "パスワードは6文字以上にしてください",
         "auth/invalid-email": "メールアドレスの形式が正しくありません",
         "auth/operation-not-allowed": "この認証方法は有効になっていません",
@@ -21,7 +21,8 @@ function getSignupErrorMessage(err: unknown): string {
         "auth/api-key-not-valid": "API キーが無効です。.env.local の NEXT_PUBLIC_FIREBASE_API_KEY を、Firebase コンソール「プロジェクトの設定」→「全般」の Web API キーと照らし、正しく貼り付けてから開発サーバーを再起動してください。",
         "auth/configuration-not-found": "Auth の設定が見つかりません。NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN を「プロジェクトID.firebaseapp.com」にしてください（firebasestorage.app ではない）。認証で「メール/パスワード」が有効かも確認し、修正後に開発サーバーを再起動してください。",
         // Firestore（createUser の setDoc で発生しうる）
-        "permission-denied": "Firestore の権限エラーです。users コレクションに「認証済みユーザーが自分の uid のドキュメントだけ create 可」というルールが必要です。",
+        "permission-denied": "Firestore の権限エラーです。以下の手順を実行してください：1) Firebase コンソール → Authentication → ユーザー タブから、登録に失敗したメールアドレスのユーザーを削除、2) Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリック、3) 再度新規登録を試してください。管理者として登録する場合は、`NEXT_PUBLIC_FIRST_ADMIN_EMAIL` で指定したメールアドレスで登録してください。",
+        "missing-or-insufficient-permissions": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。登録に失敗した場合は、Firebase コンソール → Authentication → ユーザー タブから該当ユーザーを削除してから再度登録してください。",
         "unavailable": "Firestore に接続できません。ネットワークを確認してください。",
         "failed-precondition": "Firestore の操作が許可されていません。ルールを確認してください。",
     };
