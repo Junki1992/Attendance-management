@@ -110,19 +110,23 @@ export default function AdminLayout({
                         </div>
                         <button
                             onClick={() => setShowMobileMenu(!showMobileMenu)}
+                            className={`hamburger-icon ${showMobileMenu ? 'open' : ''}`}
                             style={{
                                 border: 'none',
                                 background: 'none',
                                 cursor: 'pointer',
-                                fontSize: '1.5rem',
-                                padding: '0.25rem',
+                                padding: '0.5rem',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                color: '#e0e7ff'
+                                color: '#e0e7ff',
+                                transition: 'transform 0.2s'
                             }}
+                            aria-label="メニュー"
                         >
-                            {showMobileMenu ? '✕' : '☰'}
+                            <span></span>
+                            <span></span>
+                            <span></span>
                         </button>
                     </div>
                 </div>
@@ -203,7 +207,7 @@ export default function AdminLayout({
 
                 {/* モバイルメニュー */}
                 {isMobile && showMobileMenu && (
-                    <div style={{
+                    <div className="mobile-menu-enter" style={{
                         marginTop: '0.75rem',
                         paddingTop: '0.75rem',
                         borderTop: '1px solid rgba(224, 231, 255, 0.2)',
@@ -211,18 +215,37 @@ export default function AdminLayout({
                         flexDirection: 'column',
                         gap: '0.5rem'
                     }}>
-                        <div style={{ fontSize: '0.9rem', color: 'rgba(224, 231, 255, 0.7)', marginBottom: '0.25rem' }}>
+                        <div className="menu-item-enter" style={{ 
+                            fontSize: '0.9rem', 
+                            color: 'rgba(224, 231, 255, 0.7)', 
+                            marginBottom: '0.25rem',
+                            padding: '0.5rem 0.75rem',
+                            fontWeight: 500
+                        }}>
                             {user.name}
                         </div>
                         <Link 
                             href="/admin" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: '#e0e7ff', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/admin' ? 'rgba(224, 231, 255, 0.1)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/admin' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/admin' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/admin') {
+                                    e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/admin') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             ホーム
@@ -230,12 +253,25 @@ export default function AdminLayout({
                         <Link 
                             href="/admin/shifts" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: '#e0e7ff', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/admin/shifts' ? 'rgba(224, 231, 255, 0.1)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/admin/shifts' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/admin/shifts' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/admin/shifts') {
+                                    e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/admin/shifts') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             シフト表
@@ -243,12 +279,25 @@ export default function AdminLayout({
                         <Link 
                             href="/admin/shift-change-requests" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: '#e0e7ff', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/admin/shift-change-requests' ? 'rgba(224, 231, 255, 0.1)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/admin/shift-change-requests' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/admin/shift-change-requests' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/admin/shift-change-requests') {
+                                    e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/admin/shift-change-requests') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             変更申請
@@ -256,12 +305,25 @@ export default function AdminLayout({
                         <Link 
                             href="/admin/chat" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: '#e0e7ff', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/admin/chat' ? 'rgba(224, 231, 255, 0.1)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/admin/chat' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/admin/chat' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/admin/chat') {
+                                    e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/admin/chat') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             チャット
@@ -269,12 +331,25 @@ export default function AdminLayout({
                         <Link 
                             href="/admin/settings" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: '#e0e7ff', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/admin/settings' ? 'rgba(224, 231, 255, 0.1)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/admin/settings' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/admin/settings' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/admin/settings') {
+                                    e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/admin/settings') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             設定
@@ -284,16 +359,27 @@ export default function AdminLayout({
                                 setShowMobileMenu(false);
                                 handleLogout();
                             }}
+                            className="menu-item-enter"
                             style={{ 
                                 background: 'transparent', 
                                 border: '1px solid #e0e7ff', 
                                 color: '#e0e7ff', 
-                                padding: '0.5rem', 
-                                borderRadius: '4px',
+                                padding: '0.75rem 1rem', 
+                                borderRadius: '8px',
                                 cursor: 'pointer',
                                 fontSize: '0.9rem',
                                 textAlign: 'left',
-                                marginTop: '0.5rem'
+                                marginTop: '0.5rem',
+                                transition: 'all 0.2s ease',
+                                fontWeight: 500
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
+                                e.currentTarget.style.borderColor = '#a5b4fc';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = '#e0e7ff';
                             }}
                         >
                             ログアウト

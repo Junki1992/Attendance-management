@@ -109,18 +109,23 @@ export default function StaffLayout({
                         </div>
                         <button
                             onClick={() => setShowMobileMenu(!showMobileMenu)}
+                            className={`hamburger-icon ${showMobileMenu ? 'open' : ''}`}
                             style={{
                                 border: 'none',
                                 background: 'none',
                                 cursor: 'pointer',
-                                fontSize: '1.5rem',
-                                padding: '0.25rem',
+                                padding: '0.5rem',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center'
+                                justifyContent: 'center',
+                                color: 'var(--text-main)',
+                                transition: 'transform 0.2s'
                             }}
+                            aria-label="メニュー"
                         >
-                            {showMobileMenu ? '✕' : '☰'}
+                            <span></span>
+                            <span></span>
+                            <span></span>
                         </button>
                     </div>
                 </div>
@@ -199,7 +204,7 @@ export default function StaffLayout({
 
                 {/* モバイルメニュー */}
                 {isMobile && showMobileMenu && (
-                    <div style={{
+                    <div className="mobile-menu-enter" style={{
                         marginTop: '0.75rem',
                         paddingTop: '0.75rem',
                         borderTop: '1px solid var(--border)',
@@ -207,18 +212,37 @@ export default function StaffLayout({
                         flexDirection: 'column',
                         gap: '0.5rem'
                     }}>
-                        <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+                        <div className="menu-item-enter" style={{ 
+                            fontSize: '0.9rem', 
+                            color: 'var(--text-muted)', 
+                            marginBottom: '0.25rem',
+                            padding: '0.5rem 0.75rem',
+                            fontWeight: 500
+                        }}>
                             {user.name}
                         </div>
                         <Link 
                             href="/staff" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: 'var(--text-main)', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/staff' ? 'var(--surface-hover)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/staff' ? 'var(--surface-hover)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/staff' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/staff') {
+                                    e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/staff') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             ホーム
@@ -226,12 +250,25 @@ export default function StaffLayout({
                         <Link 
                             href="/staff/shifts" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: 'var(--text-main)', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/staff/shifts' ? 'var(--surface-hover)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/staff/shifts' ? 'var(--surface-hover)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/staff/shifts' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/staff/shifts') {
+                                    e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/staff/shifts') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             シフト提出
@@ -239,12 +276,25 @@ export default function StaffLayout({
                         <Link 
                             href="/staff/confirmed-shifts" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: 'var(--text-main)', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/staff/confirmed-shifts' ? 'var(--surface-hover)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/staff/confirmed-shifts' ? 'var(--surface-hover)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/staff/confirmed-shifts' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/staff/confirmed-shifts') {
+                                    e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/staff/confirmed-shifts') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             確定シフト
@@ -252,12 +302,25 @@ export default function StaffLayout({
                         <Link 
                             href="/staff/chat" 
                             onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
                             style={{ 
                                 textDecoration: 'none', 
                                 color: 'var(--text-main)', 
-                                padding: '0.5rem',
-                                borderRadius: '4px',
-                                backgroundColor: pathname === '/staff/chat' ? 'var(--surface-hover)' : 'transparent'
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/staff/chat' ? 'var(--surface-hover)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/staff/chat' ? 600 : 400
+                            }}
+                            onMouseEnter={(e) => {
+                                if (pathname !== '/staff/chat') {
+                                    e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (pathname !== '/staff/chat') {
+                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                }
                             }}
                         >
                             チャット
@@ -267,16 +330,27 @@ export default function StaffLayout({
                                 setShowMobileMenu(false);
                                 handleLogout();
                             }}
+                            className="menu-item-enter"
                             style={{ 
                                 background: 'transparent', 
                                 border: '1px solid var(--border)', 
                                 color: 'var(--text-main)', 
-                                padding: '0.5rem', 
-                                borderRadius: '4px',
+                                padding: '0.75rem 1rem', 
+                                borderRadius: '8px',
                                 cursor: 'pointer',
                                 fontSize: '0.9rem',
                                 textAlign: 'left',
-                                marginTop: '0.5rem'
+                                marginTop: '0.5rem',
+                                transition: 'all 0.2s ease',
+                                fontWeight: 500
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                                e.currentTarget.style.borderColor = 'var(--primary)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                                e.currentTarget.style.borderColor = 'var(--border)';
                             }}
                         >
                             ログアウト
