@@ -19,16 +19,22 @@ if (typeof window !== "undefined" && !firebaseConfig.projectId) {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
-// Firestore: experimentalForceLongPolling で WebChannel の代わりに long-polling を使用。
-// 「Failed to get document because the client is offline」が遅延・不安定な回線や
-// 一部のプロキシ環境で出るのを軽減する。
+// Firestore:
+// 以前は experimentalForceLongPolling を常に有効化していたが、環境によっては極端に遅くなることがある。
+// デフォルトは WebChannel を使い、必要な場合だけ long-polling を有効化できるようにする。
 let db: ReturnType<typeof getFirestore>;
 let firestoreReady: Promise<void> = Promise.resolve();
 if (typeof window !== "undefined") {
+    const forceLongPolling = process.env.NEXT_PUBLIC_FIREBASE_FORCE_LONG_POLLING === "1";
     try {
-        db = initializeFirestore(app, { experimentalForceLongPolling: true });
+        db = forceLongPolling
+            ? initializeFirestore(app, { experimentalForceLongPolling: true })
+            : getFirestore(app);
     } catch {
         db = getFirestore(app);
+    }
+    if (forceLongPolling) {
+        console.warn("[Firebase] Firestore: experimentalForceLongPolling=ON（回線によっては遅くなる場合があります）");
     }
     // オフライン永続化（複数タブ対応）: 必ず他の Firestore 操作より先に呼ぶ。
     // 複数タブでも永続化が有効になり「client is offline」を軽減する。

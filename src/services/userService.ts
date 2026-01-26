@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, query, where } from "firebase/firestore";
+import { collection, doc, setDoc, query, where, getDocFromCache } from "firebase/firestore";
 
 export interface UserProfile {
     uid: string;
@@ -12,7 +12,22 @@ export interface UserProfile {
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
     const docRef = doc(db, "users", uid);
-    const docSnap = await getDoc(docRef);
+    // サーバーが激遅い/不安定な環境だと getDoc(=server 優先) が極端に待たされることがある。
+    // まずキャッシュを試し、無ければサーバーへ（オフライン時は wrapper が空 Snapshot を返す）。
+    const docSnap = await (async () => {
+        try {
+            const snap = await getDocFromCache(docRef);
+            if (process.env.NODE_ENV === "development") {
+                console.info("[userService] getUserProfile: cache hit", { uid });
+            }
+            return snap;
+        } catch {
+            if (process.env.NODE_ENV === "development") {
+                console.info("[userService] getUserProfile: cache miss -> server", { uid });
+            }
+            return await getDoc(docRef);
+        }
+    })();
 
     if (docSnap.exists()) {
         const data = docSnap.data();
