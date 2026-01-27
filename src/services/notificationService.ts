@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase/firebase";
+import { db, auth } from "@/lib/firebase/firebase";
 import { getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot } from "firebase/firestore";
 
@@ -83,12 +83,18 @@ export const getUserNotifications = async (userId: string) => {
 };
 
 export const subscribeNotifications = (userId: string, callback: (notifications: Notification[]) => void) => {
+    // loginMock や未ログイン時は request.auth が null のため Firestore が permission-denied になる。
+    if (!auth.currentUser) {
+        callback([]);
+        return () => {};
+    }
+
     const q = query(
         collection(db, "notifications"),
         where("userId", "==", userId),
         orderBy("createdAt", "desc")
     );
-    
+
     return onSnapshot(q, (snapshot) => {
         const notifications: Notification[] = [];
         snapshot.forEach((doc) => {
@@ -102,28 +108,23 @@ export const subscribeNotifications = (userId: string, callback: (notifications:
         }
         callback(notifications);
     }, (error) => {
-        // エラーオブジェクト全体を直接ログに出力
-        console.error("[notificationService] subscribeNotifications: error (full error object):", error);
-        
-        // エラーの詳細を抽出
-        const code = (error as any)?.code ?? (error as any)?.errorInfo?.code ?? "";
-        const message = (error as any)?.message ?? (error as any)?.errorInfo?.message ?? String(error);
-        
-        console.error("[notificationService] subscribeNotifications: error details:", { 
-            code, 
-            message, 
-            userId,
-            errorType: typeof error,
-            errorConstructor: error?.constructor?.name,
-            errorKeys: error && typeof error === 'object' ? Object.keys(error) : []
-        });
-        
-        // Firestoreインデックスエラーの場合、詳細を表示
-        if (code === "failed-precondition" || code === "unavailable" || message?.includes("index") || message?.includes("index")) {
-            console.error("[notificationService] ⚠️ Firestore index required!");
-            console.error("  Collection: notifications");
-            console.error("  Fields: userId (Ascending), createdAt (Descending)");
-            console.error("  Please create this index in Firebase Console → Firestore Database → Indexes");
+        const code = (error as { code?: string })?.code ?? (error as { errorInfo?: { code?: string } })?.errorInfo?.code ?? "";
+        const message = String((error as { message?: string })?.message ?? (error as { errorInfo?: { message?: string } })?.errorInfo?.message ?? error);
+
+        // permission-denied の場合は空で返し、コンソールに FirebaseError を出さない
+        if (
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            (typeof message === "string" && message.toLowerCase().includes("insufficient permissions"))
+        ) {
+            callback([]);
+            return;
+        }
+
+        console.error("[notificationService] subscribeNotifications: error", { code, message, userId });
+
+        if (code === "failed-precondition" || message?.includes("index")) {
+            console.error("[notificationService] ⚠️ Firestore index required: notifications (userId, createdAt)");
         }
     });
 };
@@ -137,6 +138,7 @@ export const markAsRead = async (notificationId: string) => {
 
 /** 特定のチャットルームのメッセージ通知を既読にする */
 export const markMessageNotificationsAsRead = async (userId: string, roomId: string) => {
+    if (!auth.currentUser) return;
     try {
         const q = query(
             collection(db, "notifications"),
@@ -156,6 +158,15 @@ export const markMessageNotificationsAsRead = async (userId: string, roomId: str
             });
         }
     } catch (error) {
+        const code = (error as { code?: string })?.code ?? "";
+        const msg = String((error as { message?: string })?.message ?? error);
+        if (
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            msg.toLowerCase().includes("insufficient permissions")
+        ) {
+            return;
+        }
         console.error("[notificationService] markMessageNotificationsAsRead: error", error);
     }
 };

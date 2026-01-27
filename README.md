@@ -71,7 +71,19 @@ Next.js と Firebase を使用したアルバイト・パート向けシフト�
 
 4. **Firebase コンソールの設定**（メール登録・ログインを使う場合）
    - **Authentication** → ログイン方法 → **メール/パスワード** を有効にする。
-   - **Firestore** → ルール：
+   - **Firestore** → データベース・ルール・インデックスを一括で用意する（推奨）：
+     1. Firebase コンソール → **Firestore Database** → まだなら **「データベースを作成」** をクリック（本番/テストどちらでも可）。
+     2. ターミナルで以下を実行（プロジェクトID は `.env.local` の `NEXT_PUBLIC_FIREBASE_PROJECT_ID` の値に合わせる）：
+        ```bash
+        npm install -g firebase-tools
+        firebase login
+        firebase use あなたのプロジェクトID
+        firebase deploy --only firestore
+        ```
+        `firebase deploy --only firestore` で **ルール**（`firestore.rules`）と **インデックス**（`firestore.indexes.json`）が一度にデプロイされます。インデックス作成には数分かかることがあります。
+     3. ルールだけ先に反映したい場合: `firebase deploy --only firestore:rules`
+     4. インデックスだけ先に反映したい場合: `firebase deploy --only firestore:indexes`
+   - **Firestore** → ルール（CLI を使わない場合）：
      1. Firebase コンソール → **Firestore Database** → **ルール** タブを開く
      2. プロジェクトルートの `firestore.rules` ファイルの内容をコピー
      3. コンソールのルールエディタに貼り付けて **「公開」** をクリック
@@ -89,34 +101,8 @@ Next.js と Firebase を使用したアルバイト・パート向けシフト�
      - 開発者ツールで `user.role` を書き換えても、Firestore への書き込みが拒否されるため、管理者画面にはアクセスできません
      - `/admin/*` へのアクセスは `src/middleware.ts` でもチェック可能（Firebase Admin SDK を設定した場合）
 
-   - **Firestore** → インデックス：
-     1. Firebase コンソール → **Firestore Database** → **インデックス** タブを開く
-     2. エラーメッセージに表示されたURLをクリックするか、以下のインデックスを手動で作成：
-        - **`messages` コレクション**: `roomId` (昇順) + `createdAt` (昇順)
-        - **`notifications` コレクション**: `userId` (昇順) + `createdAt` (降順)
-     3. インデックスの作成には数分かかる場合があります
-     
-     これがないとチャット機能や通知機能で「The query requires an index」エラーが発生します。
-     
-     **手動でインデックスを作成する場合**：
-     1. Firebase コンソール → **Firestore Database** → **インデックス** タブ
-     2. 「インデックスを追加」をクリック
-     3. 以下のインデックスを順番に作成：
-        - コレクションID: `messages`、フィールド: `roomId` (昇順)、`createdAt` (昇順)
-        - コレクションID: `notifications`、フィールド: `userId` (昇順)、`createdAt` (降順)
-        - コレクションID: `shifts`、フィールド: `userId` (昇順)、`date` (昇順)
-        - コレクションID: `shiftChangeRequests`、フィールド: `userId` (昇順)、`createdAt` (降順)
-
-   - **Firestore** → インデックス：
-     1. Firebase コンソール → **Firestore Database** → **インデックス** タブを開く
-     2. エラーメッセージに表示されたURLをクリックするか、以下のインデックスを手動で作成：
-        - **`messages` コレクション**: `roomId` (昇順) + `createdAt` (昇順)
-        - **`notifications` コレクション**: `userId` (昇順) + `createdAt` (降順)
-        - **`shifts` コレクション**: `userId` (昇順) + `date` (昇順)
-        - **`shiftChangeRequests` コレクション**: `userId` (昇順) + `createdAt` (降順)
-     3. インデックスの作成には数分かかる場合があります
-     
-     これがないとチャット機能、通知機能、シフト機能、変更申請で「The query requires an index」エラーが発生します。
+   - **Firestore** → インデックス（CLI で `firebase deploy --only firestore` を実行した場合は不要）：
+     手動で行う場合のみ、Firebase コンソール → **Firestore Database** → **インデックス** タブで、`firestore.indexes.json` に定義されている 7 本の複合インデックスを追加します（チャット・通知・シフト・変更申請で必要）。インデックスの作成には数分かかることがあります。
    ```bash
    npm run dev
    ```

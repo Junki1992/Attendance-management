@@ -202,7 +202,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
             } catch (e) {
                 // Firestore permission-denied などでここに来ると、loading が落ちず無限 Loading になり得るため必ず回復させる
-                devError("[Auth] onAuthStateChanged error:", e);
+                const msg = (e as { message?: string })?.message ?? "";
+                const code = (e as { code?: string })?.code ?? "";
+                devError("[Auth] onAuthStateChanged error (getUserProfile等):", { code, message: msg, full: e });
                 try {
                     await signOut(auth);
                 } catch {

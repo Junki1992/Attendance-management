@@ -10,31 +10,36 @@ export default function StaffChatPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // まず管理者のUIDを取得
+        const isPermissionDenied = (err: unknown) => {
+            const code = (err as { code?: string })?.code ?? "";
+            const msg = String((err as { message?: string })?.message ?? err);
+            return (
+                code === "permission-denied" ||
+                code === "missing-or-insufficient-permissions" ||
+                msg.toLowerCase().includes("insufficient permissions")
+            );
+        };
+
         getAdminId().then((uid) => {
             if (uid) {
                 setAdminId(uid);
-                // 管理者のプロフィールを取得して名前を設定
                 getUserProfile(uid).then((admin) => {
                     if (admin) {
                         setAdminName(admin.name || "管理者");
                     }
                     setLoading(false);
                 }).catch((err) => {
-                    console.error("Failed to get admin profile:", err);
+                    if (!isPermissionDenied(err)) {
+                        console.error("Failed to get admin profile:", err);
+                    }
                     setLoading(false);
                 });
             } else {
                 setLoading(false);
             }
         }).catch((err) => {
-            console.error("Failed to get admin ID:", err);
-            // エラーの詳細をログに出力
-            if (process.env.NODE_ENV === "development") {
-                console.error("Error details:", {
-                    code: (err as { code?: string })?.code,
-                    message: (err as { message?: string })?.message,
-                });
+            if (!isPermissionDenied(err)) {
+                console.error("Failed to get admin ID:", err);
             }
             setLoading(false);
         });

@@ -1,5 +1,5 @@
 
-import { db } from "@/lib/firebase/firebase";
+import { db, auth } from "@/lib/firebase/firebase";
 import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timestamp } from "firebase/firestore";
 import { createNotification } from "@/services/notificationService";
 
@@ -29,55 +29,77 @@ export const sendMessage = async (text: string, senderId: string, receiverId: st
     }
 };
 
+/** createdAt のミリ秒または秒を返す（ソート用） */
+function toMillis(obj: ChatMessage["createdAt"]): number {
+    if (!obj) return 0;
+    if (typeof (obj as { toMillis?: () => number }).toMillis === "function") {
+        return (obj as { toMillis: () => number }).toMillis();
+    }
+    const s = (obj as { seconds?: number })?.seconds;
+    return typeof s === "number" ? s * 1000 : 0;
+}
+
 export const subscribeMessages = (
-    userId1: string, 
-    userId2: string, 
+    currentUserId: string,
+    partnerId: string,
     callback: (messages: ChatMessage[]) => void
 ) => {
-    // Queries messages where (sender=u1 AND receiver=u2) OR (sender=u2 AND receiver=u1)
-    // Firestore doesn't support logical OR in simple queries efficiently for this mixed structure without advanced indices or client-side merge.
-    // simpler approach: Subscribe to ALL messages where (sender == userId1) OR (receiver == userId1) 
-    // and then filter for the specific partner client-side.
-    // OR: maintain a "chatRoomId" which is `min(u1, u2)_max(u1, u2)`
-    
-    // Using simple approach: query all involved with current user (for staff view that's mostly fine).
-    // Actually, for direct chat, room ID strategy is best.
-    const roomId = [userId1, userId2].sort().join("_");
-    
-    // However, that requires adding roomId to every message. Let's do that in sendMessage?
-    // Changing strategy: Query logic client side for simplicity given low volume?
-    // No, let's use the 'OR' query or just two listeners?
-    // Firestore 'in' query works for one field.
-    
-    // Let's execute TWO queries? No, `onSnapshot` might be complicated.
-    
-    // Easier strategy for this scale:
-    // Just save `roomId` or `participants` array. 
-    // Let's modify sendMessage to include `roomId`.
-    // But `sendMessage` above doesn't have it. I'll update `sendMessage` to include logic or `roomId`.
-    
-    // Wait, simple approach without changing schema too much:
-    // Query: collection "messages", where "participants" array-contains "userId1"
-    // Then filter by "userId2" in JS.
-    
-    // Let's just assume we pass `roomId` explicitly or derive it.
-    // Let's use derived `roomId` = sort(u1, u2).join('_').
-    // I will update sendMessage to include this field.
-    
-    return onSnapshot(
-        query(
-            collection(db, "messages"),
-            where("roomId", "==", [userId1, userId2].sort().join("_")),
-            orderBy("createdAt", "asc")
-        ),
-        (snapshot) => {
-            const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatMessage));
-            callback(messages);
-        },
-        (error) => {
-            console.error("Chat subscription error:", error);
+    // loginMock や未ログイン時は request.auth が null のため Firestore が permission-denied になる。
+    // Firebase Auth が有効でないときは購読せず空で返す（コンソールエラーを出さない）。
+    if (!auth.currentUser) {
+        callback([]);
+        return () => {};
+    }
+
+    let part1: ChatMessage[] = [];
+    let part2: ChatMessage[] = [];
+
+    const notify = () => {
+        const combined = [...part1, ...part2].sort((a, b) => toMillis(a.createdAt) - toMillis(b.createdAt));
+        callback(combined);
+    };
+
+    const onError = (error: unknown) => {
+        const code = (error as { code?: string })?.code ?? "";
+        const message = String((error as { message?: string })?.message ?? error);
+        const isPermissionDenied =
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            message.toLowerCase().includes("insufficient permissions");
+        if (isPermissionDenied) {
+            callback([]);
+            return;
         }
+        console.error("Chat subscription error:", { code, message, currentUserId, partnerId });
+    };
+
+    const q1 = query(
+        collection(db, "messages"),
+        where("senderId", "==", currentUserId),
+        where("receiverId", "==", partnerId),
+        orderBy("createdAt", "asc")
     );
+    const q2 = query(
+        collection(db, "messages"),
+        where("receiverId", "==", currentUserId),
+        where("senderId", "==", partnerId),
+        orderBy("createdAt", "asc")
+    );
+
+    const unsub1 = onSnapshot(q1, (snap) => {
+        part1 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+        notify();
+    }, onError);
+
+    const unsub2 = onSnapshot(q2, (snap) => {
+        part2 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+        notify();
+    }, onError);
+
+    return () => {
+        unsub1();
+        unsub2();
+    };
 };
 
 export const sendMessageWithRoom = async (text: string, senderId: string, receiverId: string, senderName?: string) => {

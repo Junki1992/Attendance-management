@@ -3,14 +3,20 @@
 import { useState, useEffect } from "react";
 import ChatWindow from "@/components/ChatWindow";
 import { getAllStaff, StaffItem } from "@/services/userService";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminChatPage() {
+    const { user } = useAuth();
     const [staffList, setStaffList] = useState<StaffItem[]>([]);
     const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
 
     useEffect(() => {
+        // 一般アカウント（スタッフ）で/admin/chatに来た場合、getAllStaff()は
+        // 「role==staff」のユーザーを読もうとして permission-denied になる。
+        // 管理者のときだけスタッフ一覧を取得する。
+        if (user?.role !== "admin") return;
         getAllStaff().then(setStaffList);
-    }, []);
+    }, [user?.role]);
 
     const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
 

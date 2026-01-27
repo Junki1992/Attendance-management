@@ -1,4 +1,4 @@
-import { db } from "@/lib/firebase/firebase";
+import { db, auth } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, query, where, getDocFromCache } from "firebase/firestore";
 
@@ -66,26 +66,47 @@ export interface StaffItem {
     name: string;
 }
 
+const STAFF_FALLBACK_LIST: StaffItem[] = [
+    { id: "staff-456", name: "アルバイト 花子" },
+    { id: "1", name: "佐藤 一郎" },
+    { id: "2", name: "鈴木 次郎" },
+];
+
 /** users の role='staff' 一覧。 Firestore に staff がいない場合のフォールバック用にモックを返す */
 export const getAllStaff = async (): Promise<StaffItem[]> => {
-    const q = query(
-        collection(db, "users"),
-        where("role", "==", "staff")
-    );
-    const snap = await getDocs(q);
-    const list: StaffItem[] = [];
-    snap.forEach((d) => {
-        const data = d.data();
-        list.push({ id: d.id, name: data.name || "（名前なし）" });
-    });
-    if (list.length === 0) {
-        return [
-            { id: "staff-456", name: "アルバイト 花子" },
-            { id: "1", name: "佐藤 一郎" },
-            { id: "2", name: "鈴木 次郎" },
-        ];
+    // loginMock や未ログイン時は request.auth が null のため Firestore が permission-denied になる。
+    if (!auth.currentUser) {
+        return STAFF_FALLBACK_LIST;
     }
-    return list;
+    try {
+        const q = query(
+            collection(db, "users"),
+            where("role", "==", "staff")
+        );
+        const snap = await getDocs(q);
+        const list: StaffItem[] = [];
+        snap.forEach((d) => {
+            const data = d.data();
+            list.push({ id: d.id, name: data.name || "（名前なし）" });
+        });
+        if (list.length === 0) {
+            return STAFF_FALLBACK_LIST;
+        }
+        return list;
+    } catch (err) {
+        // 一般アカウント（スタッフ）が /admin/chat 等に来た場合、「role==staff」のクエリは
+        // permission-denied になる。コンソールエラーを出さずフォールバックを返す。
+        const code = (err as { code?: string })?.code ?? "";
+        const msg = (err as { message?: string })?.message ?? "";
+        if (
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            (typeof msg === "string" && msg.toLowerCase().includes("insufficient permissions"))
+        ) {
+            return STAFF_FALLBACK_LIST;
+        }
+        throw err;
+    }
 };
 
 /** 全ユーザー一覧を取得（管理者用） */
@@ -113,14 +134,14 @@ export const updateUserRole = async (uid: string, role: "admin" | "staff"): Prom
 
 /** 管理者のUIDを取得 */
 export const getAdminId = async (): Promise<string | null> => {
-    // 環境変数で管理者のUIDが指定されている場合はそれを使用
+    // loginMock や未ログイン時は Firestore が permission-denied になるためスキップ
+    if (!auth.currentUser) return null;
+
     const adminUidFromEnv = process.env.NEXT_PUBLIC_ADMIN_UID?.trim();
     if (adminUidFromEnv) {
         return adminUidFromEnv;
     }
-    
-    // 環境変数が設定されていない場合、Firestoreから取得を試みる
-    // ただし、スタッフはクエリを実行できないため、管理者のみが実行可能
+
     try {
         const q = query(
             collection(db, "users"),
@@ -133,8 +154,13 @@ export const getAdminId = async (): Promise<string | null> => {
         // 最初の管理者のUIDを返す
         return snap.docs[0].id;
     } catch (err) {
-        // クエリが失敗した場合（スタッフが実行した場合など）、null を返す
-        if (process.env.NODE_ENV === "development") {
+        const code = (err as { code?: string })?.code ?? "";
+        const msg = String((err as { message?: string })?.message ?? err);
+        const isPermissionDenied =
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            msg.toLowerCase().includes("insufficient permissions");
+        if (!isPermissionDenied && process.env.NODE_ENV === "development") {
             console.warn("[userService] getAdminId: query failed, use NEXT_PUBLIC_ADMIN_UID env var", err);
         }
         return null;
