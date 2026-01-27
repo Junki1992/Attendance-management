@@ -101,17 +101,22 @@ Next.js と Firebase を使用したアルバイト・パート向けシフト�
      **手動でインデックスを作成する場合**：
      1. Firebase コンソール → **Firestore Database** → **インデックス** タブ
      2. 「インデックスを追加」をクリック
-     3. コレクションID: `messages`、フィールド: `roomId` (昇順)、`createdAt` (昇順) を設定して作成
-     4. 同様に、コレクションID: `notifications`、フィールド: `userId` (昇順)、`createdAt` (降順) を設定して作成
+     3. 以下のインデックスを順番に作成：
+        - コレクションID: `messages`、フィールド: `roomId` (昇順)、`createdAt` (昇順)
+        - コレクションID: `notifications`、フィールド: `userId` (昇順)、`createdAt` (降順)
+        - コレクションID: `shifts`、フィールド: `userId` (昇順)、`date` (昇順)
+        - コレクションID: `shiftChangeRequests`、フィールド: `userId` (昇順)、`createdAt` (降順)
 
    - **Firestore** → インデックス：
      1. Firebase コンソール → **Firestore Database** → **インデックス** タブを開く
      2. エラーメッセージに表示されたURLをクリックするか、以下のインデックスを手動で作成：
         - **`messages` コレクション**: `roomId` (昇順) + `createdAt` (昇順)
         - **`notifications` コレクション**: `userId` (昇順) + `createdAt` (降順)
+        - **`shifts` コレクション**: `userId` (昇順) + `date` (昇順)
+        - **`shiftChangeRequests` コレクション**: `userId` (昇順) + `createdAt` (降順)
      3. インデックスの作成には数分かかる場合があります
      
-     これがないとチャット機能や通知機能で「The query requires an index」エラーが発生します。
+     これがないとチャット機能、通知機能、シフト機能、変更申請で「The query requires an index」エラーが発生します。
    ```bash
    npm run dev
    ```

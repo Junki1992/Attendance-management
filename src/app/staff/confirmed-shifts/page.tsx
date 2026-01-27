@@ -9,6 +9,7 @@ import {
   getMyShiftChangeRequests,
   ShiftChangeRequest,
 } from "@/services/shiftChangeRequestService";
+import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -312,6 +313,8 @@ export default function StaffConfirmedShiftsPage() {
             const date = new Date(year, month, day);
             const dow = date.getDay();
             const isWeekend = dow === 0 || dow === 6;
+            const isHoliday = isJapaneseHoliday(date);
+            const isRed = isWeekend || isHoliday;
             const s = shiftByDay[day];
             const label = !s
               ? ""
@@ -326,14 +329,14 @@ export default function StaffConfirmedShiftsPage() {
                   backgroundColor: "var(--surface)",
                   minHeight: "80px",
                   padding: "0.5rem",
-                  color: isWeekend ? "var(--destructive)" : "inherit",
                 }}
               >
                 <div
                   style={{
-                    fontWeight: 500,
+                    fontWeight: isRed ? "bold" : 500,
                     fontSize: "0.9rem",
                     marginBottom: "0.25rem",
+                    color: isRed ? "#DC2626" : "var(--text-main)",
                   }}
                 >
                   {day}
