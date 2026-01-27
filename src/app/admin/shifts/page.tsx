@@ -12,6 +12,8 @@ import {
 import { getAllStaff, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
 
+const MOBILE_BREAKPOINT = 768;
+
 function calcHours(s: Shift): number | "OFF" {
   if (s.startTime === "00:00" && s.endTime === "00:00") return "OFF";
   const [sH, sM] = s.startTime.split(":").map(Number);
@@ -38,6 +40,14 @@ export default function AdminShiftGrid() {
   const [workSummary, setWorkSummary] = useState<{ userId: string; name: string; totalHours: number; hourlyWage: number; salary: number }[]>([]);
   const [editingCell, setEditingCell] = useState<{ userId: string; day: number } | null>(null);
   const [savingCell, setSavingCell] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const lastDay = new Date(year, month + 1, 0).getDate();
   const DAYS = Array.from({ length: lastDay }, (_, i) => i + 1);
@@ -275,15 +285,16 @@ export default function AdminShiftGrid() {
         </div>
       )}
 
-      <div style={{ overflowX: "auto" }}>
+      <div style={{ overflowX: isMobile ? "visible" : "auto" }}>
         <div
           style={{
             display: "flex",
+            flexDirection: isMobile ? "column" : "row",
             justifyContent: "space-between",
-            alignItems: "center",
+            alignItems: isMobile ? "stretch" : "center",
             marginBottom: "1rem",
             flexWrap: "wrap",
-            gap: "0.5rem",
+            gap: "0.75rem",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -294,7 +305,7 @@ export default function AdminShiftGrid() {
             >
               ‹
             </button>
-            <h2 style={{ fontSize: "1.5rem", margin: 0 }}>
+            <h2 style={{ fontSize: isMobile ? "1.25rem" : "1.5rem", margin: 0 }}>
               {year}年 {month + 1}月 シフト表
             </h2>
             <button
@@ -305,11 +316,12 @@ export default function AdminShiftGrid() {
               ›
             </button>
           </div>
-          <div style={{ display: "flex", gap: "1rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             <button
               className="btn btn-outline"
               onClick={handleCopyCsv}
               disabled={loading}
+              style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {csvCopied ? "コピーしました" : "CSVコピー"}
             </button>
@@ -317,6 +329,7 @@ export default function AdminShiftGrid() {
               className="btn btn-primary"
               onClick={handleConfirm}
               disabled={loading || confirming}
+              style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {confirming ? "処理中..." : "確定して通知"}
             </button>
@@ -341,6 +354,72 @@ export default function AdminShiftGrid() {
           <div style={{ padding: "2rem", textAlign: "center" }}>
             読み込み中...
           </div>
+        ) : isMobile ? (
+          (() => {
+            const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
+            const firstDayOfWeek = new Date(year, month, 1).getDay();
+            const leadingBlanks = Array.from({ length: firstDayOfWeek }, () => null);
+            const daysArray: (number | null)[] = [...leadingBlanks, ...DAYS];
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                {staffList.map((user) => {
+                  const totalHours = DAYS.reduce((acc, d) => acc + getShift(user.id, d), 0);
+                  const weeklyWarning = totalHours > 40;
+                  return (
+                    <div key={user.id} className="card" style={{ padding: "0.75rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.25rem" }}>
+                        <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>
+                          {user.name}
+                          {weeklyWarning && <span style={{ marginLeft: "0.25rem" }} title="週40時間超過">⚠️</span>}
+                        </span>
+                        <span style={{ fontSize: "0.875rem", color: weeklyWarning ? "var(--destructive)" : "var(--text-muted)", fontWeight: 500 }}>
+                          合計 {totalHours}h
+                        </span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", fontSize: "0.7rem" }}>
+                        {dayOfWeek.map((d) => (
+                          <div key={d} style={{ textAlign: "center", padding: "0.2rem", backgroundColor: "var(--surface-hover)", borderRadius: "2px", fontWeight: 600 }}>
+                            {d}
+                          </div>
+                        ))}
+                        {daysArray.map((day, index) => {
+                          if (day === null) {
+                            return <div key={`empty-${index}`} style={{ minHeight: "32px" }} />;
+                          }
+                          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                          const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr);
+                          const h = shift ? calcHours(shift) : 0;
+                          const numHours = h === "OFF" ? 0 : (h as number);
+                          const isOver = isDailyOver(numHours);
+                          const hasData = !!shift;
+                          const isEditedLate = !!shift?.editedAfterDeadline;
+                          return (
+                            <div
+                              key={day}
+                              onClick={hasData ? () => setEditingCell({ userId: user.id, day }) : undefined}
+                              style={{
+                                minHeight: "32px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "0.2rem",
+                                borderRadius: "4px",
+                                backgroundColor: isOver ? "#FEE2E2" : numHours > 0 ? "#EEF2FF" : "var(--surface-hover)",
+                                color: isOver || isEditedLate ? "#B91C1C" : "inherit",
+                                cursor: hasData ? "pointer" : "default",
+                              }}
+                            >
+                              {h === "OFF" ? "OFF" : numHours > 0 ? numHours : ""}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()
         ) : (
           <table
             style={{
@@ -479,7 +558,8 @@ export default function AdminShiftGrid() {
         {confirmedNotifs.length === 0 ? (
           <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>確定通知はまだありません</p>
         ) : (
-          <table style={{ width: "100%", fontSize: "0.8rem", borderCollapse: "collapse" }}>
+          <div style={isMobile ? { overflowX: "auto", WebkitOverflowScrolling: "touch" } : undefined}>
+          <table style={{ width: "100%", minWidth: isMobile ? "280px" : undefined, fontSize: "0.8rem", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
@@ -505,6 +585,7 @@ export default function AdminShiftGrid() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -514,7 +595,8 @@ export default function AdminShiftGrid() {
         {workSummary.length === 0 ? (
           <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>確定シフトがないため、集計はありません</p>
         ) : (
-          <table style={{ width: "100%", fontSize: "0.8rem", borderCollapse: "collapse" }}>
+          <div style={isMobile ? { overflowX: "auto", WebkitOverflowScrolling: "touch" } : undefined}>
+          <table style={{ width: "100%", minWidth: isMobile ? "320px" : undefined, fontSize: "0.8rem", borderCollapse: "collapse" }}>
             <thead>
               <tr>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
@@ -534,6 +616,7 @@ export default function AdminShiftGrid() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
