@@ -53,8 +53,20 @@ export default function ChatWindow({ className, partnerName, partnerId }: ChatWi
 
     if (!user) return <div>Auth required</div>;
 
+    const useFullHeight = className?.includes("h-full");
     return (
-        <div className={`flex flex-col h-full bg-white rounded-lg shadow border border-gray-200 ${className}`} style={{ height: '500px', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '0.5rem' }}>
+        <div
+            className={`flex flex-col bg-white rounded-lg shadow border border-gray-200 ${className ?? ""}`}
+            style={{
+                height: useFullHeight ? "100%" : "500px",
+                minHeight: useFullHeight ? 0 : undefined,
+                display: "flex",
+                flexDirection: "column",
+                backgroundColor: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "0.5rem",
+            }}
+        >
             {/* Header */}
             <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface-hover)', fontWeight: 600 }}>
                 {partnerName}
