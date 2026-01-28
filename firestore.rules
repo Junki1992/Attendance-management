@@ -3,6 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    
     // users コレクション：role の書き換えを禁止して管理者アクセスを保護
     match /users/{userId} {
       // 作成：新規登録時のみ。role は "staff" または "admin" を許可
@@ -52,16 +58,19 @@ service cloud.firestore {
       // 返されるすべてのドキュメントは receiverId == request.auth.uid を満たすため、
       // resource.data.receiverId == request.auth.uid を満たす
       // したがって、クエリが返すすべてのドキュメントはこのルールを満たす
+      // 読み取り：
+      // - 送信者/受信者は読める
+      // - 管理者(role=admin)は全メッセージを読める（UIDズレ等で宛先がズレたデータも調査/復旧できるように）
       allow read: if request.auth != null
-                  && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+                  && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid || isAdmin());
       // 作成：送信者が認証ユーザーである必要がある
       allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
       // 更新：送信者または受信者のみ
       allow update: if request.auth != null
-                    && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+                    && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid || isAdmin());
       // 削除：送信者または受信者のみ
       allow delete: if request.auth != null
-                    && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+                    && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid || isAdmin());
     }
     
     // notifications コレクション（自分の通知のみ読める。where userId== クエリで permission-denied を防ぐため明示）

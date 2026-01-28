@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
 import { getAllUsers, updateUserRole, UserProfile } from "@/services/userService";
 import { useAuth } from "@/context/AuthContext";
+import ProfileImageUpload from "@/components/ProfileImageUpload";
+import Avatar from "@/components/Avatar";
 
 export default function AdminSettingsPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshUserProfile } = useAuth();
   const [deadlineDay, setDeadlineDay] = useState(25);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -78,6 +80,17 @@ export default function AdminSettingsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+      {currentUser && (
+        <div className="card" style={{ maxWidth: "400px" }}>
+          <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>自分のプロフィール</h2>
+          <ProfileImageUpload
+            uid={currentUser.uid}
+            name={currentUser.name}
+            photoURL={currentUser.photoURL}
+            onSuccess={refreshUserProfile}
+          />
+        </div>
+      )}
       <div className="card" style={{ maxWidth: "400px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>設定</h2>
 
@@ -141,9 +154,12 @@ export default function AdminSettingsPage() {
                   backgroundColor: user.uid === currentUser?.uid ? "var(--bg-secondary)" : undefined,
                 }}
               >
-                <div>
-                  <div style={{ fontWeight: 500 }}>{user.name}</div>
-                  <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{user.email}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                  <Avatar photoURL={user.photoURL} name={user.name} size="md" />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 500 }}>{user.name}</div>
+                    <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{user.email}</div>
+                  </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <span

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import ChatWindow from "@/components/ChatWindow";
+import Avatar from "@/components/Avatar";
 import { getAllStaff, StaffItem } from "@/services/userService";
 import { useAuth } from "@/context/AuthContext";
 
@@ -66,6 +67,9 @@ export default function AdminChatPage() {
                             }
                         }}
                         style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.75rem",
                             padding: "1rem 1.25rem",
                             borderBottom: "1px solid var(--border)",
                             cursor: "pointer",
@@ -75,6 +79,7 @@ export default function AdminChatPage() {
                             transition: "background-color 0.15s ease",
                         }}
                     >
+                        <Avatar photoURL={staff.photoURL} name={staff.name} size="sm" />
                         {staff.name}
                     </div>
                 ))}
@@ -141,9 +146,10 @@ export default function AdminChatPage() {
                 </button>
             )}
             <div style={{ flex: 1, minHeight: 0 }}>
-                <ChatWindow
+                    <ChatWindow
                     partnerId={selectedStaff.id}
                     partnerName={selectedStaff.name}
+                    partnerPhotoURL={selectedStaff.photoURL}
                     className="h-full"
                 />
             </div>

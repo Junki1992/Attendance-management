@@ -1,17 +1,23 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ChatMessage, sendMessageWithRoom, subscribeMessages } from "@/services/chatService";
+import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesFromPartners, subscribeMyMessages } from "@/services/chatService";
 import { useAuth } from "@/context/AuthContext";
 import { markMessageNotificationsAsRead } from "@/services/notificationService";
+import Avatar from "@/components/Avatar";
 
 interface ChatWindowProps {
     className?: string;
-    partnerName: string;   // Name of the person we are chatting with
-    partnerId: string;     // ID of the person we are chatting with
+    partnerName: string;
+    partnerId: string;
+    /** 複数指定時は「この誰かから届いたメッセージ」を全て表示（例: スタッフチャットで全管理者） */
+    partnerIds?: string[];
+    /** true の場合、相手を固定せず自分が送受信した全メッセージを表示 */
+    subscribeAllForMe?: boolean;
+    partnerPhotoURL?: string | null;
 }
 
-export default function ChatWindow({ className, partnerName, partnerId }: ChatWindowProps) {
+export default function ChatWindow({ className, partnerName, partnerId, partnerIds, subscribeAllForMe, partnerPhotoURL }: ChatWindowProps) {
     const { user } = useAuth();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState("");
@@ -27,16 +33,18 @@ export default function ChatWindow({ className, partnerName, partnerId }: ChatWi
             console.error("[ChatWindow] Failed to mark notifications as read:", err);
         });
 
-        const unsubscribe = subscribeMessages(user.uid, partnerId, (msgs) => {
+        const onMessages = (msgs: ChatMessage[]) => {
             setMessages(msgs);
-            // Scroll to bottom on new message
-            setTimeout(() => {
-                bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
-        });
+            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        };
+        const unsubscribe = subscribeAllForMe
+            ? subscribeMyMessages(user.uid, onMessages)
+            : (partnerIds && partnerIds.length > 0
+                ? subscribeMessagesFromPartners(user.uid, partnerIds, onMessages)
+                : subscribeMessages(user.uid, partnerId, onMessages));
 
         return () => unsubscribe();
-    }, [user, partnerId]);
+    }, [user, partnerId, partnerIds, subscribeAllForMe]);
 
     const handleSend = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -47,7 +55,8 @@ export default function ChatWindow({ className, partnerName, partnerId }: ChatWi
             setInputText("");
         } catch (error) {
             console.error(error);
-            alert("送信に失敗しました");
+            const msg = error instanceof Error ? error.message : "送信に失敗しました";
+            alert(msg);
         }
     };
 
@@ -68,7 +77,8 @@ export default function ChatWindow({ className, partnerName, partnerId }: ChatWi
             }}
         >
             {/* Header */}
-            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface-hover)', fontWeight: 600 }}>
+            <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface-hover)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Avatar photoURL={partnerPhotoURL} name={partnerName} size="sm" />
                 {partnerName}
             </div>
 

@@ -53,6 +53,7 @@ export interface User {
     email: string;
     name: string;
     role: UserRole;
+    photoURL?: string;
 }
 
 interface AuthContextType {
@@ -65,6 +66,8 @@ interface AuthContextType {
     /** 開発・検証用：パスワードなしでロールを選んで入る */
     loginMock: (role: UserRole) => Promise<void>;
     logout: () => Promise<void>;
+    /** プロフィールを再取得して user を更新（画像変更後に呼ぶ） */
+    refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -74,6 +77,7 @@ const AuthContext = createContext<AuthContextType>({
     register: async () => {},
     loginMock: async () => {},
     logout: async () => {},
+    refreshUserProfile: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -156,6 +160,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                             email: firebaseUser.email || profile.email || "",
                             name: profile.name,
                             role: profile.role,
+                            photoURL: profile.photoURL,
                         };
                         userRef.current = u;
                         setUser(u);
@@ -260,6 +265,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     email: firebaseUser.email || profile.email || "",
                     name: profile.name,
                     role: profile.role,
+                    photoURL: profile.photoURL,
                 };
                 userRef.current = u;
                 setUser(u);
@@ -366,8 +372,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    const refreshUserProfile = async () => {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser || userRef.current?.uid !== firebaseUser.uid) return;
+        try {
+            const profile = await getUserProfile(firebaseUser.uid);
+            if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                const u: User = {
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email || profile.email || "",
+                    name: profile.name,
+                    role: profile.role,
+                    photoURL: profile.photoURL,
+                };
+                userRef.current = u;
+                setUser(u);
+            }
+        } catch {
+            // ignore
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, loginMock, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, register, loginMock, logout, refreshUserProfile }}>
             {children}
         </AuthContext.Provider>
     );

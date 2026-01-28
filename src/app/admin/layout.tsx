@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import NotificationList from "@/components/NotificationList";
+import Avatar from "@/components/Avatar";
 import { subscribeNotifications } from "@/services/notificationService";
 
 export default function AdminLayout({
@@ -141,7 +142,10 @@ export default function AdminLayout({
                 }}>
                     <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>管理画面</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.9rem' }}>{user.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Avatar photoURL={user.photoURL} name={user.name} size="sm" />
+                            <span style={{ fontSize: '0.9rem' }}>{user.name}</span>
+                        </div>
                         <div style={{ position: 'relative' }}>
                             <button 
                                 onClick={() => setShowNotifications(!showNotifications)}
@@ -216,12 +220,14 @@ export default function AdminLayout({
                         gap: '0.5rem'
                     }}>
                         <div className="menu-item-enter" style={{ 
+                            display: 'flex', alignItems: 'center', gap: '0.5rem',
                             fontSize: '0.9rem', 
                             color: 'rgba(224, 231, 255, 0.7)', 
                             marginBottom: '0.25rem',
                             padding: '0.5rem 0.75rem',
                             fontWeight: 500
                         }}>
+                            <Avatar photoURL={user.photoURL} name={user.name} size="sm" />
                             {user.name}
                         </div>
                         <Link 

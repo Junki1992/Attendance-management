@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import ChatWindow from "@/components/ChatWindow";
-import { getAdminId, getUserProfile } from "@/services/userService";
+import { getAdminIds, getUserProfile } from "@/services/userService";
 
 export default function StaffChatPage() {
-    const [adminId, setAdminId] = useState<string | null>(null);
+    const [adminIds, setAdminIds] = useState<string[]>([]);
     const [adminName, setAdminName] = useState<string>("管理者");
+    const [adminPhotoURL, setAdminPhotoURL] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -20,27 +21,25 @@ export default function StaffChatPage() {
             );
         };
 
-        getAdminId().then((uid) => {
-            if (uid) {
-                setAdminId(uid);
-                getUserProfile(uid).then((admin) => {
+        getAdminIds().then((ids) => {
+            setAdminIds(ids);
+            const first = ids[0];
+            if (first) {
+                getUserProfile(first).then((admin) => {
                     if (admin) {
                         setAdminName(admin.name || "管理者");
+                        setAdminPhotoURL(admin.photoURL ?? null);
                     }
                     setLoading(false);
                 }).catch((err) => {
-                    if (!isPermissionDenied(err)) {
-                        console.error("Failed to get admin profile:", err);
-                    }
+                    if (!isPermissionDenied(err)) console.error("Failed to get admin profile:", err);
                     setLoading(false);
                 });
             } else {
                 setLoading(false);
             }
         }).catch((err) => {
-            if (!isPermissionDenied(err)) {
-                console.error("Failed to get admin ID:", err);
-            }
+            if (!isPermissionDenied(err)) console.error("Failed to get admin IDs:", err);
             setLoading(false);
         });
     }, []);
@@ -56,7 +55,7 @@ export default function StaffChatPage() {
         );
     }
 
-    if (!adminId) {
+    if (adminIds.length === 0) {
         return (
             <div style={{ width: '100%', maxWidth: '100%' }}>
                 <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>管理者への連絡</h2>
@@ -70,9 +69,12 @@ export default function StaffChatPage() {
     return (
         <div style={{ width: '100%', maxWidth: '100%' }}>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>管理者への連絡</h2>
-            <ChatWindow 
-                partnerId={adminId} 
-                partnerName={adminName} 
+            <ChatWindow
+                partnerId={adminIds[0]}
+                partnerIds={adminIds}
+                partnerName={adminName}
+                partnerPhotoURL={adminPhotoURL}
+                subscribeAllForMe
             />
         </div>
     );

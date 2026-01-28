@@ -1,6 +1,13 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, initializeFirestore, enableNetwork, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
+import {
+    getFirestore,
+    initializeFirestore,
+    enableNetwork,
+    persistentLocalCache,
+    persistentMultipleTabManager,
+} from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -20,34 +27,31 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 
 // Firestore:
-// 以前は experimentalForceLongPolling を常に有効化していたが、環境によっては極端に遅くなることがある。
-// デフォルトは WebChannel を使い、必要な場合だけ long-polling を有効化できるようにする。
+// オフライン永続化（複数タブ対応）は FirestoreSettings.localCache で指定（非推奨の enableMultiTabIndexedDbPersistence の代替）。
+// experimentalForceLongPolling は NEXT_PUBLIC_FIREBASE_FORCE_LONG_POLLING=1 のときのみ有効。
 let db: ReturnType<typeof getFirestore>;
-let firestoreReady: Promise<void> = Promise.resolve();
+const firestoreReady: Promise<void> = Promise.resolve();
 if (typeof window !== "undefined") {
     const forceLongPolling = process.env.NEXT_PUBLIC_FIREBASE_FORCE_LONG_POLLING === "1";
     try {
-        db = forceLongPolling
-            ? initializeFirestore(app, { experimentalForceLongPolling: true })
-            : getFirestore(app);
-    } catch {
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+            ...(forceLongPolling && { experimentalForceLongPolling: true }),
+        });
+    } catch (e: unknown) {
+        const err = e as { code?: string; message?: string };
+        if (err?.code !== "failed-precondition" && err?.code !== "unimplemented") {
+            console.warn("[Firebase] オフライン永続化の初期化に失敗しました:", err?.message ?? e);
+        }
         db = getFirestore(app);
     }
     if (forceLongPolling) {
         console.warn("[Firebase] Firestore: experimentalForceLongPolling=ON（回線によっては遅くなる場合があります）");
     }
-    // オフライン永続化（複数タブ対応）: 必ず他の Firestore 操作より先に呼ぶ。
-    // 複数タブでも永続化が有効になり「client is offline」を軽減する。
-    const _p = enableMultiTabIndexedDbPersistence(db).catch((e: { code?: string; message?: string }) => {
-        if (e?.code !== "failed-precondition" && e?.code !== "unimplemented") {
-            console.warn("[Firebase] オフライン永続化を有効にできません:", e?.message ?? e);
-        }
-    });
-    firestoreReady = _p.then(() => {});
-    // 接続を明示的に有効化（オフライン誤検知の緩和）
     enableNetwork(db).catch(() => {});
 } else {
     db = getFirestore(app);
 }
 
-export { app, auth, db, firestoreReady };
+const storage = getStorage(app);
+export { app, auth, db, firestoreReady, storage };

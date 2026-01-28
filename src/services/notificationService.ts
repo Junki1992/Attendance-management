@@ -95,6 +95,25 @@ export const subscribeNotifications = (userId: string, callback: (notifications:
         orderBy("createdAt", "desc")
     );
 
+    const normalizeError = (error: unknown): { code: string; message: string; raw: unknown } => {
+        const anyErr = error as any;
+        const code =
+            (typeof anyErr?.code === "string" ? anyErr.code : "") ||
+            (typeof anyErr?.errorInfo?.code === "string" ? anyErr.errorInfo.code : "") ||
+            (typeof anyErr?.name === "string" && anyErr.name.toLowerCase().includes("permission") ? "permission-denied" : "");
+        const message =
+            (typeof anyErr?.message === "string" ? anyErr.message : "") ||
+            (typeof anyErr?.errorInfo?.message === "string" ? anyErr.errorInfo.message : "") ||
+            (() => {
+                try {
+                    return JSON.stringify(error);
+                } catch {
+                    return String(error);
+                }
+            })();
+        return { code, message, raw: error };
+    };
+
     return onSnapshot(q, (snapshot) => {
         const notifications: Notification[] = [];
         snapshot.forEach((doc) => {
@@ -108,8 +127,7 @@ export const subscribeNotifications = (userId: string, callback: (notifications:
         }
         callback(notifications);
     }, (error) => {
-        const code = (error as { code?: string })?.code ?? (error as { errorInfo?: { code?: string } })?.errorInfo?.code ?? "";
-        const message = String((error as { message?: string })?.message ?? (error as { errorInfo?: { message?: string } })?.errorInfo?.message ?? error);
+        const { code, message, raw } = normalizeError(error);
 
         // permission-denied の場合は空で返し、コンソールに FirebaseError を出さない
         if (
@@ -121,11 +139,14 @@ export const subscribeNotifications = (userId: string, callback: (notifications:
             return;
         }
 
-        console.error("[notificationService] subscribeNotifications: error", { code, message, userId });
-
-        if (code === "failed-precondition" || message?.includes("index")) {
-            console.error("[notificationService] ⚠️ Firestore index required: notifications (userId, createdAt)");
+        // 典型的な「インデックス不足」は noisy なので warn にする（本質的な原因特定の邪魔になる）
+        if (code === "failed-precondition" || (typeof message === "string" && message.toLowerCase().includes("index"))) {
+            console.warn("[notificationService] subscribeNotifications: index required", { userId, code, message });
+            console.warn("[notificationService] ⚠️ Firestore index required: notifications (userId, createdAt)");
+            return;
         }
+
+        console.error("[notificationService] subscribeNotifications: error", { userId, code, message, raw });
     });
 };
 

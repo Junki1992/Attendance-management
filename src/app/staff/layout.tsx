@@ -5,6 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import NotificationList from "@/components/NotificationList";
+import Avatar from "@/components/Avatar";
+import ProfileImageUpload from "@/components/ProfileImageUpload";
 import { subscribeNotifications } from "@/services/notificationService";
 
 export default function StaffLayout({
@@ -12,10 +14,11 @@ export default function StaffLayout({
 }: {
     children: React.ReactNode
 }) {
-    const { user, loading, logout } = useAuth();
+    const { user, loading, logout, refreshUserProfile } = useAuth();
     const router = useRouter();
     const pathname = usePathname();
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
@@ -140,7 +143,16 @@ export default function StaffLayout({
                 }}>
                     <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>スタッフ用</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.9rem' }}>{user.name}</span>
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setShowProfileMenu(true)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowProfileMenu(true); } }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', padding: '0.25rem 0' }}
+                        >
+                            <Avatar photoURL={user.photoURL} name={user.name} size="sm" />
+                            <span style={{ fontSize: '0.9rem' }}>{user.name}</span>
+                        </div>
                         <div style={{ position: 'relative' }}>
                             <button 
                                 onClick={() => setShowNotifications(!showNotifications)}
@@ -212,13 +224,23 @@ export default function StaffLayout({
                         flexDirection: 'column',
                         gap: '0.5rem'
                     }}>
-                        <div className="menu-item-enter" style={{ 
-                            fontSize: '0.9rem', 
-                            color: 'var(--text-muted)', 
-                            marginBottom: '0.25rem',
-                            padding: '0.5rem 0.75rem',
-                            fontWeight: 500
-                        }}>
+                        <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => { setShowProfileMenu(true); setShowMobileMenu(false); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setShowProfileMenu(true); setShowMobileMenu(false); } }}
+                            className="menu-item-enter"
+                            style={{ 
+                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                fontSize: '0.9rem', 
+                                color: 'var(--text-muted)', 
+                                marginBottom: '0.25rem',
+                                padding: '0.5rem 0.75rem',
+                                fontWeight: 500,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            <Avatar photoURL={user.photoURL} name={user.name} size="sm" />
                             {user.name}
                         </div>
                         <Link 
@@ -368,6 +390,59 @@ export default function StaffLayout({
             >
                 {children}
             </main>
+
+            {showProfileMenu && (
+                <>
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(0,0,0,0.4)',
+                            zIndex: 100,
+                        }}
+                        onClick={() => setShowProfileMenu(false)}
+                        aria-hidden
+                    />
+                    <div
+                        role="dialog"
+                        aria-label="プロフィール画像"
+                        style={{
+                            position: 'fixed',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            zIndex: 101,
+                            padding: '1.5rem',
+                            minWidth: '280px',
+                            maxWidth: '90vw',
+                            backgroundColor: 'var(--surface)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '0.75rem',
+                            boxShadow: 'var(--shadow-lg)',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <span style={{ fontWeight: 600, fontSize: '1rem' }}>プロフィール画像</span>
+                            <button
+                                type="button"
+                                onClick={() => setShowProfileMenu(false)}
+                                style={{ border: 'none', background: 'none', cursor: 'pointer', fontSize: '1.5rem', lineHeight: 1, color: 'var(--text-muted)' }}
+                                aria-label="閉じる"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        <ProfileImageUpload
+                            uid={user.uid}
+                            name={user.name}
+                            photoURL={user.photoURL}
+                            size="md"
+                            onSuccess={() => { refreshUserProfile(); setShowProfileMenu(false); }}
+                        />
+                    </div>
+                </>
+            )}
         </div>
     );
 }
