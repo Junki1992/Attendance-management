@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesFromPartners, subscribeMyMessages } from "@/services/chatService";
-import { setRoomLastRead, subscribeRoomMeta } from "@/services/chatService";
+import { setRoomLastRead, subscribeRoomMeta, getActiveListenerCount } from "@/services/chatService";
 import { useAuth } from "@/context/AuthContext";
 import { markMessageNotificationsAsRead } from "@/services/notificationService";
 import Avatar from "@/components/Avatar";
@@ -35,6 +35,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [roomMeta, setRoomMeta] = useState<Record<string, any>>({});
+    const [activeListeners, setActiveListeners] = useState<number>(0);
 
     useEffect(() => {
         if (!user || !partnerId) return;
@@ -68,6 +69,18 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         });
         return () => unsubMeta();
     }, [user, partnerId]);
+
+    // Poll active listener count for debug display
+    useEffect(() => {
+        const id = setInterval(() => {
+            try {
+                setActiveListeners(getActiveListenerCount());
+            } catch {
+                setActiveListeners(0);
+            }
+        }, 1000);
+        return () => clearInterval(id);
+    }, []);
 
     // update my lastRead when messages change (only if there are new messages)
     const toMillis = (obj: any): number => {
@@ -277,6 +290,10 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 boxSizing: 'border-box',
                 position: 'relative',
             }}>
+                {/* DEBUG: active listener count */}
+                <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(0,0,0,0.6)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', zIndex: 50 }}>
+                    listeners: {activeListeners}
+                </div>
                 {messages.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '2rem' }}>
                         メッセージはまだありません
