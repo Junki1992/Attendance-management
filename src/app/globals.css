@@ -39,14 +39,103 @@
   margin: 0;
 }
 
+/* 横スクロールを完全に防止 */
 html {
   color-scheme: light;
+  overflow-x: hidden !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  position: relative !important;
 }
 
 body {
   background: var(--background);
   color: var(--text-main);
   min-height: 100vh;
+  overflow-x: hidden !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  position: relative !important;
+}
+
+/* チャット画面専用：画面全体をチャットウィンドウにし、無駄なスクロールを防ぐ */
+html.chat-fullscreen {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+html.chat-fullscreen::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+}
+
+html.chat-fullscreen body {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  position: relative !important;
+}
+
+/* チャット画面のmain要素とその子要素を画面全体の幅にする */
+html.chat-fullscreen main {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+html.chat-fullscreen main > div {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+html.chat-fullscreen main > div > div {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+html.chat-fullscreen main > div > div > div {
+  max-width: 100% !important;
+  width: 100% !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* チャットページ：画面幅いっぱいに表示（flex レイアウトで親から継承） */
+#staff-chat-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+#staff-chat-container .chat-window-fullwidth {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
+
+img, svg {
+  max-width: 100%;
+  height: auto;
 }
 
 a {
@@ -209,4 +298,3 @@ a {
   top: 8px;
   transform: rotate(-135deg);
 }
-

@@ -51,12 +51,58 @@ export default function StaffLayout({
         return () => unsubscribe();
     }, [user]);
 
+    useEffect(() => {
+        if (pathname === '/staff/chat') {
+            // グローバルCSSクラスを適用して確実にスクロールを無効化
+            document.documentElement.classList.add('chat-fullscreen');
+            
+            // 横スクロールを強制的に防ぐ
+            const preventHorizontalScroll = () => {
+                if (window.scrollX !== 0) {
+                    window.scrollTo(0, window.scrollY);
+                }
+                document.documentElement.scrollLeft = 0;
+                document.body.scrollLeft = 0;
+            };
+            
+            // 定期的にチェック
+            const interval = setInterval(preventHorizontalScroll, 100);
+            
+            // イベントリスナーも追加
+            window.addEventListener('scroll', preventHorizontalScroll, { passive: true });
+            window.addEventListener('resize', preventHorizontalScroll);
+            
+            return () => {
+                document.documentElement.classList.remove('chat-fullscreen');
+                clearInterval(interval);
+                window.removeEventListener('scroll', preventHorizontalScroll);
+                window.removeEventListener('resize', preventHorizontalScroll);
+            };
+        }
+    }, [pathname]);
+
     if (loading || !user) return <div className="p-4 text-center">Loading...</div>;
 
     const isWide = pathname === "/staff/shifts" || pathname === "/staff/confirmed-shifts" || pathname === "/staff/chat";
 
+    const isChatPage = pathname === '/staff/chat';
+    const isChatMobile = isChatPage && isMobile;
+
     return (
-        <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ 
+            minHeight: '100vh',
+            height: isChatPage ? '100vh' : undefined,
+            display: 'flex', 
+            flexDirection: 'column',
+            overflow: isChatPage ? 'hidden' : undefined,
+            overflowX: 'hidden',
+            width: '100%',
+            maxWidth: '100%',
+            padding: isChatPage ? '0' : undefined,
+            margin: isChatPage ? '0' : undefined,
+            boxSizing: 'border-box',
+        }}>
+            {pathname !== '/staff/chat' && (
             <header style={{
                 backgroundColor: 'var(--surface)',
                 borderBottom: '1px solid var(--border)',
@@ -380,12 +426,23 @@ export default function StaffLayout({
                     </div>
                 )}
             </header>
+            )}
             <main
-                className={isWide ? '' : 'container'}
+                className={isChatPage ? '' : (isWide ? '' : 'container')}
                 style={{
-                    flex: 1,
-                    padding: '2rem 1rem',
-                    ...(isWide && { maxWidth: '1600px', margin: '0 auto', width: '100%' }),
+                    flex: isChatPage ? '1 1 0' : 1,
+                    padding: isChatPage ? '0' : (isWide ? '2rem 1rem' : '2rem 1rem'),
+                    maxWidth: isChatPage ? '100%' : (isWide ? '1600px' : undefined),
+                    margin: isChatPage ? '0' : (isWide ? '0 auto' : undefined),
+                    width: isChatPage ? '100%' : (isWide ? '100%' : undefined),
+                    height: isChatPage ? '100%' : undefined,
+                    minHeight: isChatPage ? 0 : undefined,
+                    display: isChatPage ? 'flex' : (isWide ? 'block' : 'block'),
+                    flexDirection: isChatPage ? 'column' : undefined,
+                    overflow: isChatPage ? 'hidden' : undefined,
+                    overflowX: isChatPage ? 'hidden' : undefined,
+                    position: isChatPage ? 'relative' : undefined,
+                    boxSizing: isChatPage ? 'border-box' : undefined,
                 }}
             >
                 {children}
@@ -414,7 +471,7 @@ export default function StaffLayout({
                             zIndex: 101,
                             padding: '1.5rem',
                             minWidth: '280px',
-                            maxWidth: '90vw',
+                            maxWidth: '90%',
                             backgroundColor: 'var(--surface)',
                             border: '1px solid var(--border)',
                             borderRadius: '0.75rem',
