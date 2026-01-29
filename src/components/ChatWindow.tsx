@@ -56,9 +56,8 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 const roomId = [user.uid, partnerId].sort().join("_");
                 if (!initialMarkedRef.current) {
                     initialMarkedRef.current = true;
-                    setRoomLastRead(roomId, user.uid).catch((err) => {
-                        console.error("[ChatWindow] initial setRoomLastRead failed:", err);
-                    });
+                    // schedule initial mark to respect debounce and reduce permission/write storms
+                    scheduleRoomLastRead(roomId, user.uid);
                 }
             } catch (err) {
                 console.error("[ChatWindow] initial mark read error:", err);

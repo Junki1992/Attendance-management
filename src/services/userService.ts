@@ -201,27 +201,9 @@ export const getAdminIds = async (): Promise<string[]> => {
 
     const adminUidFromEnv = process.env.NEXT_PUBLIC_ADMIN_UID?.trim();
     if (adminUidFromEnv) {
-        // env を鵜呑みにすると「users に存在しない uid」を管理者扱いしてしまい、
-        // チャット/通知の宛先がズレて表示されない原因になる。存在確認してから採用する。
-        try {
-            const profile = await getUserProfile(adminUidFromEnv);
-            if (profile?.role === "admin") {
-                return [adminUidFromEnv];
-            }
-            if (process.env.NODE_ENV === "development") {
-                console.warn("[userService] NEXT_PUBLIC_ADMIN_UID is not an admin user doc; fallback to query", {
-                    adminUidFromEnv,
-                    role: profile?.role ?? null,
-                });
-            }
-        } catch (e) {
-            if (process.env.NODE_ENV === "development") {
-                console.warn("[userService] NEXT_PUBLIC_ADMIN_UID lookup failed; fallback to query", {
-                    adminUidFromEnv,
-                    error: e,
-                });
-            }
-        }
+        // For stability in environments where querying users may be permission-restricted,
+        // prefer returning the admin UID from env immediately (avoid extra reads).
+        return [adminUidFromEnv];
     }
 
     try {
