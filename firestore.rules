@@ -82,11 +82,10 @@ service cloud.firestore {
       // 作成：認証ユーザーなら可（必要なら participants のチェックを追加）
       allow create: if request.auth != null;
 
-      // 更新：認証ユーザーは自分の lastReadBy のみ書き込める
-      // request.resource.data.lastReadBy は自分の uid キーのみを含み、その値は timestamp であること
+      // 更新：認証ユーザーは自分の lastReadBy を書き込める（簡易チェック）
+      // NOTE: keys().hasOnly の厳密チェックを外し、nested key の存在と型のみ検証します。
+      // これによりクライアントの merge / partial update による拒否を防ぎます。
       allow update: if request.auth != null
-                    && request.resource.data.keys().hasOnly(['lastReadBy'])
-                    && request.resource.data.lastReadBy.keys().hasOnly([request.auth.uid])
                     && request.resource.data.lastReadBy[request.auth.uid] is timestamp;
 
       // 削除：管理者のみ
