@@ -6,6 +6,8 @@ import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesF
 import { useAuth } from "@/context/AuthContext";
 import { markMessageNotificationsAsRead } from "@/services/notificationService";
 import Avatar from "@/components/Avatar";
+import { storage } from "@/lib/firebase/firebase";
+import { ref as storageRef, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 interface ChatWindowProps {
     className?: string;
@@ -28,6 +30,9 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [inputText, setInputText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
     useEffect(() => {
         if (!user || !partnerId) return;
@@ -63,6 +68,66 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
             console.error(error);
             const msg = error instanceof Error ? error.message : "送信に失敗しました";
             alert(msg);
+        }
+    };
+
+    const openFilePicker = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const f = e.target.files?.[0];
+        if (!f || !user) return;
+
+        // allow only images and PDFs
+        const allowed = f.type.startsWith("image/") || f.type === "application/pdf";
+        if (!allowed) {
+            alert("画像またはPDFのみアップロードできます");
+            e.currentTarget.value = "";
+            return;
+        }
+
+        setUploading(true);
+        setUploadProgress(0);
+
+        try {
+            const roomId = [user.uid, partnerId].sort().join("_");
+            const path = `chat/${roomId}/${Date.now()}_${f.name}`;
+            const sRef = storageRef(storage, path);
+            const uploadTask = uploadBytesResumable(sRef, f);
+
+            await new Promise<void>((resolve, reject) => {
+                uploadTask.on(
+                    "state_changed",
+                    (snapshot) => {
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        setUploadProgress(Math.round(progress));
+                    },
+                    (err) => {
+                        console.error("[ChatWindow] upload failed:", err);
+                        reject(err);
+                    },
+                    () => {
+                        resolve();
+                    }
+                );
+            });
+
+            const url = await getDownloadURL(sRef);
+            // send message with file meta (empty text)
+            await sendMessageWithRoom("", user.uid, partnerId, user.name, {
+                url,
+                name: f.name,
+                type: f.type,
+                size: f.size,
+            });
+        } catch (err) {
+            console.error(err);
+            alert("ファイルの送信に失敗しました");
+        } finally {
+            setUploading(false);
+            setUploadProgress(null);
+            if (fileInputRef.current) fileInputRef.current.value = "";
         }
     };
 
@@ -202,7 +267,22 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                                 maxWidth: '100%',
                                 boxSizing: 'border-box',
                             }}>
-                                {msg.text}
+                                {msg.fileURL ? (
+                                    <>
+                                        {msg.fileType && msg.fileType.startsWith('image/') ? (
+                                            <img src={msg.fileURL} alt={msg.fileName ?? 'image'} style={{ maxWidth: isMobile ? '70vw' : '60%', height: 'auto', borderRadius: '0.5rem' }} />
+                                        ) : (
+                                            <a href={msg.fileURL} target="_blank" rel="noreferrer" style={{ color: isMe ? 'white' : 'inherit', textDecoration: 'underline' }}>
+                                                {msg.fileName ?? 'ファイルをダウンロード'}
+                                            </a>
+                                        )}
+                                        {msg.text && (
+                                            <div style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+                                        )}
+                                    </>
+                                ) : (
+                                    msg.text
+                                )}
                             </div>
                             <div style={{ 
                                 fontSize: '0.75rem', 
@@ -237,7 +317,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     width: '100%',
                     maxWidth: '100%',
                     boxSizing: 'border-box',
-                    position: isFullWidthMode && isMobile ? 'fixed' : 'relative',
+                        position: isFullWidthMode && isMobile ? 'fixed' : 'relative',
                     bottom: isFullWidthMode && isMobile ? 0 : undefined,
                     left: isFullWidthMode && isMobile ? 0 : undefined,
                     right: isFullWidthMode && isMobile ? 0 : undefined,
@@ -245,6 +325,34 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     overflowX: 'hidden',
                 }}
             >
+                <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    ref={(el) => { fileInputRef.current = el; }}
+                    onChange={handleFileChange}
+                    style={{ display: 'none' }}
+                />
+                <button
+                    type="button"
+                    onClick={openFilePicker}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '0.5rem 0.75rem',
+                        borderRadius: '0.5rem',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        cursor: 'pointer',
+                    }}
+                >
+                    添付
+                </button>
+                {uploading && uploadProgress !== null && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '120px' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>アップロード {uploadProgress}%</div>
+                    </div>
+                )}
                 <input
                     type="text"
                     value={inputText}
@@ -261,12 +369,14 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                         backgroundColor: 'var(--surface)',
                         maxWidth: '100%',
                         boxSizing: 'border-box',
+                        opacity: uploading ? 0.6 : 1,
+                        pointerEvents: uploading ? 'none' : undefined,
                     }}
                 />
                 <button 
                     type="submit" 
                     className="btn btn-primary"
-                    disabled={!inputText.trim()}
+                    disabled={!inputText.trim() || uploading}
                     style={{
                         borderRadius: isFullWidthMode && isMobile ? '0' : undefined,
                         flexShrink: 0,

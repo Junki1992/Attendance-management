@@ -13,6 +13,11 @@ export interface ChatMessage {
     receiverId: string;
     read: boolean;
     createdAt: any; // Timestamp
+    // optional file metadata
+    fileURL?: string;
+    fileName?: string;
+    fileType?: string;
+    fileSize?: number;
 }
 
 export const sendMessage = async (text: string, senderId: string, receiverId: string, senderName?: string) => {
@@ -280,12 +285,18 @@ export const subscribeMyMessages = (
     };
 };
 
-export const sendMessageWithRoom = async (text: string, senderId: string, receiverId: string, senderName?: string) => {
+export const sendMessageWithRoom = async (
+    text: string,
+    senderId: string,
+    receiverId: string,
+    senderName?: string,
+    file?: { url: string; name?: string; type?: string; size?: number }
+) => {
     if (!receiverId || typeof receiverId !== "string" || !receiverId.trim()) {
         throw new Error("送信先が指定されていません");
     }
     const roomId = [senderId, receiverId].sort().join("_");
-    await addDoc(collection(db, "messages"), {
+    const payload: Record<string, unknown> = {
         text,
         senderId,
         receiverId,
@@ -293,7 +304,14 @@ export const sendMessageWithRoom = async (text: string, senderId: string, receiv
         read: false,
         roomId,
         createdAt: Timestamp.now(),
-    });
+    };
+    if (file && file.url) {
+        payload.fileURL = file.url;
+        if (file.name) payload.fileName = file.name;
+        if (file.type) payload.fileType = file.type;
+        if (typeof file.size === "number") payload.fileSize = file.size;
+    }
+    await addDoc(collection(db, "messages"), payload);
 
     try {
         await createNotification(
