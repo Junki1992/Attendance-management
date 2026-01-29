@@ -21,7 +21,8 @@ const roomMetaListenerCache = new Map<string, {
 }>();
 
 // schedule/debounce lastRead writes: coalesce writes within this delay (ms)
-const LAST_READ_DEBOUNCE_MS = 5000;
+// Increased default to reduce write frequency; can be disabled via global flag.
+const LAST_READ_DEBOUNCE_MS = 30000;
 const lastReadTimers = new Map<string, NodeJS.Timeout>();
 const lastReadPending = new Map<string, number>(); // roomId -> timestamp (ms)
 
@@ -35,7 +36,12 @@ export const scheduleRoomLastRead = (roomId: string, uid: string) => {
     }
     const t = setTimeout(async () => {
         try {
-            await setRoomLastRead(roomId, uid);
+            // Allow emergency disable of last-read writes
+            if ((globalThis as any).__DISABLE_LAST_READ_WRITES__) {
+                // skip write
+            } else {
+                await setRoomLastRead(roomId, uid);
+            }
         } catch (err) {
             console.error("[chatService] scheduleRoomLastRead failed:", err);
         } finally {
@@ -425,6 +431,10 @@ export const sendMessageWithRoom = async (
 
 export const setRoomLastRead = async (roomId: string, uid: string) => {
     if (!roomId || !uid) return;
+    // Emergency disable flag
+    if ((globalThis as any).__DISABLE_LAST_READ_WRITES__) {
+        return;
+    }
     const ref = doc(db, "chatRooms", roomId);
     // Use setDoc with merge to create the doc if missing and set nested field
     await setDoc(ref, { lastReadBy: { [uid]: serverTimestamp() } }, { merge: true });
