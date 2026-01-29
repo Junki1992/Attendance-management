@@ -73,6 +73,26 @@ service cloud.firestore {
                     && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid || isAdmin());
     }
     
+    // chatRooms コレクション：ルームメタ（lastReadBy）を保持
+    match /chatRooms/{roomId} {
+      // 読み取り：認証済みか管理者、または participants に含まれるユーザーのみ
+      allow read: if request.auth != null
+                  && (isAdmin() || !(resource.data.participants is list) || request.auth.uid in resource.data.participants);
+
+      // 作成：認証ユーザーなら可（必要なら participants のチェックを追加）
+      allow create: if request.auth != null;
+
+      // 更新：認証ユーザーは自分の lastReadBy のみ書き込める
+      // request.resource.data.lastReadBy は自分の uid キーのみを含み、その値は timestamp であること
+      allow update: if request.auth != null
+                    && request.resource.data.keys().hasOnly(['lastReadBy'])
+                    && request.resource.data.lastReadBy.keys().hasOnly([request.auth.uid])
+                    && request.resource.data.lastReadBy[request.auth.uid] is timestamp;
+
+      // 削除：管理者のみ
+      allow delete: if isAdmin();
+    }
+
     // notifications コレクション（自分の通知のみ読める。where userId== クエリで permission-denied を防ぐため明示）
     match /notifications/{notificationId} {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
