@@ -351,10 +351,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                         boxSizing: 'border-box',
                     }}
                 >
-                    {/* paperclip icon */}
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                        <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 01-7.78 0 5.5 5.5 0 010-7.78l8.49-8.49a3.5 3.5 0 014.95 4.95L10.5 18.95a2 2 0 01-2.83 0 2 2 0 010-2.83l7.08-7.08" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
+                    <i className="fa-solid fa-paperclip" aria-hidden style={{ fontSize: 18 }} />
                 </button>
                 {uploading && uploadProgress !== null && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '120px' }}>
