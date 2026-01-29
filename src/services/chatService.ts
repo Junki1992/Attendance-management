@@ -144,47 +144,54 @@ export const subscribeMessages = (
         }
         console.error("[chatService] Chat subscription error:", { which, code, message, currentUserId, partnerId, raw });
     };
-
-    const q1 = query(
-        collection(db, "messages"),
-        where("senderId", "==", currentUserId),
-        where("receiverId", "==", partnerId),
-        orderBy("createdAt", "asc")
-    );
-    const q2 = query(
-        collection(db, "messages"),
-        where("receiverId", "==", currentUserId),
-        where("senderId", "==", partnerId),
-        orderBy("createdAt", "asc")
-    );
+    const roomErrorHandler = (error: unknown) => {
+        const { code, message, raw } = normalizeSnapshotError(error);
+        const isPermissionDenied =
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            message.toLowerCase().includes("insufficient permissions");
+        if (isPermissionDenied) {
+            part1 = [];
+            part2 = [];
+            notify();
+            return;
+        }
+        if (code === "failed-precondition" || message.toLowerCase().includes("index")) {
+            console.warn("[chatService] Chat subscription (room): index required", { currentUserId, partnerId, code, message });
+            return;
+        }
+        console.error("[chatService] Chat subscription error (room):", { code, message, currentUserId, partnerId, raw });
+    };
 
     // Use caching to avoid creating duplicate realtime listeners for same room
     const key = `${currentUserId}_${partnerId}`;
     let entry = messagesListenerCache.get(key);
     if (!entry) {
         entry = { callbacks: new Set() };
-        // create underlying listeners once
-        const unsub1 = onSnapshot(q1, (snap) => {
+        // create a single underlying listener on roomId to reduce listener count
+        const roomId = [currentUserId, partnerId].sort().join("_");
+        const qRoom = query(
+            collection(db, "messages"),
+            where("roomId", "==", roomId),
+            orderBy("createdAt", "asc")
+        );
+        const unsubRoom = onSnapshot(qRoom, (snap) => {
+            // put all messages into part1 and clear part2, reuse existing notify()
             part1 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+            part2 = [];
             notify();
-            // propagate to all callbacks via notify()
-        }, makeErrorHandler("q1"));
-        const unsub2 = onSnapshot(q2, (snap) => {
-            part2 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
-            notify();
-        }, makeErrorHandler("q2"));
+        }, roomErrorHandler);
         entry.unsub = () => {
-            try { unsub1(); } catch {}
-            try { unsub2(); } catch {}
-            activeListenerCount = Math.max(0, activeListenerCount - 2);
+            try { unsubRoom(); } catch {}
+            activeListenerCount = Math.max(0, activeListenerCount - 1);
             if (process.env.NODE_ENV === "development") {
                 console.info("[chatService] underlying unsub for room", key, "activeListeners:", activeListenerCount);
             }
         };
         messagesListenerCache.set(key, entry);
-        activeListenerCount += 2;
+        activeListenerCount += 1;
         if (process.env.NODE_ENV === "development") {
-            console.info("[chatService] created underlying listeners for room", key, "activeListeners:", activeListenerCount);
+            console.info("[chatService] created underlying listener for room", key, "activeListeners:", activeListenerCount);
         }
     }
     // register callback
