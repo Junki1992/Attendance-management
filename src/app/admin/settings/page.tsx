@@ -16,6 +16,7 @@ export default function AdminSettingsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -159,8 +160,8 @@ export default function AdminSettingsPage() {
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
                   <Avatar photoURL={user.photoURL} name={user.name} size="md" />
                   <div style={{ minWidth: 0, overflow: "hidden" }}>
-                    <div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
-                    <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
+                    <div title={user.name} style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
+                    <div title={user.email} style={{ fontSize: "0.875rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
@@ -191,6 +192,14 @@ export default function AdminSettingsPage() {
                         : "管理者に昇格"}
                     </button>
                   )}
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: "0.85rem", padding: "0.25rem 0.5rem", marginLeft: 4 }}
+                    onClick={() => setSelectedUser(user)}
+                    aria-label="ユーザー詳細を表示"
+                  >
+                    詳細
+                  </button>
                   {user.uid === currentUser?.uid && (
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", flexShrink: 0 }}>（自分）</span>
                   )}
@@ -200,6 +209,68 @@ export default function AdminSettingsPage() {
           </div>
         )}
       </div>
+    {selectedUser && (
+      <div
+        role="dialog"
+        aria-label="ユーザー詳細"
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 200,
+          padding: "1rem",
+        }}
+        onClick={() => setSelectedUser(null)}
+      >
+        <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, padding: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <h3 style={{ margin: 0 }}>ユーザー詳細</h3>
+            <button onClick={() => setSelectedUser(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18 }}>
+              ×
+            </button>
+          </div>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem" }}>
+            <Avatar photoURL={selectedUser!.photoURL} name={selectedUser!.name} size="md" />
+            <div>
+              <div style={{ fontWeight: 600 }}>{selectedUser!.name}</div>
+              <div style={{ color: "var(--text-muted)" }}>{selectedUser!.email}</div>
+            </div>
+          </div>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <strong>役割:</strong>{" "}
+            <span style={{ padding: "0.25rem 0.5rem", borderRadius: 6, background: selectedUser!.role === "admin" ? "var(--primary)" : "var(--bg-secondary)", color: selectedUser!.role === "admin" ? "#fff" : "inherit" }}>
+              {selectedUser!.role === "admin" ? "管理者" : "スタッフ"}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+            {selectedUser!.uid !== currentUser?.uid && (
+              <button
+                className="btn btn-outline"
+                onClick={async () => {
+                  try {
+                    setUpdatingUserId(selectedUser!.uid);
+                    await handleRoleChange(selectedUser!.uid, selectedUser!.role === "admin" ? "staff" : "admin");
+                    const updated = (await getAllUsers()).find((u) => u.uid === selectedUser!.uid) ?? null;
+                    setSelectedUser(updated);
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setUpdatingUserId(null);
+                  }
+                }}
+                disabled={updatingUserId === selectedUser!.uid}
+              >
+                {updatingUserId === selectedUser!.uid ? "変更中..." : selectedUser!.role === "admin" ? "スタッフに降格" : "管理者に昇格"}
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={() => setSelectedUser(null)}>閉じる</button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
