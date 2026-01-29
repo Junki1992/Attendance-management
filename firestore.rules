@@ -75,10 +75,9 @@ service cloud.firestore {
     
     // chatRooms コレクション：ルームメタ（lastReadBy）を保持
     match /chatRooms/{roomId} {
-      // 読み取り：認証済みか管理者、または participants に含まれるユーザーのみ
-      // ドキュメントが存在しない場合や participants が未設定の場合は読み取りを許可
-      allow read: if request.auth != null
-                  && (isAdmin() || resource.data == null || !(resource.data.participants is list) || request.auth.uid in resource.data.participants);
+      // 読み取り：まずは認証ユーザーであれば読み取りを許可（即時復旧のため）。
+      // 将来的には participants ベースの制限に戻すことを検討してください。
+      allow read: if request.auth != null;
 
       // 作成：認証ユーザーなら可（必要なら participants のチェックを追加）
       allow create: if request.auth != null;
