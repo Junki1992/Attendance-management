@@ -33,21 +33,14 @@ let db: ReturnType<typeof getFirestore>;
 const firestoreReady: Promise<void> = Promise.resolve();
 if (typeof window !== "undefined") {
     const forceLongPolling = process.env.NEXT_PUBLIC_FIREBASE_FORCE_LONG_POLLING === "1";
-    try {
-        db = initializeFirestore(app, {
-            localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-            ...(forceLongPolling && { experimentalForceLongPolling: true }),
-        });
-    } catch (e: unknown) {
-        const err = e as { code?: string; message?: string };
-        if (err?.code !== "failed-precondition" && err?.code !== "unimplemented") {
-            console.warn("[Firebase] オフライン永続化の初期化に失敗しました:", err?.message ?? e);
-        }
-        db = getFirestore(app);
-    }
+    // To avoid localStorage / WebStorage quota exhaustion in browsers (multi-tab shared client state),
+    // do NOT enable persistent local cache / multi-tab manager here.
+    // Use a plain getFirestore() instance in the browser to prevent excessive localStorage writes.
+    db = getFirestore(app);
     if (forceLongPolling) {
         console.warn("[Firebase] Firestore: experimentalForceLongPolling=ON（回線によっては遅くなる場合があります）");
     }
+    // Ensure network is enabled
     enableNetwork(db).catch(() => {});
 } else {
     db = getFirestore(app);
