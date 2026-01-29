@@ -9,6 +9,43 @@ import { createNotification } from "@/services/notificationService";
 let activeListenerCount = 0;
 export const getActiveListenerCount = () => activeListenerCount;
 
+// --- Caches for realtime subscriptions to avoid creating duplicate listeners ---
+const messagesListenerCache = new Map<string, {
+    callbacks: Set<(msgs: ChatMessage[]) => void>,
+    unsub?: () => void
+}>();
+
+const roomMetaListenerCache = new Map<string, {
+    callbacks: Set<(meta: Record<string, any>) => void>,
+    unsub?: () => void
+}>();
+
+// schedule/debounce lastRead writes: coalesce writes within this delay (ms)
+const LAST_READ_DEBOUNCE_MS = 5000;
+const lastReadTimers = new Map<string, NodeJS.Timeout>();
+const lastReadPending = new Map<string, number>(); // roomId -> timestamp (ms)
+
+export const scheduleRoomLastRead = (roomId: string, uid: string) => {
+    if (!roomId || !uid) return;
+    const key = `${roomId}:${uid}`;
+    lastReadPending.set(key, Date.now());
+    if (lastReadTimers.has(key)) {
+        // timer already scheduled; do nothing (coalesce)
+        return;
+    }
+    const t = setTimeout(async () => {
+        try {
+            await setRoomLastRead(roomId, uid);
+        } catch (err) {
+            console.error("[chatService] scheduleRoomLastRead failed:", err);
+        } finally {
+            lastReadTimers.delete(key);
+            lastReadPending.delete(key);
+        }
+    }, LAST_READ_DEBOUNCE_MS);
+    lastReadTimers.set(key, t);
+};
+
 export interface ChatMessage {
     id?: string;
     text: string;
@@ -121,41 +158,58 @@ export const subscribeMessages = (
         orderBy("createdAt", "asc")
     );
 
-    if (process.env.NODE_ENV === "development") {
-        console.info("[chatService] subscribeMessages", { currentUserId, partnerId });
-    }
-
-    const unsub1 = onSnapshot(q1, (snap) => {
-        part1 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+    // Use caching to avoid creating duplicate realtime listeners for same room
+    const key = `${currentUserId}_${partnerId}`;
+    let entry = messagesListenerCache.get(key);
+    if (!entry) {
+        entry = { callbacks: new Set() };
+        // create underlying listeners once
+        const unsub1 = onSnapshot(q1, (snap) => {
+            part1 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+            notify();
+            // propagate to all callbacks via notify()
+        }, makeErrorHandler("q1"));
+        const unsub2 = onSnapshot(q2, (snap) => {
+            part2 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+            notify();
+        }, makeErrorHandler("q2"));
+        entry.unsub = () => {
+            try { unsub1(); } catch {}
+            try { unsub2(); } catch {}
+            activeListenerCount = Math.max(0, activeListenerCount - 2);
+            if (process.env.NODE_ENV === "development") {
+                console.info("[chatService] underlying unsub for room", key, "activeListeners:", activeListenerCount);
+            }
+        };
+        messagesListenerCache.set(key, entry);
+        activeListenerCount += 2;
         if (process.env.NODE_ENV === "development") {
-            console.info("[chatService] q1 (自分→相手) count:", part1.length);
+            console.info("[chatService] created underlying listeners for room", key, "activeListeners:", activeListenerCount);
         }
-        notify();
-    }, makeErrorHandler("q1"));
-
-    const unsub2 = onSnapshot(q2, (snap) => {
-        part2 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
-        if (process.env.NODE_ENV === "development") {
-            console.info("[chatService] q2 (相手→自分) count:", part2.length);
-        }
-        notify();
-    }, makeErrorHandler("q2"));
-
-    // count listeners
-    activeListenerCount += 2;
-    if (process.env.NODE_ENV === "development") {
-        console.info("[chatService] subscribed 2 listeners for room", currentUserId, partnerId, "activeListeners:", activeListenerCount);
     }
+    // register callback
+    entry.callbacks.add(callback);
+    if (process.env.NODE_ENV === "development") {
+        console.info("[chatService] registered callback for room", key, "callbacks:", entry.callbacks.size);
+    }
+    // immediately invoke callback with current parts if any
+    notify();
 
-    const wrappedUnsub = () => {
-        try { unsub1(); } catch {}
-        try { unsub2(); } catch {}
-        activeListenerCount = Math.max(0, activeListenerCount - 2);
-        if (process.env.NODE_ENV === "development") {
-            console.info("[chatService] unsubscribed 2 listeners for room", currentUserId, partnerId, "activeListeners:", activeListenerCount);
+    // return unsubscribe that removes this callback and cleans up underlying listeners when none remain
+    return () => {
+        const e = messagesListenerCache.get(key);
+        if (e) {
+            e.callbacks.delete(callback);
+            if (process.env.NODE_ENV === "development") {
+                console.info("[chatService] deregistered callback for room", key, "callbacks:", e.callbacks.size);
+            }
+            if (e.callbacks.size === 0) {
+                // cleanup
+                if (e.unsub) e.unsub();
+                messagesListenerCache.delete(key);
+            }
         }
     };
-    return wrappedUnsub;
 };
 
 /**

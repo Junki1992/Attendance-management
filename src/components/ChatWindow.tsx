@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesFromPartners, subscribeMyMessages } from "@/services/chatService";
-import { setRoomLastRead, subscribeRoomMeta, getActiveListenerCount } from "@/services/chatService";
+import { setRoomLastRead, subscribeRoomMeta, getActiveListenerCount, scheduleRoomLastRead } from "@/services/chatService";
 import { useAuth } from "@/context/AuthContext";
 import { markMessageNotificationsAsRead } from "@/services/notificationService";
 import Avatar from "@/components/Avatar";
@@ -97,10 +97,12 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         const lastMsgTime = messages.length ? toMillis(messages[messages.length - 1].createdAt) : 0;
         const myLastRead = roomMeta[user.uid] ? toMillis(roomMeta[user.uid]) : 0;
         if (lastMsgTime > myLastRead) {
-            // update my lastRead timestamp
-            setRoomLastRead(roomId, user.uid).catch((err) => {
-                console.error("[ChatWindow] setRoomLastRead failed:", err);
-            });
+            // schedule/update my lastRead timestamp (debounced) to avoid frequent writes
+            try {
+                scheduleRoomLastRead(roomId, user.uid);
+            } catch (err) {
+                console.error("[ChatWindow] scheduleRoomLastRead failed:", err);
+            }
         }
     }, [messages, roomMeta, user, partnerId]);
 
