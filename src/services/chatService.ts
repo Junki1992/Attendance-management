@@ -9,6 +9,11 @@ import { createNotification } from "@/services/notificationService";
 let activeListenerCount = 0;
 export const getActiveListenerCount = () => activeListenerCount;
 
+// EMERGENCY: disable all last-read writes by default to ensure ZERO write traffic
+;(globalThis as any).__DISABLE_LAST_READ_WRITES__ = true;
+export const enableLastReadWrites = () => { (globalThis as any).__DISABLE_LAST_READ_WRITES__ = false; };
+export const disableLastReadWrites = () => { (globalThis as any).__DISABLE_LAST_READ_WRITES__ = true; };
+
 // --- Caches for realtime subscriptions to avoid creating duplicate listeners ---
 const messagesListenerCache = new Map<string, {
     callbacks: Set<(msgs: ChatMessage[]) => void>,
