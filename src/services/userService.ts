@@ -75,7 +75,7 @@ const STAFF_FALLBACK_LIST: StaffItem[] = [
     { id: "2", name: "鈴木 次郎" },
 ];
 
-/** users の role='staff' 一覧。 Firestore に staff がいない場合のフォールバック用にモックを返す */
+/** users の role='staff' 一覧。 Firestore に staff がいない場合のフォールバック用にモックを返す（画面上は「アルバイト」と表示） */
 export const getAllStaff = async (): Promise<StaffItem[]> => {
     // loginMock や未ログイン時は request.auth が null のため Firestore が permission-denied になる。
     if (!auth.currentUser) {
@@ -98,7 +98,7 @@ export const getAllStaff = async (): Promise<StaffItem[]> => {
         });
         return list;
     } catch (err) {
-        // 一般アカウント（スタッフ）が /admin/chat 等に来た場合、「role==staff」のクエリは
+        // 一般アカウント（アルバイト）が /admin/chat 等に来た場合、「role==staff」のクエリは
         // permission-denied になる。コンソールエラーを出さずフォールバックを返す。
         const code = (err as { code?: string })?.code ?? "";
         const msg = (err as { message?: string })?.message ?? "";
@@ -195,7 +195,7 @@ export const getAdminId = async (): Promise<string | null> => {
     return ids.length > 0 ? ids[0] : null;
 };
 
-/** 管理者のUIDを全件取得（スタッフチャットで「誰か管理者」からのメッセージを全て表示するため） */
+/** 管理者のUIDを全件取得（アルバイトチャットで「誰か管理者」からのメッセージを全て表示するため） */
 export const getAdminIds = async (): Promise<string[]> => {
     if (!auth.currentUser) return [];
 

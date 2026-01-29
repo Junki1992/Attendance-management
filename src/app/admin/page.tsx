@@ -39,7 +39,7 @@ export default function AdminDashboard() {
                 <div className="card">
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>チャット</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        スタッフからの連絡を確認できます。
+                        アルバイトからの連絡を確認できます。
                     </p>
                     <Link href="/admin/chat" className="btn btn-outline">
                         メッセージを確認

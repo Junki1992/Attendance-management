@@ -14,14 +14,14 @@ interface ChatWindowProps {
     className?: string;
     partnerName: string;
     partnerId: string;
-    /** 複数指定時は「この誰かから届いたメッセージ」を全て表示（例: スタッフチャットで全管理者） */
+    /** 複数指定時は「この誰かから届いたメッセージ」を全て表示（例: アルバイトチャットで全管理者） */
     partnerIds?: string[];
     /** true の場合、相手を固定せず自分が送受信した全メッセージを表示 */
     subscribeAllForMe?: boolean;
     partnerPhotoURL?: string | null;
     /** 戻るボタンを表示するか（チャット画面でヘッダー非表示のとき） */
     showBackButton?: boolean;
-    /** true の場合、常に画面幅いっぱいに表示（スタッフチャット用） */
+    /** true の場合、常に画面幅いっぱいに表示（アルバイトチャット用） */
     forceFullWidth?: boolean;
 }
 

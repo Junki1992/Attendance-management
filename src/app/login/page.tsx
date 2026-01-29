@@ -116,7 +116,7 @@ export default function LoginPage() {
                             管理者としてログイン
                         </button>
                         <button onClick={() => handleMockLogin("staff")} className="btn btn-outline" style={{ width: "100%" }}>
-                            スタッフとしてログイン
+                            アルバイトとしてログイン
                         </button>
                     </div>
                 </div>
@@ -215,7 +215,7 @@ export default function LoginPage() {
                                 onClick={() => handleMockLogin("staff")}
                                 disabled={submitting}
                             >
-                                スタッフ（モック）
+                                アルバイト（モック）
                             </button>
                         </div>
                     </details>

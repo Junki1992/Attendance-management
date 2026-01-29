@@ -106,7 +106,7 @@ export default function AdminShiftGrid() {
   };
 
   const handleConfirm = async () => {
-    if (!confirm(`${year}年${month + 1}月のシフトを確定し、スタッフへ通知を送りますか？`))
+    if (!confirm(`${year}年${month + 1}月のシフトを確定し、アルバイトへ通知を送りますか？`))
       return;
     setConfirming(true);
     try {
@@ -129,7 +129,7 @@ export default function AdminShiftGrid() {
       );
       getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
-      alert(`${affectedUserIds.length}名のスタッフに通知を送りました！`);
+      alert(`${affectedUserIds.length}名のアルバイトに通知を送りました！`);
     } catch (e) {
       console.error("[admin/shifts] handleConfirm: error", e);
       alert("確定処理に失敗しました");
@@ -163,7 +163,7 @@ export default function AdminShiftGrid() {
   const buildCsv = (): string => {
     const confirmed = shifts.filter((s) => s.status === "confirmed");
     const nameMap = Object.fromEntries(staffList.map((s) => [s.id, s.name]));
-    const header = ["スタッフ", ...DAYS.map((d) => String(d)), "合計"].join(",");
+    const header = ["アルバイト", ...DAYS.map((d) => String(d)), "合計"].join(",");
     const rows = staffList.map((staff) => {
       let total = 0;
       const cells = DAYS.map((d) => {
@@ -442,7 +442,7 @@ export default function AdminShiftGrid() {
                     zIndex: 1,
                   }}
                 >
-                  スタッフ
+                  アルバイト
                 </th>
                 {DAYS.map((d) => (
                   <th
@@ -562,7 +562,7 @@ export default function AdminShiftGrid() {
           <table style={{ width: "100%", minWidth: isMobile ? "280px" : undefined, fontSize: "0.8rem", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>アルバイト</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>既読</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>通知日時</th>
               </tr>
@@ -599,7 +599,7 @@ export default function AdminShiftGrid() {
           <table style={{ width: "100%", minWidth: isMobile ? "320px" : undefined, fontSize: "0.8rem", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>アルバイト</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>勤務時間</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>時給</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "right" }}>給与</th>

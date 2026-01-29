@@ -1,0 +1,111 @@
+[debug] [2026-01-29T07:27:42.658Z] ----------------------------------------------------------------------
+[debug] [2026-01-29T07:27:42.660Z] Command:       /opt/homebrew/Cellar/node/23.11.0/bin/node /opt/homebrew/bin/firebase deploy --only functions
+[debug] [2026-01-29T07:27:42.660Z] CLI Version:   15.4.0
+[debug] [2026-01-29T07:27:42.660Z] Platform:      darwin
+[debug] [2026-01-29T07:27:42.661Z] Node Version:  v23.11.0
+[debug] [2026-01-29T07:27:42.661Z] Time:          Thu Jan 29 2026 16:27:42 GMT+0900 (Japan Standard Time)
+[debug] [2026-01-29T07:27:42.661Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-29T07:27:43.830Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-29T07:27:43.830Z] > authorizing via signed-in user (tggca.manager@gmail.com)
+[debug] [2026-01-29T07:27:43.830Z] [iam] checking project attendance-management-4bf79 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-01-29T07:27:43.831Z] Checked if tokens are valid: false, expires at: 1769672318639
+[debug] [2026-01-29T07:27:43.831Z] Checked if tokens are valid: false, expires at: 1769672318639
+[debug] [2026-01-29T07:27:43.831Z] > refreshing access token with scopes: []
+[debug] [2026-01-29T07:27:43.832Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-01-29T07:27:43.832Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-01-29T07:27:43.944Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-01-29T07:27:43.944Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-01-29T07:27:43.946Z] [iam] error while checking permissions, command may fail: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-01-29T07:27:43.946Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:43.946Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:43.946Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/attendance-management-4bf79/serviceAccounts/attendance-management-4bf79@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-01-29T07:27:43.946Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/attendance-management-4bf79/serviceAccounts/attendance-management-4bf79@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-01-29T07:27:44.957Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/attendance-management-4bf79/serviceAccounts/attendance-management-4bf79@appspot.gserviceaccount.com:testIamPermissions 404
+[debug] [2026-01-29T07:27:44.957Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/attendance-management-4bf79/serviceAccounts/attendance-management-4bf79@appspot.gserviceaccount.com:testIamPermissions {"error":{"code":404,"message":"Unknown service account","status":"NOT_FOUND"}}
+[debug] [2026-01-29T07:27:44.957Z] [functions] service account IAM check errored, deploy may fail: Request to https://iam.googleapis.com/v1/projects/attendance-management-4bf79/serviceAccounts/attendance-management-4bf79@appspot.gserviceaccount.com:testIamPermissions had HTTP Error: 404, Unknown service account {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":404,"message":"Unknown service account","status":"NOT_FOUND"}},"response":{"statusCode":404}},"exit":1,"message":"Request to https://iam.googleapis.com/v1/projects/attendance-management-4bf79/serviceAccounts/attendance-management-4bf79@appspot.gserviceaccount.com:testIamPermissions had HTTP Error: 404, Unknown service account","status":404}
+[info] 
+[info] === Deploying to 'attendance-management-4bf79'...
+[info] 
+[info] i  deploying functions 
+[debug] [2026-01-29T07:27:44.959Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:44.959Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:44.959Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/attendance-management-4bf79 [none]
+[debug] [2026-01-29T07:27:45.634Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/attendance-management-4bf79 200
+[debug] [2026-01-29T07:27:45.634Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/attendance-management-4bf79 {"projectNumber":"517856723712","projectId":"attendance-management-4bf79","lifecycleState":"ACTIVE","name":" Attendance-management","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-01-27T03:57:22.353669Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[debug] [2026-01-29T07:27:45.634Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:45.634Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:45.634Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:45.635Z] Checked if tokens are valid: true, expires at: 1769675262944
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[debug] [2026-01-29T07:27:45.635Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:45.635Z] Checked if tokens are valid: true, expires at: 1769675262944
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-01-29T07:27:45.635Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:45.635Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:45.635Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudfunctions.googleapis.com [none]
+[debug] [2026-01-29T07:27:45.635Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:45.636Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/runtimeconfig.googleapis.com [none]
+[debug] [2026-01-29T07:27:45.636Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/runtimeconfig.googleapis.com x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:45.637Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com [none]
+[debug] [2026-01-29T07:27:45.637Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:45.638Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/artifactregistry.googleapis.com [none]
+[debug] [2026-01-29T07:27:45.638Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/artifactregistry.googleapis.com x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:46.540Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/runtimeconfig.googleapis.com 200
+[debug] [2026-01-29T07:27:46.540Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2026-01-29T07:27:46.545Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com 200
+[debug] [2026-01-29T07:27:46.545Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com [omitted]
+[warn] ⚠  functions: missing required API cloudbuild.googleapis.com. Enabling now... 
+[debug] [2026-01-29T07:27:46.545Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:46.545Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:46.545Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com:enable [none]
+[debug] [2026-01-29T07:27:46.545Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com:enable x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:46.563Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/artifactregistry.googleapis.com 200
+[debug] [2026-01-29T07:27:46.563Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/artifactregistry.googleapis.com [omitted]
+[warn] ⚠  artifactregistry: missing required API artifactregistry.googleapis.com. Enabling now... 
+[debug] [2026-01-29T07:27:46.563Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:46.563Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:46.563Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/artifactregistry.googleapis.com:enable [none]
+[debug] [2026-01-29T07:27:46.563Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/artifactregistry.googleapis.com:enable x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:46.570Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudfunctions.googleapis.com 200
+[debug] [2026-01-29T07:27:46.570Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudfunctions.googleapis.com [omitted]
+[warn] ⚠  functions: missing required API cloudfunctions.googleapis.com. Enabling now... 
+[debug] [2026-01-29T07:27:46.570Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:46.570Z] Checked if tokens are valid: true, expires at: 1769675262944
+[debug] [2026-01-29T07:27:46.570Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudfunctions.googleapis.com:enable [none]
+[debug] [2026-01-29T07:27:46.570Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudfunctions.googleapis.com:enable x-goog-quota-user=projects/attendance-management-4bf79
+[debug] [2026-01-29T07:27:46.681Z] Error: EPERM: operation not permitted, open '/Users/junkihayashi/.config/configstore/firebase-tools.json.1548363776'
+    at Object.openSync (node:fs:563:18)
+    at Function.writeFileSync [as sync] (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/write-file-atomic/index.js:205:13)
+    at set all (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/configstore/index.js:61:20)
+    at Configstore.set (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/configstore/index.js:91:12)
+    at cacheEnabledAPI (/opt/homebrew/lib/node_modules/firebase-tools/lib/ensureApiEnabled.js:141:31)
+    at Object.check (/opt/homebrew/lib/node_modules/firebase-tools/lib/ensureApiEnabled.js:38:9)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Promise.all (index 1)
+    at async prepare (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/functions/prepare.js:54:30)
+    at async chain (/opt/homebrew/lib/node_modules/firebase-tools/lib/deploy/index.js:43:9)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2026-01-29T07:27:46.797Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com:enable 400
+[debug] [2026-01-29T07:27:46.797Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/attendance-management-4bf79/services/cloudbuild.googleapis.com:enable [omitted]
+[debug] [2026-01-29T07:27:46.934Z] Error: EPERM: operation not permitted, open '/Users/junkihayashi/.config/configstore/firebase-tools.json.2052107572'
+    at Object.openSync (node:fs:563:18)
+    at Function.writeFileSync [as sync] (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/write-file-atomic/index.js:205:13)
+    at set all (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/configstore/index.js:61:20)
+    at Configstore.delete (/opt/homebrew/lib/node_modules/firebase-tools/node_modules/configstore/index.js:101:12)
+    at process.<anonymous> (/opt/homebrew/lib/node_modules/firebase-tools/lib/bin/cli.js:65:45)
+    at process.emit (node:events:519:35)
+    at process.exit (node:internal/process/per_thread:236:15)
+    at Timeout._onTimeout (/opt/homebrew/lib/node_modules/firebase-tools/lib/errorOut.js:20:17)
+    at listOnTimeout (node:internal/timers:608:17)
+    at process.processTimers (node:internal/timers:543:7)
+[error] 
+[error] Error: An unexpected error has occurred.

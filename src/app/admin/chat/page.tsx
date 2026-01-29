@@ -51,7 +51,7 @@ export default function AdminChatPage() {
                     flexShrink: 0,
                 }}
             >
-                スタッフ一覧
+                アルバイト一覧
             </div>
             <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                 {staffList.map((staff) => (
@@ -114,8 +114,8 @@ export default function AdminChatPage() {
                 }}
             >
                 {isMobile
-                    ? "スタッフをタップして\nチャットを開始してください"
-                    : "左のリストからスタッフを選択してください"}
+                    ? "アルバイトをタップして\nチャットを開始してください"
+                    : "左のリストからアルバイトを選択してください"}
             </p>
         </div>
     );
@@ -139,10 +139,10 @@ export default function AdminChatPage() {
                         cursor: "pointer",
                         fontWeight: 500,
                     }}
-                    aria-label="スタッフ一覧に戻る"
+                    aria-label="アルバイト一覧に戻る"
                 >
                     <span style={{ fontSize: "1.2rem" }}>←</span>
-                    スタッフ一覧
+                    アルバイト一覧
                 </button>
             )}
             <div style={{ flex: 1, minHeight: 0 }}>

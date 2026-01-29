@@ -165,7 +165,7 @@ export interface MonthlyWorkSummaryRow {
     salary: number;
 }
 
-/** 確定シフトベースの月別・スタッフ別 勤務時間と給与 */
+/** 確定シフトベースの月別・アルバイト別 勤務時間と給与 */
 export const getMonthlyWorkSummary = async (year: number, month: number): Promise<MonthlyWorkSummaryRow[]> => {
     const shifts = await getAllShifts(year, month);
     const confirmed = shifts.filter((s) => s.status === "confirmed");
@@ -190,7 +190,7 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
     return rows;
 };
 
-/** 対象月に1件も submitted/confirmed のシフトがないスタッフを返す */
+/** 対象月に1件も submitted/confirmed のシフトがないアルバイトを返す */
 export const getUnsubmittedStaff = async (
     year: number,
     month: number

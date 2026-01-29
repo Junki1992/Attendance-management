@@ -119,7 +119,7 @@ export default function StaffLayout({
                     justifyContent: 'space-between', 
                     alignItems: 'center'
                 }}>
-                    <h1 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>スタッフ用</h1>
+                    <h1 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>アルバイト用</h1>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative' }}>
                             <button 
@@ -188,7 +188,7 @@ export default function StaffLayout({
                     justifyContent: 'space-between', 
                     alignItems: 'center' 
                 }}>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>スタッフ用</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>アルバイト用</h1>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div
                             role="button"

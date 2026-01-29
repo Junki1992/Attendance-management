@@ -59,7 +59,7 @@ export default function AdminSettingsPage() {
   };
 
   const handleRoleChange = async (uid: string, newRole: "admin" | "staff") => {
-    if (!confirm(`このユーザーを${newRole === "admin" ? "管理者" : "スタッフ"}に変更しますか？`)) {
+    if (!confirm(`このユーザーを${newRole === "admin" ? "管理者" : "アルバイト"}に変更しますか？`)) {
       return;
     }
     setUpdatingUserId(uid);
@@ -101,7 +101,7 @@ export default function AdminSettingsPage() {
               シフト提出締切日
             </label>
             <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-              各月の「何日」までにスタッフがシフトを提出できるか。1〜28で指定。締切を過ぎるとスタッフは編集できません。
+              各月の「何日」までにアルバイトがシフトを提出できるか。1〜28で指定。締切を過ぎるとアルバイトは編集できません。
             </p>
             <input
               id="deadline"
@@ -132,8 +132,8 @@ export default function AdminSettingsPage() {
 
       <div className="card" style={{ maxWidth: "600px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>ユーザー管理</h2>
-        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-          スタッフを管理者に昇格させたり、管理者をスタッフに降格させることができます。
+          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+          アルバイトを管理者に昇格させたり、管理者をアルバイトに降格させることができます。
         </p>
 
         {usersLoading ? (
@@ -176,7 +176,7 @@ export default function AdminSettingsPage() {
                       flexShrink: 0,
                     }}
                   >
-                    {user.role === "admin" ? "管理者" : "スタッフ"}
+                    {user.role === "admin" ? "管理者" : "アルバイト"}
                   </span>
                   {user.uid !== currentUser?.uid && (
                     <button
@@ -188,7 +188,7 @@ export default function AdminSettingsPage() {
                       {updatingUserId === user.uid
                         ? "変更中..."
                         : user.role === "admin"
-                        ? "スタッフに降格"
+                        ? "アルバイトに降格"
                         : "管理者に昇格"}
                     </button>
                   )}
@@ -242,7 +242,7 @@ export default function AdminSettingsPage() {
           <div style={{ marginBottom: "0.75rem" }}>
             <strong>役割:</strong>{" "}
             <span style={{ padding: "0.25rem 0.5rem", borderRadius: 6, background: selectedUser!.role === "admin" ? "var(--primary)" : "var(--bg-secondary)", color: selectedUser!.role === "admin" ? "#fff" : "inherit" }}>
-              {selectedUser!.role === "admin" ? "管理者" : "スタッフ"}
+              {selectedUser!.role === "admin" ? "管理者" : "アルバイト"}
             </span>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
@@ -263,7 +263,7 @@ export default function AdminSettingsPage() {
                 }}
                 disabled={updatingUserId === selectedUser!.uid}
               >
-                {updatingUserId === selectedUser!.uid ? "変更中..." : selectedUser!.role === "admin" ? "スタッフに降格" : "管理者に昇格"}
+                {updatingUserId === selectedUser!.uid ? "変更中..." : selectedUser!.role === "admin" ? "アルバイトに降格" : "管理者に昇格"}
               </button>
             )}
             <button className="btn btn-primary" onClick={() => setSelectedUser(null)}>閉じる</button>

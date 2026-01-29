@@ -91,7 +91,7 @@ export default function AdminShiftChangeRequestsPage() {
           <table style={{ width: "100%", fontSize: "0.875rem", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>スタッフ</th>
+                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>アルバイト</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>日付</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>希望</th>
                 <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>理由</th>

@@ -232,7 +232,7 @@ export const subscribeMessages = (
 
 /**
  * 複数の相手（例: 全管理者）とのやり取りを1本のストリームで購読する。
- * スタッフチャットで「どの管理者からでも」届いたメッセージを表示するために使用。
+ * アルバイトチャットで「どの管理者からでも」届いたメッセージを表示するために使用。
  */
 export const subscribeMessagesFromPartners = (
     currentUserId: string,
@@ -489,4 +489,4 @@ export const subscribeRoomMeta = (roomId: string, callback: (lastReadBy: Record<
     return wrapped;
 };
 // For Admin: Get list of users who have chatted? 
-// That might be complex. For now Admin can just see list of all staff (STAFF_LIST from page.tsx) and click one to chat.
+// That might be complex. For now Admin can just see list of all アルバイト (STAFF_LIST from page.tsx) and click one to chat.
