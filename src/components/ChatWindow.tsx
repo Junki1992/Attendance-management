@@ -36,6 +36,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [roomMeta, setRoomMeta] = useState<Record<string, any>>({});
     const [activeListeners, setActiveListeners] = useState<number>(0);
+    const initialMarkedRef = useRef(false);
 
     useEffect(() => {
         if (!user || !partnerId) return;
@@ -50,6 +51,18 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         const onMessages = (msgs: ChatMessage[]) => {
             setMessages(msgs);
             setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            // mark existing messages as read immediately once on first load
+            try {
+                const roomId = [user.uid, partnerId].sort().join("_");
+                if (!initialMarkedRef.current) {
+                    initialMarkedRef.current = true;
+                    setRoomLastRead(roomId, user.uid).catch((err) => {
+                        console.error("[ChatWindow] initial setRoomLastRead failed:", err);
+                    });
+                }
+            } catch (err) {
+                console.error("[ChatWindow] initial mark read error:", err);
+            }
         };
         const unsubscribe = subscribeAllForMe
             ? subscribeMyMessages(user.uid, onMessages)
