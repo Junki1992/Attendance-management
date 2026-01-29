@@ -7,6 +7,7 @@ export const metadata: Metadata = {
 }
 
 import { AuthProvider } from "@/context/AuthContext";
+import LabelFix from "@/components/LabelFix";
 
 export default function RootLayout({
   children,
@@ -26,6 +27,7 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning={true}>
         <AuthProvider>
+          <LabelFix />
           {children}
         </AuthProvider>
       </body>
