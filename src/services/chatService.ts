@@ -436,7 +436,9 @@ export const subscribeRoomMeta = (roomId: string, callback: (lastReadBy: Record<
         return () => {};
     }
     const ref = doc(db, "chatRooms", roomId);
-    const unsub = onSnapshot(ref, (snap) => {
+    // create listener and if permission-denied occurs, unsubscribe to avoid retry flood
+    let unsub: (() => void) | undefined;
+    unsub = onSnapshot(ref, (snap) => {
         if (!snap.exists()) {
             callback({});
             return;
@@ -444,8 +446,19 @@ export const subscribeRoomMeta = (roomId: string, callback: (lastReadBy: Record<
         const data = snap.data() as Record<string, any>;
         callback(data.lastReadBy || {});
     }, (err) => {
+        const { code, message } = normalizeSnapshotError(err);
+        const isPermissionDenied =
+            code === "permission-denied" ||
+            code === "missing-or-insufficient-permissions" ||
+            (typeof message === "string" && message.toLowerCase().includes("insufficient permissions"));
         console.error("[chatService] subscribeRoomMeta error:", err);
         callback({});
+        if (isPermissionDenied) {
+            // stop listening to avoid repeated errors and reconnect storms
+            try {
+                unsub && unsub();
+            } catch (e) {}
+        }
     });
     activeListenerCount += 1;
     if (process.env.NODE_ENV === "development") {
