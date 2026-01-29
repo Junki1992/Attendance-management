@@ -171,6 +171,15 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         overflowX: "hidden",
     };
     
+    // Send button style adjusts for mobile to be smaller
+    const sendButtonStyle: React.CSSProperties = {
+        borderRadius: isFullWidthMode && isMobile ? '0' : undefined,
+        flexShrink: 0,
+        padding: isMobile ? '0.45rem 0.9rem' : '0.75rem 1.5rem',
+        fontSize: isMobile ? '0.95rem' : undefined,
+        whiteSpace: 'nowrap',
+    };
+    
     return (
         <div
             className={isFullWidthMode ? "chat-window-fullwidth" : `flex flex-col bg-white rounded-lg shadow border border-gray-200 ${className ?? ""}`}
@@ -385,12 +394,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     type="submit" 
                     className="btn btn-primary"
                     disabled={!inputText.trim() || uploading}
-                    style={{
-                        borderRadius: isFullWidthMode && isMobile ? '0' : undefined,
-                        flexShrink: 0,
-                        padding: '0.75rem 1.5rem',
-                        whiteSpace: 'nowrap',
-                    }}
+                    style={sendButtonStyle}
                 >
                     送信
                 </button>
