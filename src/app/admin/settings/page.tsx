@@ -152,16 +152,18 @@ export default function AdminSettingsPage() {
                   border: "1px solid var(--border)",
                   borderRadius: "var(--radius-md)",
                   backgroundColor: user.uid === currentUser?.uid ? "var(--bg-secondary)" : undefined,
+                  gap: "0.75rem",
+                  flexWrap: "wrap",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
                   <Avatar photoURL={user.photoURL} name={user.name} size="md" />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 500 }}>{user.name}</div>
-                    <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{user.email}</div>
+                  <div style={{ minWidth: 0, overflow: "hidden" }}>
+                    <div style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
+                    <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                   <span
                     style={{
                       padding: "0.25rem 0.5rem",
@@ -170,6 +172,7 @@ export default function AdminSettingsPage() {
                       fontWeight: 500,
                       backgroundColor: user.role === "admin" ? "var(--primary)" : "var(--bg-secondary)",
                       color: user.role === "admin" ? "white" : "var(--text)",
+                      flexShrink: 0,
                     }}
                   >
                     {user.role === "admin" ? "管理者" : "スタッフ"}
@@ -177,7 +180,7 @@ export default function AdminSettingsPage() {
                   {user.uid !== currentUser?.uid && (
                     <button
                       className="btn btn-outline"
-                      style={{ fontSize: "0.875rem", padding: "0.25rem 0.5rem" }}
+                      style={{ fontSize: "0.875rem", padding: "0.25rem 0.5rem", flexShrink: 0 }}
                       onClick={() => handleRoleChange(user.uid, user.role === "admin" ? "staff" : "admin")}
                       disabled={updatingUserId === user.uid}
                     >
@@ -189,7 +192,7 @@ export default function AdminSettingsPage() {
                     </button>
                   )}
                   {user.uid === currentUser?.uid && (
-                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>（自分）</span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", flexShrink: 0 }}>（自分）</span>
                   )}
                 </div>
               </div>
