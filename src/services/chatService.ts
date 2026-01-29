@@ -5,6 +5,10 @@ import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timesta
 const MAX_IN_QUERY = 30; // Firestore "in" の上限
 import { createNotification } from "@/services/notificationService";
 
+// Simple global counter to help debug active realtime listeners
+let activeListenerCount = 0;
+export const getActiveListenerCount = () => activeListenerCount;
+
 export interface ChatMessage {
     id?: string;
     text: string;
@@ -137,10 +141,21 @@ export const subscribeMessages = (
         notify();
     }, makeErrorHandler("q2"));
 
-    return () => {
-        unsub1();
-        unsub2();
+    // count listeners
+    activeListenerCount += 2;
+    if (process.env.NODE_ENV === "development") {
+        console.info("[chatService] subscribed 2 listeners for room", currentUserId, partnerId, "activeListeners:", activeListenerCount);
+    }
+
+    const wrappedUnsub = () => {
+        try { unsub1(); } catch {}
+        try { unsub2(); } catch {}
+        activeListenerCount = Math.max(0, activeListenerCount - 2);
+        if (process.env.NODE_ENV === "development") {
+            console.info("[chatService] unsubscribed 2 listeners for room", currentUserId, partnerId, "activeListeners:", activeListenerCount);
+        }
     };
+    return wrappedUnsub;
 };
 
 /**
@@ -211,11 +226,21 @@ export const subscribeMessagesFromPartners = (
         part2 = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
         notify();
     }, makeErrorHandler("q2"));
+    // count listeners
+    activeListenerCount += 2;
+    if (process.env.NODE_ENV === "development") {
+        console.info("[chatService] subscribed 2 listeners for partners", ids, "activeListeners:", activeListenerCount);
+    }
 
-    return () => {
-        unsub1();
-        unsub2();
+    const wrapped = () => {
+        try { unsub1(); } catch {}
+        try { unsub2(); } catch {}
+        activeListenerCount = Math.max(0, activeListenerCount - 2);
+        if (process.env.NODE_ENV === "development") {
+            console.info("[chatService] unsubscribed 2 listeners for partners", ids, "activeListeners:", activeListenerCount);
+        }
     };
+    return wrapped;
 };
 
 /**
@@ -278,11 +303,20 @@ export const subscribeMyMessages = (
         received = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
         notify();
     }, makeErrorHandler("received"));
+    activeListenerCount += 2;
+    if (process.env.NODE_ENV === "development") {
+        console.info("[chatService] subscribed 2 listeners for myMessages", currentUserId, "activeListeners:", activeListenerCount);
+    }
 
-    return () => {
-        unsub1();
-        unsub2();
+    const wrapped = () => {
+        try { unsub1(); } catch {}
+        try { unsub2(); } catch {}
+        activeListenerCount = Math.max(0, activeListenerCount - 2);
+        if (process.env.NODE_ENV === "development") {
+            console.info("[chatService] unsubscribed 2 listeners for myMessages", currentUserId, "activeListeners:", activeListenerCount);
+        }
     };
+    return wrapped;
 };
 
 export const sendMessageWithRoom = async (
@@ -352,7 +386,18 @@ export const subscribeRoomMeta = (roomId: string, callback: (lastReadBy: Record<
         console.error("[chatService] subscribeRoomMeta error:", err);
         callback({});
     });
-    return unsub;
+    activeListenerCount += 1;
+    if (process.env.NODE_ENV === "development") {
+        console.info("[chatService] subscribed 1 listener for roomMeta", roomId, "activeListeners:", activeListenerCount);
+    }
+    const wrapped = () => {
+        try { unsub(); } catch {}
+        activeListenerCount = Math.max(0, activeListenerCount - 1);
+        if (process.env.NODE_ENV === "development") {
+            console.info("[chatService] unsubscribed 1 listener for roomMeta", roomId, "activeListeners:", activeListenerCount);
+        }
+    };
+    return wrapped;
 };
 // For Admin: Get list of users who have chatted? 
 // That might be complex. For now Admin can just see list of all staff (STAFF_LIST from page.tsx) and click one to chat.
