@@ -135,7 +135,7 @@ export default function AdminLayout({
 
                 {/* デスクトップ用ヘッダー */}
                 {!isMobile && (
-                <div className="container" style={{ 
+                <div className="container container-wide" style={{ 
                     display: 'flex',
                     justifyContent: 'space-between', 
                     alignItems: 'center' 
@@ -394,11 +394,12 @@ export default function AdminLayout({
                 )}
             </header>
             <main
-                className={isWide ? '' : 'container'}
+                className="container container-wide"
                 style={{
                     flex: 1,
                     padding: '2rem 1rem',
-                    ...(isWide && { maxWidth: '1600px', margin: '0 auto', width: '100%' }),
+                    margin: '0 auto',
+                    width: '100%',
                 }}
             >
                 {children}
