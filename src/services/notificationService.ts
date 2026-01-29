@@ -97,20 +97,29 @@ export const subscribeNotifications = (userId: string, callback: (notifications:
 
     const normalizeError = (error: unknown): { code: string; message: string; raw: unknown } => {
         const anyErr = error as any;
-        const code =
+        let code =
             (typeof anyErr?.code === "string" ? anyErr.code : "") ||
             (typeof anyErr?.errorInfo?.code === "string" ? anyErr.errorInfo.code : "") ||
             (typeof anyErr?.name === "string" && anyErr.name.toLowerCase().includes("permission") ? "permission-denied" : "");
-        const message =
+        let message =
             (typeof anyErr?.message === "string" ? anyErr.message : "") ||
-            (typeof anyErr?.errorInfo?.message === "string" ? anyErr.errorInfo.message : "") ||
-            (() => {
-                try {
-                    return JSON.stringify(error);
-                } catch {
-                    return String(error);
-                }
-            })();
+            (typeof anyErr?.errorInfo?.message === "string" ? anyErr.errorInfo.message : "");
+        
+        // message が空ならフォールバック
+        if (!message) {
+            try {
+                message = JSON.stringify(error);
+            } catch {
+                message = String(error);
+            }
+        }
+        
+        // code が空なら message から推測
+        if (!code && typeof message === "string") {
+            if (message.toLowerCase().includes("permission")) code = "permission-denied";
+            else if (message.toLowerCase().includes("index")) code = "failed-precondition";
+        }
+        
         return { code, message, raw: error };
     };
 
@@ -146,7 +155,12 @@ export const subscribeNotifications = (userId: string, callback: (notifications:
             return;
         }
 
-        console.error("[notificationService] subscribeNotifications: error", { userId, code, message, raw });
+        // raw の全プロパティを展開してログに出す（原因特定のため）
+        const rawProps = raw && typeof raw === "object" ? Object.keys(raw).reduce((acc, k) => {
+            acc[k] = (raw as Record<string, unknown>)[k];
+            return acc;
+        }, {} as Record<string, unknown>) : raw;
+        console.error("[notificationService] subscribeNotifications: error", { userId, code, message, raw: rawProps });
     });
 };
 
