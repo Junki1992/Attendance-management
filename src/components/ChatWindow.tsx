@@ -56,8 +56,22 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 const roomId = [user.uid, partnerId].sort().join("_");
                 if (!initialMarkedRef.current) {
                     initialMarkedRef.current = true;
-                    // schedule initial mark to respect debounce and reduce permission/write storms
-                    scheduleRoomLastRead(roomId, user.uid);
+                    // If server endpoint is configured, call it to mark lastRead server-side (preferred)
+                    const fnUrl = process.env.NEXT_PUBLIC_MARK_LAST_READ_URL;
+                    if (fnUrl) {
+                        fetch(fnUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ roomId, uid: user.uid }),
+                        }).catch((e) => {
+                            console.error('[ChatWindow] markLastRead via server failed:', e);
+                            // fallback to client-schedule if server call fails
+                            scheduleRoomLastRead(roomId, user.uid);
+                        });
+                    } else {
+                        // fallback to client-schedule if no server endpoint configured
+                        scheduleRoomLastRead(roomId, user.uid);
+                    }
                 }
             } catch (err) {
                 console.error("[ChatWindow] initial mark read error:", err);

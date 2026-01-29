@@ -8,6 +8,7 @@ import NotificationList from "@/components/NotificationList";
 import Avatar from "@/components/Avatar";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import { subscribeNotifications } from "@/services/notificationService";
+import HelpButton from "@/components/HelpButton";
 
 export default function StaffLayout({
     children,
@@ -240,6 +241,7 @@ export default function StaffLayout({
                             <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>シフト提出</Link>
                             <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>確定シフト</Link>
                             <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>チャット</Link>
+                            <Link href="/manual/staff" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>マニュアル</Link>
                             <button 
                                 onClick={handleLogout}
                                 style={{ 
@@ -393,6 +395,25 @@ export default function StaffLayout({
                         >
                             チャット
                         </Link>
+                        <Link 
+                            href="/manual/staff" 
+                            onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
+                            style={{ 
+                                textDecoration: 'none', 
+                                color: 'var(--text-main)', 
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: pathname === '/manual/staff' ? 'var(--surface-hover)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: pathname === '/manual/staff' ? 600 : 400
+                            }}
+                        >
+                            マニュアル
+                        </Link>
+                        <div style={{ padding: '0.25rem 1rem' }}>
+                            <HelpButton scope="staff" />
+                        </div>
                         <button 
                             onClick={() => {
                                 setShowMobileMenu(false);
