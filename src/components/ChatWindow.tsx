@@ -318,7 +318,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 boxSizing: 'border-box',
                 position: 'relative',
             }}>
-                {/* debug badge removed in all environments */}
+                {/* debug badge removed */}
                 {messages.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '2rem' }}>
                         メッセージはまだありません
