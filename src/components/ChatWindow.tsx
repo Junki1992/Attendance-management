@@ -349,9 +349,12 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                         width: '40px',
                         height: '40px',
                         boxSizing: 'border-box',
+                        color: 'var(--text-muted)',
                     }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--primary)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
                 >
-                    <i className="fa-solid fa-paperclip" aria-hidden style={{ fontSize: 18 }} />
+                    <i className="fa-solid fa-paperclip" aria-hidden style={{ fontSize: 18, color: 'inherit' }} />
                 </button>
                 {uploading && uploadProgress !== null && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '120px' }}>
