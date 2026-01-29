@@ -1,6 +1,6 @@
 
 import { db, auth } from "@/lib/firebase/firebase";
-import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timestamp, doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 const MAX_IN_QUERY = 30; // Firestore "in" の上限
 import { createNotification } from "@/services/notificationService";
@@ -328,5 +328,31 @@ export const sendMessageWithRoom = async (
     }
 };
 
+export const setRoomLastRead = async (roomId: string, uid: string) => {
+    if (!roomId || !uid) return;
+    const ref = doc(db, "chatRooms", roomId);
+    // Use setDoc with merge to create the doc if missing and set nested field
+    await setDoc(ref, { lastReadBy: { [uid]: serverTimestamp() } }, { merge: true });
+};
+
+export const subscribeRoomMeta = (roomId: string, callback: (lastReadBy: Record<string, any>) => void) => {
+    if (!roomId) {
+        callback({});
+        return () => {};
+    }
+    const ref = doc(db, "chatRooms", roomId);
+    const unsub = onSnapshot(ref, (snap) => {
+        if (!snap.exists()) {
+            callback({});
+            return;
+        }
+        const data = snap.data() as Record<string, any>;
+        callback(data.lastReadBy || {});
+    }, (err) => {
+        console.error("[chatService] subscribeRoomMeta error:", err);
+        callback({});
+    });
+    return unsub;
+};
 // For Admin: Get list of users who have chatted? 
 // That might be complex. For now Admin can just see list of all staff (STAFF_LIST from page.tsx) and click one to chat.

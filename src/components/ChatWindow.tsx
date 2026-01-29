@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesFromPartners, subscribeMyMessages } from "@/services/chatService";
+import { setRoomLastRead, subscribeRoomMeta } from "@/services/chatService";
 import { useAuth } from "@/context/AuthContext";
 import { markMessageNotificationsAsRead } from "@/services/notificationService";
 import Avatar from "@/components/Avatar";
@@ -33,6 +34,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+    const [roomMeta, setRoomMeta] = useState<Record<string, any>>({});
 
     useEffect(() => {
         if (!user || !partnerId) return;
@@ -56,6 +58,38 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
 
         return () => unsubscribe();
     }, [user, partnerId, partnerIds, subscribeAllForMe]);
+
+    // subscribe to room meta (lastReadBy)
+    useEffect(() => {
+        if (!user || !partnerId) return;
+        const roomId = [user.uid, partnerId].sort().join("_");
+        const unsubMeta = subscribeRoomMeta(roomId, (meta) => {
+            setRoomMeta(meta || {});
+        });
+        return () => unsubMeta();
+    }, [user, partnerId]);
+
+    // update my lastRead when messages change (only if there are new messages)
+    const toMillis = (obj: any): number => {
+        if (!obj) return 0;
+        if (typeof obj?.toMillis === "function") return obj.toMillis();
+        if (typeof obj?.seconds === "number") return obj.seconds * 1000;
+        if (obj instanceof Date) return obj.getTime();
+        return 0;
+    };
+
+    useEffect(() => {
+        if (!user || !partnerId) return;
+        const roomId = [user.uid, partnerId].sort().join("_");
+        const lastMsgTime = messages.length ? toMillis(messages[messages.length - 1].createdAt) : 0;
+        const myLastRead = roomMeta[user.uid] ? toMillis(roomMeta[user.uid]) : 0;
+        if (lastMsgTime > myLastRead) {
+            // update my lastRead timestamp
+            setRoomLastRead(roomId, user.uid).catch((err) => {
+                console.error("[ChatWindow] setRoomLastRead failed:", err);
+            });
+        }
+    }, [messages, roomMeta, user, partnerId]);
 
     const handleSend = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -305,6 +339,15 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                                 overflowWrap: 'break-word',
                             }}>
                                 {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
+                                {isMe && (() => {
+                                    const partnerLastRead = roomMeta[partnerId];
+                                    const msgTime = msg.createdAt ? toMillis(msg.createdAt) : 0;
+                                    const partnerReadTime = partnerLastRead ? toMillis(partnerLastRead) : 0;
+                                    if (partnerReadTime && partnerReadTime >= msgTime) {
+                                        return <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>既読</span>;
+                                    }
+                                    return null;
+                                })()}
                             </div>
                         </div>
                     );
