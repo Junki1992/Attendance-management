@@ -318,10 +318,12 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 boxSizing: 'border-box',
                 position: 'relative',
             }}>
-                {/* DEBUG: active listener count */}
-                <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(0,0,0,0.6)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', zIndex: 50 }}>
+                {/* DEBUG: active listener count (development only) */}
+                {process.env.NODE_ENV === "development" && (
+                  <div style={{ position: 'absolute', top: 8, right: 12, background: 'rgba(0,0,0,0.6)', color: 'white', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', zIndex: 50 }}>
                     listeners: {activeListeners}
-                </div>
+                  </div>
+                )}
                 {messages.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '2rem' }}>
                         メッセージはまだありません
