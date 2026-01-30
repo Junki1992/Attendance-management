@@ -14,6 +14,8 @@ export interface Shift {
     hourlyWage?: number; // Optional snapshot of wage at time of shift
     /** 締切後に管理者が編集した場合 true */
     editedAfterDeadline?: boolean;
+    /** 確定済みのシフトを管理者が編集した場合 true（再通知が必要） */
+    editedAfterConfirmed?: boolean;
     /** 在宅勤務の場合 true */
     isRemote?: boolean;
 }
@@ -157,13 +159,19 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     if (userShifts.length === 0) return false;
 
     const toUpdate = userShifts.filter((s) => s.status !== "confirmed");
-    if (toUpdate.length === 0) return true; // すでに全て確定済み
-
     await Promise.all(
         toUpdate.map((shift) => {
             const docId = `${shift.userId}_${shift.date}`;
             const shiftRef = doc(db, "shifts", docId);
             return setDoc(shiftRef, { status: "confirmed" }, { merge: true });
+        })
+    );
+    // 確定通知を送ったので editedAfterConfirmed をクリア（再通知不要に）
+    await Promise.all(
+        userShifts.map((shift) => {
+            const docId = `${shift.userId}_${shift.date}`;
+            const shiftRef = doc(db, "shifts", docId);
+            return setDoc(shiftRef, { editedAfterConfirmed: false }, { merge: true });
         })
     );
     return true;

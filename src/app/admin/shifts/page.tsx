@@ -114,12 +114,12 @@ export default function AdminShiftGrid() {
     [shifts]
   );
 
-  /** このユーザーの当月シフトがすべて確定済みなら true（シフトなしは false） */
+  /** このユーザーの当月シフトがすべて確定済みで、確定後に編集されていなければ true（シフトなしは false） */
   const isFullyConfirmed = useCallback(
     (userId: string) => {
       const userShifts = shifts.filter((s) => s.userId === userId);
       if (userShifts.length === 0) return false;
-      return userShifts.every((s) => s.status === "confirmed");
+      return userShifts.every((s) => s.status === "confirmed" && !s.editedAfterConfirmed);
     },
     [shifts]
   );
@@ -183,16 +183,16 @@ export default function AdminShiftGrid() {
   const handleConfirmOne = async (userId: string) => {
     setConfirmingUserId(userId);
     try {
+      const hadEdited = shifts.some((s) => s.userId === userId && s.editedAfterConfirmed);
       const hasShifts = await confirmShiftsForUser(userId, year, month);
       if (!hasShifts) {
         alert("このアルバイトのシフトがありません。");
         return;
       }
-      await createNotification(
-        userId,
-        "shift_confirmed",
-        `${month + 1}月のシフトが確定しました。確認してください。`
-      );
+      const message = hadEdited
+        ? `${month + 1}月のシフトが変更されました。確認してください。`
+        : `${month + 1}月のシフトが確定しました。確認してください。`;
+      await createNotification(userId, "shift_confirmed", message);
       getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
       setSelectedUserIds((prev) => {
@@ -221,12 +221,12 @@ export default function AdminShiftGrid() {
     setConfirmingSelected(true);
     try {
       for (const uid of ids) {
+        const hadEdited = shifts.some((s) => s.userId === uid && s.editedAfterConfirmed);
         await confirmShiftsForUser(uid, year, month);
-        await createNotification(
-          uid,
-          "shift_confirmed",
-          `${month + 1}月のシフトが確定しました。確認してください。`
-        );
+        const message = hadEdited
+          ? `${month + 1}月のシフトが変更されました。確認してください。`
+          : `${month + 1}月のシフトが確定しました。確認してください。`;
+        await createNotification(uid, "shift_confirmed", message);
       }
       getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
@@ -820,57 +820,21 @@ export default function AdminShiftGrid() {
                 在宅
               </label>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {[
-                  { label: "09:00-18:00", start: "09:00", end: "18:00" },
-                  { label: "10:00-19:00", start: "10:00", end: "19:00" },
-                  { label: "OFF", start: "00:00", end: "00:00" },
-                ].map((opt) => (
-                  <button
-                    key={opt.label}
-                    className="btn btn-outline"
-                    disabled={savingCell}
-                    onClick={async () => {
-                      setSavingCell(true);
-                      try {
-                        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
-                        await saveShift(
-                          {
-                            userId: editingCell.userId,
-                            date: dateStr,
-                            startTime: opt.start,
-                            endTime: opt.end,
-                            status: "confirmed",
-                            isRemote: opt.start !== "00:00" ? cellModalIsRemote : false,
-                          },
-                          { byAdmin: true }
-                        );
-                        setEditingCell(null);
-                      } catch (e) {
-                        console.error(e);
-                        alert("更新に失敗しました");
-                      } finally {
-                        setSavingCell(false);
-                      }
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>自由に設定</div>
+                <div style={{ marginBottom: "0.25rem" }}>
+                  <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>時間を設定</div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                     <input
                       type="time"
                       value={cellModalStart}
                       onChange={(e) => setCellModalStart(e.target.value)}
-                      style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                      style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
                     />
-                    <span style={{ fontSize: "0.875rem" }}>～</span>
+                    <span style={{ fontSize: "1.1rem" }}>～</span>
                     <input
                       type="time"
                       value={cellModalEnd}
                       onChange={(e) => setCellModalEnd(e.target.value)}
-                      style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                      style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
                     />
                     <button
                       className="btn btn-outline"
@@ -885,6 +849,8 @@ export default function AdminShiftGrid() {
                         setSavingCell(true);
                         try {
                           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
+                          const existingShift = shifts.find((s) => s.userId === editingCell.userId && s.date === dateStr);
+                          const editedAfterConfirmed = existingShift?.status === "confirmed";
                           await saveShift(
                             {
                               userId: editingCell.userId,
@@ -893,6 +859,7 @@ export default function AdminShiftGrid() {
                               endTime: cellModalEnd,
                               status: "confirmed",
                               isRemote: cellModalIsRemote,
+                              ...(editedAfterConfirmed && { editedAfterConfirmed: true }),
                             },
                             { byAdmin: true }
                           );
@@ -908,6 +875,45 @@ export default function AdminShiftGrid() {
                       適用
                     </button>
                   </div>
+                </div>
+                <div style={{ paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
+                  {[
+                    { label: "OFF", start: "00:00", end: "00:00" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      className="btn btn-outline"
+                      disabled={savingCell}
+                      onClick={async () => {
+                        setSavingCell(true);
+                        try {
+                          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
+                          const existingShift = shifts.find((s) => s.userId === editingCell.userId && s.date === dateStr);
+                          const editedAfterConfirmed = existingShift?.status === "confirmed";
+                          await saveShift(
+                            {
+                              userId: editingCell.userId,
+                              date: dateStr,
+                              startTime: opt.start,
+                              endTime: opt.end,
+                              status: "confirmed",
+                              isRemote: opt.start !== "00:00" ? cellModalIsRemote : false,
+                              ...(editedAfterConfirmed && { editedAfterConfirmed: true }),
+                            },
+                            { byAdmin: true }
+                          );
+                          setEditingCell(null);
+                        } catch (e) {
+                          console.error(e);
+                          alert("更新に失敗しました");
+                        } finally {
+                          setSavingCell(false);
+                        }
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <button
