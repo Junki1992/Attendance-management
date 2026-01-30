@@ -14,6 +14,8 @@ export interface Shift {
     hourlyWage?: number; // Optional snapshot of wage at time of shift
     /** 締切後に管理者が編集した場合 true */
     editedAfterDeadline?: boolean;
+    /** 在宅勤務の場合 true */
+    isRemote?: boolean;
 }
 
 export type SaveShiftOptions = { byAdmin?: boolean };
@@ -146,6 +148,25 @@ export const confirmShifts = async (year: number, month: number) => {
 
     await Promise.all(promises);
     return Array.from(affectedUserIds);
+};
+
+/** 指定ユーザーのその月のシフトのみ確定する（個別確定通知用） */
+export const confirmShiftsForUser = async (userId: string, year: number, month: number): Promise<boolean> => {
+    const shifts = await getAllShifts(year, month);
+    const userShifts = shifts.filter((s) => s.userId === userId);
+    if (userShifts.length === 0) return false;
+
+    const toUpdate = userShifts.filter((s) => s.status !== "confirmed");
+    if (toUpdate.length === 0) return true; // すでに全て確定済み
+
+    await Promise.all(
+        toUpdate.map((shift) => {
+            const docId = `${shift.userId}_${shift.date}`;
+            const shiftRef = doc(db, "shifts", docId);
+            return setDoc(shiftRef, { status: "confirmed" }, { merge: true });
+        })
+    );
+    return true;
 };
 
 function calcHoursForShift(s: Shift): number {

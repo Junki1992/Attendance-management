@@ -17,6 +17,7 @@ export default function ShiftCalendar() {
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth());
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
+    const [remoteByDay, setRemoteByDay] = useState<{ [key: number]: boolean }>({});
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
     const [deadlinePassed, setDeadlinePassed] = useState(false);
@@ -24,9 +25,11 @@ export default function ShiftCalendar() {
     const [modalStart, setModalStart] = useState("09:00");
     const [modalEnd, setModalEnd] = useState("18:00");
     const [modalIsOff, setModalIsOff] = useState(false);
+    const [modalIsRemote, setModalIsRemote] = useState(false);
     const [bulkStart, setBulkStart] = useState("09:00");
     const [bulkEnd, setBulkEnd] = useState("18:00");
     const [bulkIsOff, setBulkIsOff] = useState(false);
+    const [bulkIsRemote, setBulkIsRemote] = useState(false);
     const [bulkSelectedDays, setBulkSelectedDays] = useState<number[]>([]);
     const [dragStartDay, setDragStartDay] = useState<number | null>(null);
     const [dragCurrentDay, setDragCurrentDay] = useState<number | null>(null);
@@ -49,6 +52,7 @@ export default function ShiftCalendar() {
                 if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
                 setDeadlinePassed(past);
                 const shiftMap: { [key: number]: string } = {};
+                const remoteMap: { [key: number]: boolean } = {};
                 data.forEach((s) => {
                     const day = parseInt(s.date.split("-")[2], 10);
                     if (s.startTime === "00:00" && s.endTime === "00:00") {
@@ -56,8 +60,10 @@ export default function ShiftCalendar() {
                     } else {
                         shiftMap[day] = `${s.startTime} - ${s.endTime}`;
                     }
+                    if (s.isRemote) remoteMap[day] = true;
                 });
                 setShifts(shiftMap);
+                setRemoteByDay(remoteMap);
             } catch (error) {
                 console.error("Failed to fetch data", error);
             }
@@ -122,6 +128,7 @@ export default function ShiftCalendar() {
             setModalEnd("18:00");
             setModalIsOff(false);
         }
+        setModalIsRemote(!!remoteByDay[day]);
         setEditingDay(day);
     };
     openModalRef.current = handleShiftClick;
@@ -130,6 +137,7 @@ export default function ShiftCalendar() {
         if (editingDay === null) return;
         if (modalIsOff) {
             setShifts((prev) => ({ ...prev, [editingDay]: "OFF" }));
+            setRemoteByDay((prev) => ({ ...prev, [editingDay]: false }));
         } else {
             const startM = parseInt(modalStart.slice(0, 2), 10) * 60 + parseInt(modalStart.slice(3), 10);
             const endM = parseInt(modalEnd.slice(0, 2), 10) * 60 + parseInt(modalEnd.slice(3), 10);
@@ -138,6 +146,7 @@ export default function ShiftCalendar() {
                 return;
             }
             setShifts((prev) => ({ ...prev, [editingDay]: `${modalStart} - ${modalEnd}` }));
+            setRemoteByDay((prev) => ({ ...prev, [editingDay]: modalIsRemote }));
         }
         setEditingDay(null);
     };
@@ -185,6 +194,11 @@ export default function ShiftCalendar() {
             targetDays.forEach((d) => (next[d] = value));
             return next;
         });
+        setRemoteByDay((prev) => {
+            const next = { ...prev };
+            targetDays.forEach((d) => (next[d] = bulkIsOff ? false : bulkIsRemote));
+            return next;
+        });
         alert(`${targetDays.length}日分を一括で設定しました。内容を確認して「提出内容を保存」で送信してください。`);
     };
 
@@ -213,6 +227,7 @@ export default function ShiftCalendar() {
                     startTime: start,
                     endTime: end,
                     status: "submitted",
+                    isRemote: remoteByDay[day] ?? false,
                 };
                 return saveShift(shiftData);
             });
@@ -298,6 +313,10 @@ export default function ShiftCalendar() {
                         </label>
                         {!bulkIsOff && (
                             <>
+                                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", fontSize: "0.875rem" }}>
+                                    <input type="checkbox" checked={bulkIsRemote} onChange={(e) => setBulkIsRemote(e.target.checked)} />
+                                    在宅
+                                </label>
                                 <input
                                     type="time"
                                     value={bulkStart}
@@ -423,7 +442,7 @@ export default function ShiftCalendar() {
                                             whiteSpace: "nowrap",
                                         }}
                                     >
-                                        {formatShiftLabel(shifts[day])}
+                                        {formatShiftLabel(shifts[day])}{remoteByDay[day] ? " 在宅" : ""}
                                     </div>
                                 )}
                             </div>
@@ -459,6 +478,10 @@ export default function ShiftCalendar() {
                             </label>
                             {!modalIsOff && (
                                 <>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.875rem" }}>
+                                        <input type="checkbox" checked={modalIsRemote} onChange={(e) => setModalIsRemote(e.target.checked)} />
+                                        在宅
+                                    </label>
                                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                                         <label style={{ fontSize: "0.875rem" }}>開始</label>
                                         <input

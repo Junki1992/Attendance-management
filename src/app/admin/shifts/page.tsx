@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   confirmShifts,
+  confirmShiftsForUser,
   saveShift,
   subscribeAllShifts,
   getUnsubmittedStaff,
@@ -33,6 +34,9 @@ export default function AdminShiftGrid() {
   const [unsubmitted, setUnsubmitted] = useState<StaffItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
+  const [confirmingSelected, setConfirmingSelected] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [reminding, setReminding] = useState(false);
   const [csvCopied, setCsvCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,7 @@ export default function AdminShiftGrid() {
   const [savingCell, setSavingCell] = useState(false);
   const [cellModalStart, setCellModalStart] = useState("09:00");
   const [cellModalEnd, setCellModalEnd] = useState("18:00");
+  const [cellModalIsRemote, setCellModalIsRemote] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -58,6 +63,7 @@ export default function AdminShiftGrid() {
     );
     setCellModalStart(shift?.startTime ?? "09:00");
     setCellModalEnd(shift?.endTime ?? "18:00");
+    setCellModalIsRemote(shift?.isRemote ?? false);
   }, [editingCell, shifts]);
 
   const lastDay = new Date(year, month + 1, 0).getDate();
@@ -101,6 +107,31 @@ export default function AdminShiftGrid() {
     (uid: string, day: number) => shiftData[`${uid}-${day}`] || 0,
     [shiftData]
   );
+
+  /** このユーザーに当月シフトが1件以上あるか */
+  const hasShiftsInMonth = useCallback(
+    (userId: string) => shifts.some((s) => s.userId === userId),
+    [shifts]
+  );
+
+  /** このユーザーの当月シフトがすべて確定済みなら true（シフトなしは false） */
+  const isFullyConfirmed = useCallback(
+    (userId: string) => {
+      const userShifts = shifts.filter((s) => s.userId === userId);
+      if (userShifts.length === 0) return false;
+      return userShifts.every((s) => s.status === "confirmed");
+    },
+    [shifts]
+  );
+
+  const toggleSelected = (userId: string) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
 
   const changeMonth = (delta: number) => {
     let m = month + delta;
@@ -146,6 +177,66 @@ export default function AdminShiftGrid() {
       alert("確定処理に失敗しました");
     } finally {
       setConfirming(false);
+    }
+  };
+
+  const handleConfirmOne = async (userId: string) => {
+    setConfirmingUserId(userId);
+    try {
+      const hasShifts = await confirmShiftsForUser(userId, year, month);
+      if (!hasShifts) {
+        alert("このアルバイトのシフトがありません。");
+        return;
+      }
+      await createNotification(
+        userId,
+        "shift_confirmed",
+        `${month + 1}月のシフトが確定しました。確認してください。`
+      );
+      getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
+      getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+      alert("確定通知を送りました。");
+    } catch (e) {
+      console.error(e);
+      alert("確定通知の送信に失敗しました");
+    } finally {
+      setConfirmingUserId(null);
+    }
+  };
+
+  const handleConfirmSelected = async () => {
+    const ids = Array.from(selectedUserIds).filter(
+      (uid) => hasShiftsInMonth(uid) && !isFullyConfirmed(uid)
+    );
+    if (ids.length === 0) {
+      alert("送信対象を選択してください（シフトがあり、まだ確定していない人にチェックを入れてください）。");
+      return;
+    }
+    if (!confirm(`選択した ${ids.length} 名に確定通知を送りますか？`)) return;
+    setConfirmingSelected(true);
+    try {
+      for (const uid of ids) {
+        await confirmShiftsForUser(uid, year, month);
+        await createNotification(
+          uid,
+          "shift_confirmed",
+          `${month + 1}月のシフトが確定しました。確認してください。`
+        );
+      }
+      getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
+      getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
+      setSelectedUserIds(new Set());
+      alert(`${ids.length} 名に確定通知を送りました。`);
+    } catch (e) {
+      console.error(e);
+      alert("確定通知の送信に失敗しました");
+    } finally {
+      setConfirmingSelected(false);
     }
   };
 
@@ -337,6 +428,15 @@ export default function AdminShiftGrid() {
               {csvCopied ? "コピーしました" : "CSVコピー"}
             </button>
             <button
+              className="btn btn-outline"
+              onClick={handleConfirmSelected}
+              disabled={loading || confirming || confirmingSelected || selectedUserIds.size === 0}
+              title={selectedUserIds.size === 0 ? "下の表で送りたい人にチェックを入れてください" : `選択した ${selectedUserIds.size} 名に送る`}
+              style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
+            >
+              {confirmingSelected ? "送信中..." : `選択した人に送る${selectedUserIds.size > 0 ? ` (${selectedUserIds.size}人)` : ""}`}
+            </button>
+            <button
               className="btn btn-primary"
               onClick={handleConfirm}
               disabled={loading || confirming}
@@ -477,6 +577,17 @@ export default function AdminShiftGrid() {
                 >
                   合計
                 </th>
+                <th
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid var(--border)",
+                    minWidth: "72px",
+                    fontSize: "0.75rem",
+                  }}
+                  title="この人にだけ確定通知を送る"
+                >
+                  確定通知
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -502,6 +613,23 @@ export default function AdminShiftGrid() {
                         gap: "0.5rem",
                       }}
                     >
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          cursor: isFullyConfirmed(user.id) ? "not-allowed" : "pointer",
+                          opacity: isFullyConfirmed(user.id) ? 0.7 : 1,
+                        }}
+                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : isFullyConfirmed(user.id) ? "この人はすでに確定済みです" : "確定通知を送る人にチェック"}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.has(user.id)}
+                          onChange={() => hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && toggleSelected(user.id)}
+                          disabled={!hasShiftsInMonth(user.id) || isFullyConfirmed(user.id)}
+                        />
+                      </label>
                       {user.name}
                       {weeklyWarning && (
                         <span
@@ -520,11 +648,11 @@ export default function AdminShiftGrid() {
                       const isOver = isDailyOver(numHours);
                       const hasData = !!shift;
                       const isEditedLate = !!shift?.editedAfterDeadline;
-                      const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : hasData ? "クリックで編集" : "";
+                      const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : hasData ? "クリックで編集" : "クリックでシフトを追加";
                       return (
                         <td
                           key={d}
-                          onClick={hasData ? () => setEditingCell({ userId: user.id, day: d }) : undefined}
+                          onClick={() => setEditingCell({ userId: user.id, day: d })}
                           style={{
                             border: "1px solid var(--border)",
                             textAlign: "center",
@@ -532,13 +660,15 @@ export default function AdminShiftGrid() {
                               ? "#FEE2E2"
                               : numHours > 0
                                 ? "#EEF2FF"
-                                : "transparent",
+                                : "var(--surface-hover)",
                             color: isOver || isEditedLate ? "#B91C1C" : "inherit",
-                            cursor: hasData ? "pointer" : "default",
+                            cursor: "pointer",
                           }}
                           title={cellTitle}
                         >
-                          {h === "OFF" ? "OFF" : numHours > 0 ? numHours : ""}
+                          {h === "OFF" ? "OFF" : numHours > 0 ? (
+                            <span>{numHours}{shift?.isRemote ? " 在宅" : ""}</span>
+                          ) : "—"}
                         </td>
                       );
                     })}
@@ -554,6 +684,33 @@ export default function AdminShiftGrid() {
                       }}
                     >
                       {totalHours}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.35rem",
+                        border: "1px solid var(--border)",
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                      }}
+                    >
+                      {!hasShiftsInMonth(user.id) ? (
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="シフトがありません">—</span>
+                      ) : isFullyConfirmed(user.id) ? (
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="この人はすでに確定済みです">
+                          確定済み
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-outline"
+                          style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                          disabled={!!confirmingUserId || confirming || confirmingSelected}
+                          onClick={() => handleConfirmOne(user.id)}
+                          title={`${user.name}さんに確定通知を送る`}
+                        >
+                          {confirmingUserId === user.id ? "送信中..." : "送る"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -654,6 +811,14 @@ export default function AdminShiftGrid() {
                 {month + 1}月{editingCell.day}日　{staffList.find((s) => s.id === editingCell.userId)?.name ?? editingCell.userId}
               </h3>
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "1rem" }}>勤務時間を設定（締切後は赤字で記録）</p>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                <input
+                  type="checkbox"
+                  checked={cellModalIsRemote}
+                  onChange={(e) => setCellModalIsRemote(e.target.checked)}
+                />
+                在宅
+              </label>
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                 {[
                   { label: "09:00-18:00", start: "09:00", end: "18:00" },
@@ -675,6 +840,7 @@ export default function AdminShiftGrid() {
                             startTime: opt.start,
                             endTime: opt.end,
                             status: "confirmed",
+                            isRemote: opt.start !== "00:00" ? cellModalIsRemote : false,
                           },
                           { byAdmin: true }
                         );
@@ -726,6 +892,7 @@ export default function AdminShiftGrid() {
                               startTime: cellModalStart,
                               endTime: cellModalEnd,
                               status: "confirmed",
+                              isRemote: cellModalIsRemote,
                             },
                             { byAdmin: true }
                           );

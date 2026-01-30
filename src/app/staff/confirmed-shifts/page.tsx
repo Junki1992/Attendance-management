@@ -241,7 +241,7 @@ export default function StaffConfirmedShiftsPage() {
                   const [, m, d] = s.date.split("-");
                   return (
                     <option key={s.date} value={s.date}>
-                      {parseInt(m, 10)}/{d}日 {s.startTime === "00:00" ? "OFF" : `${s.startTime}-${s.endTime}`}
+                      {parseInt(m, 10)}/{d}日 {s.startTime === "00:00" ? "OFF" : `${s.startTime}-${s.endTime}${s.isRemote ? " 在宅" : ""}`}
                     </option>
                   );
                 })}
@@ -355,7 +355,7 @@ export default function StaffConfirmedShiftsPage() {
                 ? ""
                 : s.startTime === "00:00" && s.endTime === "00:00"
                   ? "OFF"
-                  : `${s.startTime} - ${s.endTime}`;
+                  : `${s.startTime} - ${s.endTime}${s.isRemote ? " 在宅" : ""}`;
 
               return (
                 <div
