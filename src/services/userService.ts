@@ -121,8 +121,11 @@ export const getAllStaff = async (): Promise<StaffItem[]> => {
     }
 };
 
-/** 全ユーザー一覧を取得（管理者用） */
+/** 全ユーザー一覧を取得（管理者用）。管理者以外が呼ぶと permission-denied になるため、事前にロールを確認する */
 export const getAllUsers = async (): Promise<UserProfile[]> => {
+    if (!auth.currentUser) return [];
+    const myProfile = await getUserProfile(auth.currentUser.uid);
+    if (!myProfile || myProfile.role !== "admin") return [];
     const snap = await getDocs(collection(db, "users"));
     const list: UserProfile[] = [];
     snap.forEach((d) => {

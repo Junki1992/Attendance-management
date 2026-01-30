@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useMemo, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesFromPartners, subscribeMyMessages } from "@/services/chatService";
 import { setRoomLastRead, subscribeRoomMeta, scheduleRoomLastRead } from "@/services/chatService";
@@ -154,6 +154,21 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         if (!date || !(date instanceof Date) || isNaN(date.getTime())) return "";
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     };
+
+    /** アルバイトが「全管理者」に送ったとき、管理者ごとに1通ずつ作成されるため同一送信が複数表示される。自分送信分だけ同一内容・同一時刻でまとめて1件表示する */
+    const displayMessages = useMemo(() => {
+        if (!subscribeAllForMe || !user) return messages;
+        const seen = new Set<string>();
+        return messages.filter((m) => {
+            if (m.senderId !== user.uid) return true;
+            const t = toMillis(m.createdAt);
+            const bucket = Math.floor(t / 2000);
+            const key = `${m.text || ""}|${m.fileURL || ""}|${bucket}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [messages, subscribeAllForMe, user?.uid]);
 
     useEffect(() => {
         if (!user || !partnerId) return;
@@ -376,14 +391,14 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 boxSizing: 'border-box',
                 position: 'relative',
             }}>
-                {messages.length === 0 && (
+                {displayMessages.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '2rem' }}>
                         メッセージはまだありません
                     </div>
                 )}
                 
-                {messages.map((msg, index) => {
-                    const prevDateKey = index > 0 ? getDateKey(messages[index - 1].createdAt) : "";
+                {displayMessages.map((msg, index) => {
+                    const prevDateKey = index > 0 ? getDateKey(displayMessages[index - 1].createdAt) : "";
                     const thisDateKey = getDateKey(msg.createdAt);
                     const showDateSeparator = thisDateKey && thisDateKey !== prevDateKey;
                     const isMe = msg.senderId === user.uid;
