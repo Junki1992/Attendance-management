@@ -35,7 +35,7 @@ export default function AdminShiftChangeRequestsPage() {
 
   const formatHope = (r: ShiftChangeRequest) => {
     if (r.requestedStartTime === "00:00" && r.requestedEndTime === "00:00") return "OFF";
-    return `${r.requestedStartTime} - ${r.requestedEndTime}`;
+    return `${r.requestedStartTime} - ${r.requestedEndTime}${r.isRemote ? " 在宅" : ""}`;
   };
 
   const formatDate = (d: string) => {

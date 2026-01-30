@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, Shift } from "@/services/shiftService";
-import { getUserProfile } from "@/services/userService";
+import { getUserProfile, getAdminIds } from "@/services/userService";
 import {
   createShiftChangeRequest,
   getMyShiftChangeRequests,
   ShiftChangeRequest,
 } from "@/services/shiftChangeRequestService";
+import { createNotification } from "@/services/notificationService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
 function getDaysInMonth(year: number, month: number) {
@@ -37,12 +38,18 @@ export default function StaffConfirmedShiftsPage() {
   const [modalHopeStart, setModalHopeStart] = useState("09:00");
   const [modalHopeEnd, setModalHopeEnd] = useState("18:00");
   const [modalHopeIsOff, setModalHopeIsOff] = useState(false);
+  const [modalHopeIsRemote, setModalHopeIsRemote] = useState(false);
   const [modalReason, setModalReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
 
   const lastDay = getDaysInMonth(year, month);
   const daysArray = Array.from({ length: lastDay }, (_, i) => i + 1);
+  /** 当月の全日付（YYYY-MM-DD）。変更申請で任意の日を選択可能 */
+  const allDatesInMonth = Array.from(
+    { length: lastDay },
+    (_, i) => `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`
+  );
 
   const loadRequests = () => {
     if (!user) return;
@@ -101,10 +108,11 @@ export default function StaffConfirmedShiftsPage() {
   const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
 
   const openModal = () => {
-    setModalDate(shifts[0]?.date ?? "");
+    setModalDate(allDatesInMonth[0] ?? shifts[0]?.date ?? "");
     setModalHopeStart("09:00");
     setModalHopeEnd("18:00");
     setModalHopeIsOff(false);
+    setModalHopeIsRemote(false);
     setModalReason("");
     setModalError("");
     setShowModal(true);
@@ -127,7 +135,16 @@ export default function StaffConfirmedShiftsPage() {
     setModalError("");
     try {
       const [start, end] = modalHopeIsOff ? ["00:00", "00:00"] : [modalHopeStart, modalHopeEnd];
-      await createShiftChangeRequest(user.uid, modalDate, start, end, modalReason.trim());
+      await createShiftChangeRequest(user.uid, modalDate, start, end, modalReason.trim(), modalHopeIsRemote);
+      const adminIds = await getAdminIds();
+      const message = `${user.name ?? "アルバイト"}さんからシフト変更申請が届きました`;
+      await Promise.all(
+        adminIds.map((uid) =>
+          createNotification(uid, "shift_change_request", message).catch((err) => {
+            console.error("[confirmed-shifts] 管理者への通知失敗:", err);
+          })
+        )
+      );
       loadRequests();
       setShowModal(false);
     } catch (e: unknown) {
@@ -139,7 +156,7 @@ export default function StaffConfirmedShiftsPage() {
 
   const formatHope = (r: ShiftChangeRequest) => {
     if (r.requestedStartTime === "00:00" && r.requestedEndTime === "00:00") return "OFF";
-    return `${r.requestedStartTime}-${r.requestedEndTime}`;
+    return `${r.requestedStartTime}-${r.requestedEndTime}${r.isRemote ? " 在宅" : ""}`;
   };
   const formatDate = (d: string) => {
     const [y, m, day] = d.split("-");
@@ -189,7 +206,8 @@ export default function StaffConfirmedShiftsPage() {
           <button
             className="btn btn-outline"
             onClick={openModal}
-            disabled={loading || shifts.length === 0}
+            disabled={loading}
+            title="シフトの変更・希望日の申請"
           >
             変更申請
           </button>
@@ -237,11 +255,18 @@ export default function StaffConfirmedShiftsPage() {
                 style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
               >
                 <option value="">選択</option>
-                {shifts.map((s) => {
-                  const [, m, d] = s.date.split("-");
+                {allDatesInMonth.map((dateStr) => {
+                  const [, m, d] = dateStr.split("-");
+                  const dayNum = parseInt(d, 10);
+                  const s = shiftByDay[dayNum];
+                  const label = s
+                    ? s.startTime === "00:00"
+                      ? "OFF"
+                      : `${s.startTime}-${s.endTime}${s.isRemote ? " 在宅" : ""}`
+                    : "—";
                   return (
-                    <option key={s.date} value={s.date}>
-                      {parseInt(m, 10)}/{d}日 {s.startTime === "00:00" ? "OFF" : `${s.startTime}-${s.endTime}${s.isRemote ? " 在宅" : ""}`}
+                    <option key={dateStr} value={dateStr}>
+                      {parseInt(m, 10)}/{d}日 {label}
                     </option>
                   );
                 })}
@@ -254,21 +279,27 @@ export default function StaffConfirmedShiftsPage() {
                 OFF（休み希望）
               </label>
               {!modalHopeIsOff && (
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <input
-                    type="time"
-                    value={modalHopeStart}
-                    onChange={(e) => setModalHopeStart(e.target.value)}
-                    style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
-                  />
-                  <span style={{ fontSize: "0.875rem" }}>～</span>
-                  <input
-                    type="time"
-                    value={modalHopeEnd}
-                    onChange={(e) => setModalHopeEnd(e.target.value)}
-                    style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
-                  />
-                </div>
+                <>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", cursor: "pointer", fontSize: "0.875rem" }}>
+                    <input type="checkbox" checked={modalHopeIsRemote} onChange={(e) => setModalHopeIsRemote(e.target.checked)} />
+                    在宅
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <input
+                      type="time"
+                      value={modalHopeStart}
+                      onChange={(e) => setModalHopeStart(e.target.value)}
+                      style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                    />
+                    <span style={{ fontSize: "0.875rem" }}>～</span>
+                    <input
+                      type="time"
+                      value={modalHopeEnd}
+                      onChange={(e) => setModalHopeEnd(e.target.value)}
+                      style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                    />
+                  </div>
+                </>
               )}
             </div>
             <div style={{ marginBottom: "0.75rem" }}>

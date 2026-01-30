@@ -5,7 +5,7 @@ import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Times
 export interface Notification {
     id?: string;
     userId: string;
-    type: 'shift_confirmed' | 'remind_submit' | 'message';
+    type: 'shift_confirmed' | 'remind_submit' | 'message' | 'shift_change_request' | 'shift_change_approved' | 'shift_change_rejected';
     message: string;
     read: boolean;
     createdAt: any; // Timestamp
