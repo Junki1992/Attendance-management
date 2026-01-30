@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ChatWindow from "@/components/ChatWindow";
 import Avatar from "@/components/Avatar";
 import { getAllStaff, StaffItem } from "@/services/userService";
 import { useAuth } from "@/context/AuthContext";
+import { subscribeNotifications } from "@/services/notificationService";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -13,11 +14,31 @@ export default function AdminChatPage() {
     const [staffList, setStaffList] = useState<StaffItem[]>([]);
     const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
     const [isMobile, setIsMobile] = useState(false);
+    const [notifications, setNotifications] = useState<{ type: string; read: boolean; senderId?: string }[]>([]);
 
     useEffect(() => {
         if (user?.role !== "admin") return;
         getAllStaff().then(setStaffList);
     }, [user?.role]);
+
+    useEffect(() => {
+        if (!user?.uid) return;
+        const unsub = subscribeNotifications(user.uid, (list) => {
+            setNotifications(list.map((n) => ({ type: n.type, read: n.read ?? false, senderId: n.senderId })));
+        });
+        return () => unsub();
+    }, [user?.uid]);
+
+    /** アルバイトIDごとの未読メッセージ通知件数 */
+    const unreadCountByStaffId = useMemo(() => {
+        const count: Record<string, number> = {};
+        notifications.forEach((n) => {
+            if (n.type === "message" && !n.read && n.senderId) {
+                count[n.senderId] = (count[n.senderId] ?? 0) + 1;
+            }
+        });
+        return count;
+    }, [notifications]);
 
     useEffect(() => {
         const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
@@ -80,7 +101,31 @@ export default function AdminChatPage() {
                         }}
                     >
                         <Avatar photoURL={staff.photoURL} name={staff.name} size="sm" />
-                        {staff.name}
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {staff.name}
+                        </span>
+                        {(unreadCountByStaffId[staff.id] ?? 0) > 0 && (
+                            <span
+                                title={`未読 ${unreadCountByStaffId[staff.id]}件`}
+                                style={{
+                                    minWidth: "20px",
+                                    height: "20px",
+                                    padding: "0 6px",
+                                    borderRadius: "10px",
+                                    backgroundColor: "var(--destructive, #ef4444)",
+                                    color: "#fff",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    flexShrink: 0,
+                                }}
+                                aria-label={`未読 ${unreadCountByStaffId[staff.id]}件`}
+                            >
+                                {unreadCountByStaffId[staff.id]! > 99 ? "99+" : unreadCountByStaffId[staff.id]}
+                            </span>
+                        )}
                     </div>
                 ))}
             </div>
