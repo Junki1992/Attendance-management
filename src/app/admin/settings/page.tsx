@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
-import { getAllUsers, updateUserRole, UserProfile } from "@/services/userService";
+import { getAllUsers, updateUserRole, saveUserProfile, UserProfile } from "@/services/userService";
 import { useAuth } from "@/context/AuthContext";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import Avatar from "@/components/Avatar";
@@ -17,6 +17,8 @@ export default function AdminSettingsPage() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
+  const [savingWage, setSavingWage] = useState(false);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -72,6 +74,32 @@ export default function AdminSettingsPage() {
       alert("変更に失敗しました");
     } finally {
       setUpdatingUserId(null);
+    }
+  };
+
+  // 詳細モーダルで選択中のユーザーが変わったら時給の編集値を同期
+  useEffect(() => {
+    if (selectedUser) {
+      setEditingHourlyWage(selectedUser.hourlyWage ?? 1000);
+    }
+  }, [selectedUser?.uid, selectedUser?.hourlyWage]);
+
+  const handleSaveHourlyWage = async () => {
+    if (!selectedUser) return;
+    const wage = Math.max(0, Math.floor(Number(editingHourlyWage)) || 0);
+    setSavingWage(true);
+    try {
+      await saveUserProfile({ ...selectedUser, hourlyWage: wage });
+      setEditingHourlyWage(wage);
+      await loadUsers();
+      const updated = (await getAllUsers()).find((u) => u.uid === selectedUser.uid) ?? null;
+      if (updated) setSelectedUser(updated);
+      alert("時給を保存しました");
+    } catch (err) {
+      console.error(err);
+      alert("保存に失敗しました");
+    } finally {
+      setSavingWage(false);
     }
   };
 
@@ -245,6 +273,41 @@ export default function AdminSettingsPage() {
               {selectedUser!.role === "admin" ? "管理者" : "アルバイト"}
             </span>
           </div>
+          {selectedUser!.role === "staff" && (
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label htmlFor="admin-hourly-wage" style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
+                時給（円）
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <input
+                  id="admin-hourly-wage"
+                  type="number"
+                  min={0}
+                  value={editingHourlyWage}
+                  onChange={(e) => setEditingHourlyWage(Math.max(0, Math.floor(Number(e.target.value)) || 0))}
+                  style={{
+                    padding: "0.5rem",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-md)",
+                    width: "120px",
+                    fontSize: "1rem",
+                  }}
+                />
+                <span style={{ color: "var(--text-muted)" }}>円</span>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveHourlyWage}
+                  disabled={savingWage}
+                >
+                  {savingWage ? "保存中..." : "時給を保存"}
+                </button>
+              </div>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                給与集計やアルバイトの概算給与に反映されます。
+              </p>
+            </div>
+          )}
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
             {selectedUser!.uid !== currentUser?.uid && (
               <button
