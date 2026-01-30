@@ -1,6 +1,6 @@
 import { db, auth, storage } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, query, where, getDocFromCache } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, query, where, getDocFromCache } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export interface UserProfile {
@@ -61,6 +61,12 @@ export const createUser = async (params: CreateUserParams): Promise<void> => {
 export const saveUserProfile = async (user: UserProfile) => {
     const docRef = doc(db, "users", user.uid);
     await setDoc(docRef, user, { merge: true });
+};
+
+/** 指定ユーザーの時給のみ更新（管理者用・Firestore の update で部分更新） */
+export const updateUserHourlyWage = async (uid: string, hourlyWage: number): Promise<void> => {
+    const docRef = doc(db, "users", uid);
+    await updateDoc(docRef, { hourlyWage });
 };
 
 export interface StaffItem {

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
-import { getAllUsers, updateUserRole, saveUserProfile, UserProfile } from "@/services/userService";
+import { getAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
+import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import Avatar from "@/components/Avatar";
@@ -91,9 +92,14 @@ export default function AdminSettingsPage() {
     const wage = Math.max(0, Math.floor(Number(editingHourlyWage)) || 0);
     setSavingWage(true);
     try {
-      await saveUserProfile({ ...selectedUser, hourlyWage: wage });
+      await updateUserHourlyWage(selectedUser.uid, wage);
       setEditingHourlyWage(wage);
       setHourlyWageLocked(true);
+      await createNotification(
+        selectedUser.uid,
+        "hourly_wage_changed",
+        `時給が¥${wage.toLocaleString()}に変更されました。確認してください。`
+      );
       await loadUsers();
       const updated = (await getAllUsers()).find((u) => u.uid === selectedUser.uid) ?? null;
       if (updated) setSelectedUser(updated);
