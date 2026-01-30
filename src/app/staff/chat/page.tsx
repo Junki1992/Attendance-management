@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import ChatWindow from "@/components/ChatWindow";
 import { getAdminIds, getUserProfile } from "@/services/userService";
+import { useAuth } from "@/context/AuthContext";
 
 export default function StaffChatPage() {
+    const { user } = useAuth();
     const [adminIds, setAdminIds] = useState<string[]>([]);
     const [adminName, setAdminName] = useState<string>("管理者");
     const [adminPhotoURL, setAdminPhotoURL] = useState<string | null>(null);
@@ -25,7 +27,14 @@ export default function StaffChatPage() {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
+    // 認証済みユーザーが確定してから管理者一覧を取得（auth.currentUser が null だと getAdminIds が空を返す）
     useEffect(() => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        setError(null);
         const isPermissionDenied = (err: unknown) => {
             const code = (err as { code?: string })?.code ?? "";
             const msg = String((err as { message?: string })?.message ?? err);
@@ -67,7 +76,7 @@ export default function StaffChatPage() {
             }
             setLoading(false);
         });
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         // 横スクロールを完全に防止する
@@ -107,6 +116,24 @@ export default function StaffChatPage() {
             window.removeEventListener('resize', preventHorizontalScroll);
         };
     }, []);
+
+    if (!user) {
+        return (
+            <div style={{ 
+                width: '100%', 
+                height: '100vh', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                backgroundColor: 'var(--surface)',
+                padding: '1rem',
+            }}>
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    ログインしてください
+                </div>
+            </div>
+        );
+    }
 
     if (loading) {
         return (

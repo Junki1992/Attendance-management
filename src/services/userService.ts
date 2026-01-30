@@ -195,16 +195,13 @@ export const getAdminId = async (): Promise<string | null> => {
     return ids.length > 0 ? ids[0] : null;
 };
 
-/** 管理者のUIDを全件取得（アルバイトチャットで「誰か管理者」からのメッセージを全て表示するため） */
+/** 管理者のUIDを全件取得（アルバイトチャットで全管理者に届けるため必ず全員分返す） */
 export const getAdminIds = async (): Promise<string[]> => {
     if (!auth.currentUser) return [];
 
+    const ids = new Set<string>();
     const adminUidFromEnv = process.env.NEXT_PUBLIC_ADMIN_UID?.trim();
-    if (adminUidFromEnv) {
-        // For stability in environments where querying users may be permission-restricted,
-        // prefer returning the admin UID from env immediately (avoid extra reads).
-        return [adminUidFromEnv];
-    }
+    if (adminUidFromEnv) ids.add(adminUidFromEnv);
 
     try {
         const q = query(
@@ -212,7 +209,7 @@ export const getAdminIds = async (): Promise<string[]> => {
             where("role", "==", "admin")
         );
         const snap = await getDocs(q);
-        return snap.docs.map((d) => d.id);
+        snap.docs.forEach((d) => ids.add(d.id));
     } catch (err) {
         const code = (err as { code?: string })?.code ?? "";
         const msg = String((err as { message?: string })?.message ?? err);
@@ -221,10 +218,11 @@ export const getAdminIds = async (): Promise<string[]> => {
             code === "missing-or-insufficient-permissions" ||
             msg.toLowerCase().includes("insufficient permissions");
         if (!isPermissionDenied && process.env.NODE_ENV === "development") {
-            console.warn("[userService] getAdminIds: query failed, use NEXT_PUBLIC_ADMIN_UID env var", err);
+            console.warn("[userService] getAdminIds: query failed", err);
         }
-        return [];
+        // クエリ失敗時は env があればそれだけ返す
     }
+    return Array.from(ids);
 };
 
 /** 管理者のプロフィールを取得（最初に見つかった管理者を返す） */

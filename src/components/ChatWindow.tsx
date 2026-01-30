@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ChatMessage, sendMessageWithRoom, subscribeMessages, subscribeMessagesFromPartners, subscribeMyMessages } from "@/services/chatService";
 import { setRoomLastRead, subscribeRoomMeta, scheduleRoomLastRead } from "@/services/chatService";
@@ -32,17 +32,36 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
     const [inputText, setInputText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    /** onMessages で既読を1回書き込んだか（スナップショットごとの重複書き込みを防ぐ） */
+    const lastReadWrittenForRoomRef = useRef<string | null>(null);
+    /** メッセージ変更 effect で即時既読を1回書き込んだか */
+    const effectImmediateReadRef = useRef(false);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState<number | null>(null);
     const [roomMeta, setRoomMeta] = useState<Record<string, any>>({});
-    const initialMarkedRef = useRef(false);
+    /** subscribeAllForMe 時: 各相手の lastRead を保持（相手ID → その相手の既読タイムスタンプ） */
+    const [partnerLastReadByPartner, setPartnerLastReadByPartner] = useState<Record<string, any>>({});
+
+    // 受信者がチャットを開いたら必ず既読を書き込む（ref は立てない＝失敗時は onMessages / 下の effect でリトライ）
+    useEffect(() => {
+        if (!user || !partnerId) return;
+        lastReadWrittenForRoomRef.current = null;
+        effectImmediateReadRef.current = false;
+        if (subscribeAllForMe && partnerIds && partnerIds.length > 0) {
+            partnerIds.forEach((p) => {
+                const roomId = [user.uid, p].sort().join("_");
+                setRoomLastRead(roomId, user.uid).catch((err) => console.error("[ChatWindow] setRoomLastRead failed:", err));
+            });
+        } else {
+            const roomId = [user.uid, partnerId].sort().join("_");
+            setRoomLastRead(roomId, user.uid).catch((err) => console.error("[ChatWindow] setRoomLastRead failed:", err));
+        }
+    }, [user?.uid, partnerId, subscribeAllForMe, partnerIds]);
 
     useEffect(() => {
         if (!user || !partnerId) return;
 
         const roomId = [user.uid, partnerId].sort().join("_");
-        
-        // チャット画面を開いた時に、このチャットルームのメッセージ通知を既読にする
         markMessageNotificationsAsRead(user.uid, roomId).catch((err) => {
             console.error("[ChatWindow] Failed to mark notifications as read:", err);
         });
@@ -50,30 +69,23 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         const onMessages = (msgs: ChatMessage[]) => {
             setMessages(msgs);
             setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            // mark existing messages as read immediately once on first load
-            try {
-                const roomId = [user.uid, partnerId].sort().join("_");
-                if (!initialMarkedRef.current) {
-                    initialMarkedRef.current = true;
-                    // If server endpoint is configured, call it to mark lastRead server-side (preferred)
-                    const fnUrl = process.env.NEXT_PUBLIC_MARK_LAST_READ_URL;
-                    if (fnUrl) {
-                        fetch(fnUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ roomId, uid: user.uid }),
-                        }).catch((e) => {
-                            console.error('[ChatWindow] markLastRead via server failed:', e);
-                            // fallback to client-schedule if server call fails
-                            scheduleRoomLastRead(roomId, user.uid);
+            // 受信者がチャットを開いてメッセージが届いたら即座に既読を書き込む（送信者に既読を表示するため）
+            if (msgs.length > 0 && user) {
+                if (subscribeAllForMe && partnerIds && partnerIds.length > 0) {
+                    if (lastReadWrittenForRoomRef.current !== "partners-done") {
+                        lastReadWrittenForRoomRef.current = "partners-done";
+                        partnerIds.forEach((p) => {
+                            const roomId = [user.uid, p].sort().join("_");
+                            setRoomLastRead(roomId, user.uid).catch((err) => console.error("[ChatWindow] setRoomLastRead (onMessages) failed:", err));
                         });
-                    } else {
-                        // fallback to client-schedule if no server endpoint configured
-                        scheduleRoomLastRead(roomId, user.uid);
+                    }
+                } else {
+                    const roomId = [user.uid, partnerId].sort().join("_");
+                    if (lastReadWrittenForRoomRef.current !== roomId) {
+                        lastReadWrittenForRoomRef.current = roomId;
+                        setRoomLastRead(roomId, user.uid).catch((err) => console.error("[ChatWindow] setRoomLastRead (onMessages) failed:", err));
                     }
                 }
-            } catch (err) {
-                console.error("[ChatWindow] initial mark read error:", err);
             }
         };
         const unsubscribe = subscribeAllForMe
@@ -85,15 +97,28 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         return () => unsubscribe();
     }, [user, partnerId, partnerIds, subscribeAllForMe]);
 
-    // subscribe to room meta (lastReadBy)
+    // subscribe to room meta (lastReadBy) — 1対1のときは1ルームのみ
     useEffect(() => {
         if (!user || !partnerId) return;
+        if (subscribeAllForMe && partnerIds && partnerIds.length > 0) {
+            // アルバイト側: 複数管理者とのルーム分だけ購読
+            const unsubs: (() => void)[] = [];
+            partnerIds.forEach((p) => {
+                const roomId = [user.uid, p].sort().join("_");
+                const unsub = subscribeRoomMeta(roomId, (meta) => {
+                    const lastReadBy = meta || {};
+                    setPartnerLastReadByPartner((prev) => ({ ...prev, [p]: lastReadBy[p] }));
+                });
+                unsubs.push(unsub);
+            });
+            return () => unsubs.forEach((u) => u());
+        }
         const roomId = [user.uid, partnerId].sort().join("_");
         const unsubMeta = subscribeRoomMeta(roomId, (meta) => {
             setRoomMeta(meta || {});
         });
         return () => unsubMeta();
-    }, [user, partnerId]);
+    }, [user, partnerId, subscribeAllForMe, partnerIds]);
 
     // update my lastRead when messages change (only if there are new messages)
     const toMillis = (obj: any): number => {
@@ -104,13 +129,46 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         return 0;
     };
 
+    /** 日付区切り用ラベル（今日 / 昨日 / 2025年1月28日） */
+    const formatDateLabel = (createdAt: any): string => {
+        const date = createdAt?.toDate ? createdAt.toDate() : (createdAt?.seconds ? new Date(createdAt.seconds * 1000) : null);
+        if (!date || !(date instanceof Date) || isNaN(date.getTime())) return "";
+        const today = new Date();
+        const y = date.getFullYear();
+        const m = date.getMonth();
+        const d = date.getDate();
+        const ty = today.getFullYear();
+        const tm = today.getMonth();
+        const td = today.getDate();
+        if (y === ty && m === tm && d === td) return "今日";
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        if (y === yesterday.getFullYear() && m === yesterday.getMonth() && d === yesterday.getDate()) return "昨日";
+        if (y === ty) return `${m + 1}月${d}日`;
+        return `${y}年${m + 1}月${d}日`;
+    };
+
+    /** createdAt から YYYY-MM-DD を取得（日付区切りの比較用） */
+    const getDateKey = (createdAt: any): string => {
+        const date = createdAt?.toDate ? createdAt.toDate() : (createdAt?.seconds ? new Date(createdAt.seconds * 1000) : null);
+        if (!date || !(date instanceof Date) || isNaN(date.getTime())) return "";
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    };
+
     useEffect(() => {
         if (!user || !partnerId) return;
         const roomId = [user.uid, partnerId].sort().join("_");
         const lastMsgTime = messages.length ? toMillis(messages[messages.length - 1].createdAt) : 0;
         const myLastRead = roomMeta[user.uid] ? toMillis(roomMeta[user.uid]) : 0;
         if (lastMsgTime > myLastRead) {
-            // schedule/update my lastRead timestamp (debounced) to avoid frequent writes
+            // 未読があるとき：1回は即時書き込み（既読を必ず付ける）、その後は debounce で更新
+            if (!effectImmediateReadRef.current) {
+                effectImmediateReadRef.current = true;
+                setRoomLastRead(roomId, user.uid).catch((err) => {
+                    console.error("[ChatWindow] setRoomLastRead (effect) failed:", err);
+                    effectImmediateReadRef.current = false;
+                });
+            }
             try {
                 scheduleRoomLastRead(roomId, user.uid);
             } catch (err) {
@@ -124,7 +182,16 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         if (!inputText.trim() || !user) return;
 
         try {
-            await sendMessageWithRoom(inputText, user.uid, partnerId, user.name);
+            // アルバイトチャット（複数管理者）のときは全管理者に届くよう、全員に送信する
+            if (subscribeAllForMe && partnerIds && partnerIds.length > 0) {
+                await Promise.all(
+                    partnerIds.map((receiverId) =>
+                        sendMessageWithRoom(inputText, user.uid, receiverId, user.name)
+                    )
+                );
+            } else {
+                await sendMessageWithRoom(inputText, user.uid, partnerId, user.name);
+            }
             setInputText("");
         } catch (error) {
             console.error(error);
@@ -176,13 +243,17 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
             });
 
             const url = await getDownloadURL(sRef);
-            // send message with file meta (empty text)
-            await sendMessageWithRoom("", user.uid, partnerId, user.name, {
-                url,
-                name: f.name,
-                type: f.type,
-                size: f.size,
-            });
+            const fileMeta = { url, name: f.name, type: f.type, size: f.size };
+            // アルバイトチャット（複数管理者）のときは全管理者に届くよう、全員に送信する
+            if (subscribeAllForMe && partnerIds && partnerIds.length > 0) {
+                await Promise.all(
+                    partnerIds.map((receiverId) =>
+                        sendMessageWithRoom("", user.uid, receiverId, user.name, fileMeta)
+                    )
+                );
+            } else {
+                await sendMessageWithRoom("", user.uid, partnerId, user.name, fileMeta);
+            }
         } catch (err) {
             console.error(err);
             alert("ファイルの送信に失敗しました");
@@ -311,73 +382,98 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     </div>
                 )}
                 
-                {messages.map((msg) => {
+                {messages.map((msg, index) => {
+                    const prevDateKey = index > 0 ? getDateKey(messages[index - 1].createdAt) : "";
+                    const thisDateKey = getDateKey(msg.createdAt);
+                    const showDateSeparator = thisDateKey && thisDateKey !== prevDateKey;
                     const isMe = msg.senderId === user.uid;
                     return (
-                        <div key={msg.id} style={{ 
-                            alignSelf: isMe ? 'flex-end' : 'flex-start', 
-                            maxWidth: isMobile ? '75%' : '70%',
-                            minWidth: '120px',
-                            width: 'fit-content',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: isMe ? 'flex-end' : 'flex-start',
-                            boxSizing: 'border-box',
-                        }}>
+                        <Fragment key={msg.id}>
+                            {showDateSeparator && (
+                                <div style={{
+                                    alignSelf: "center",
+                                    fontSize: "0.75rem",
+                                    color: "var(--text-muted)",
+                                    marginTop: index > 0 ? "1rem" : "0.25rem",
+                                    marginBottom: "0.25rem",
+                                    padding: "0.25rem 0.75rem",
+                                    backgroundColor: "var(--surface-hover)",
+                                    borderRadius: "1rem",
+                                }}>
+                                    {formatDateLabel(msg.createdAt)}
+                                </div>
+                            )}
                             <div style={{ 
-                                backgroundColor: isMe ? 'var(--primary)' : '#E5E7EB', 
-                                color: isMe ? 'white' : 'black',
-                                padding: '0.625rem 1rem', 
-                                borderRadius: '1rem',
-                                borderBottomRightRadius: isMe ? '0.25rem' : '1rem',
-                                borderBottomLeftRadius: isMe ? '1rem' : '0.25rem',
-                                wordBreak: 'break-word',
-                                wordWrap: 'break-word',
-                                overflowWrap: 'break-word',
-                                lineHeight: '1.5',
-                                maxWidth: '100%',
+                                alignSelf: isMe ? 'flex-end' : 'flex-start', 
+                                maxWidth: isMobile ? '75%' : '70%',
+                                minWidth: '120px',
+                                width: 'fit-content',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: isMe ? 'flex-end' : 'flex-start',
                                 boxSizing: 'border-box',
                             }}>
-                                {msg.fileURL ? (
-                                    <>
-                                        {msg.fileType && msg.fileType.startsWith('image/') ? (
-                                            <img src={msg.fileURL} alt={msg.fileName ?? 'image'} style={{ maxWidth: isMobile ? '70vw' : '60%', height: 'auto', borderRadius: '0.5rem' }} />
-                                        ) : (
-                                            <a href={msg.fileURL} target="_blank" rel="noreferrer" style={{ color: isMe ? 'white' : 'inherit', textDecoration: 'underline' }}>
-                                                {msg.fileName ?? 'ファイルをダウンロード'}
-                                            </a>
-                                        )}
-                                        {msg.text && (
-                                            <div style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>{msg.text}</div>
-                                        )}
-                                    </>
-                                ) : (
-                                    msg.text
-                                )}
+                                <div style={{ 
+                                    backgroundColor: isMe ? 'var(--primary)' : '#E5E7EB', 
+                                    color: isMe ? 'white' : 'black',
+                                    padding: '0.625rem 1rem', 
+                                    borderRadius: '1rem',
+                                    borderBottomRightRadius: isMe ? '0.25rem' : '1rem',
+                                    borderBottomLeftRadius: isMe ? '1rem' : '0.25rem',
+                                    wordBreak: 'break-word',
+                                    wordWrap: 'break-word',
+                                    overflowWrap: 'break-word',
+                                    lineHeight: '1.5',
+                                    maxWidth: '100%',
+                                    boxSizing: 'border-box',
+                                }}>
+                                    {msg.fileURL ? (
+                                        <>
+                                            {msg.fileType && msg.fileType.startsWith('image/') ? (
+                                                <img src={msg.fileURL} alt={msg.fileName ?? 'image'} style={{ maxWidth: isMobile ? '70vw' : '60%', height: 'auto', borderRadius: '0.5rem' }} />
+                                            ) : (
+                                                <a href={msg.fileURL} target="_blank" rel="noreferrer" style={{ color: isMe ? 'white' : 'inherit', textDecoration: 'underline' }}>
+                                                    {msg.fileName ?? 'ファイルをダウンロード'}
+                                                </a>
+                                            )}
+                                            {msg.text && (
+                                                <div style={{ marginTop: '0.5rem', whiteSpace: 'pre-wrap' }}>{msg.text}</div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        msg.text
+                                    )}
+                                </div>
+                                <div style={{ 
+                                    fontSize: '0.75rem', 
+                                    color: 'var(--text-muted)', 
+                                    textAlign: isMe ? 'right' : 'left', 
+                                    marginTop: '0.25rem',
+                                    paddingLeft: isMe ? 0 : '0.25rem',
+                                    paddingRight: isMe ? '0.25rem' : 0,
+                                    maxWidth: '100%',
+                                    wordBreak: 'break-word',
+                                    overflowWrap: 'break-word',
+                                }}>
+                                    {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
+                                    {isMe && (() => {
+                                        const messagePartner = subscribeAllForMe ? msg.receiverId : partnerId;
+                                        const partnerLastRead = subscribeAllForMe
+                                            ? (messagePartner ? partnerLastReadByPartner[messagePartner] : undefined)
+                                            : roomMeta[partnerId];
+                                        const msgTime = msg.createdAt ? toMillis(msg.createdAt) : 0;
+                                        const partnerReadTime = partnerLastRead ? toMillis(partnerLastRead) : 0;
+                                        const isRead = partnerReadTime > 0 && partnerReadTime >= msgTime;
+                                        if (!isRead) return null;
+                                        return (
+                                            <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                                既読
+                                            </span>
+                                        );
+                                    })()}
+                                </div>
                             </div>
-                            <div style={{ 
-                                fontSize: '0.75rem', 
-                                color: 'var(--text-muted)', 
-                                textAlign: isMe ? 'right' : 'left', 
-                                marginTop: '0.25rem',
-                                paddingLeft: isMe ? 0 : '0.25rem',
-                                paddingRight: isMe ? '0.25rem' : 0,
-                                maxWidth: '100%',
-                                wordBreak: 'break-word',
-                                overflowWrap: 'break-word',
-                            }}>
-                                {msg.createdAt?.toDate ? msg.createdAt.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}
-                                {isMe && (() => {
-                                    const partnerLastRead = roomMeta[partnerId];
-                                    const msgTime = msg.createdAt ? toMillis(msg.createdAt) : 0;
-                                    const partnerReadTime = partnerLastRead ? toMillis(partnerLastRead) : 0;
-                                    if (partnerReadTime && partnerReadTime >= msgTime) {
-                                        return <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>既読</span>;
-                                    }
-                                    return null;
-                                })()}
-                            </div>
-                        </div>
+                        </Fragment>
                     );
                 })}
                 <div ref={bottomRef} />

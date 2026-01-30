@@ -9,8 +9,8 @@ import { createNotification } from "@/services/notificationService";
 let activeListenerCount = 0;
 export const getActiveListenerCount = () => activeListenerCount;
 
-// EMERGENCY: disable all last-read writes by default to ensure ZERO write traffic
-;(globalThis as any).__DISABLE_LAST_READ_WRITES__ = true;
+// 既読機能を有効にする（無効にしたい場合は enableLastReadWrites の代わりに disableLastReadWrites を呼ぶ）
+;(globalThis as any).__DISABLE_LAST_READ_WRITES__ = false;
 export const enableLastReadWrites = () => { (globalThis as any).__DISABLE_LAST_READ_WRITES__ = false; };
 export const disableLastReadWrites = () => { (globalThis as any).__DISABLE_LAST_READ_WRITES__ = true; };
 
@@ -26,8 +26,7 @@ const roomMetaListenerCache = new Map<string, {
 }>();
 
 // schedule/debounce lastRead writes: coalesce writes within this delay (ms)
-// Increased default to reduce write frequency; can be disabled via global flag.
-const LAST_READ_DEBOUNCE_MS = 30000;
+const LAST_READ_DEBOUNCE_MS = 5000;
 const lastReadTimers = new Map<string, NodeJS.Timeout>();
 const lastReadPending = new Map<string, number>(); // roomId -> timestamp (ms)
 
