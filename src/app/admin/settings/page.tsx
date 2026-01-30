@@ -19,6 +19,7 @@ export default function AdminSettingsPage() {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
+  const [hourlyWageLocked, setHourlyWageLocked] = useState(true);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -77,10 +78,11 @@ export default function AdminSettingsPage() {
     }
   };
 
-  // 詳細モーダルで選択中のユーザーが変わったら時給の編集値を同期
+  // 詳細モーダルで選択中のユーザーが変わったら時給の編集値とロックを同期
   useEffect(() => {
     if (selectedUser) {
       setEditingHourlyWage(selectedUser.hourlyWage ?? 1000);
+      setHourlyWageLocked(true);
     }
   }, [selectedUser?.uid, selectedUser?.hourlyWage]);
 
@@ -91,6 +93,7 @@ export default function AdminSettingsPage() {
     try {
       await saveUserProfile({ ...selectedUser, hourlyWage: wage });
       setEditingHourlyWage(wage);
+      setHourlyWageLocked(true);
       await loadUsers();
       const updated = (await getAllUsers()).find((u) => u.uid === selectedUser.uid) ?? null;
       if (updated) setSelectedUser(updated);
@@ -275,36 +278,88 @@ export default function AdminSettingsPage() {
           </div>
           {selectedUser!.role === "staff" && (
             <div style={{ marginBottom: "0.75rem" }}>
-              <label htmlFor="admin-hourly-wage" style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
                 時給（円）
               </label>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                <input
-                  id="admin-hourly-wage"
-                  type="number"
-                  min={0}
-                  value={editingHourlyWage}
-                  onChange={(e) => setEditingHourlyWage(Math.max(0, Math.floor(Number(e.target.value)) || 0))}
-                  style={{
-                    padding: "0.5rem",
-                    border: "1px solid var(--border)",
-                    borderRadius: "var(--radius-md)",
-                    width: "120px",
-                    fontSize: "1rem",
-                  }}
-                />
-                <span style={{ color: "var(--text-muted)" }}>円</span>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={handleSaveHourlyWage}
-                  disabled={savingWage}
-                >
-                  {savingWage ? "保存中..." : "時給を保存"}
-                </button>
-              </div>
+              {hourlyWageLocked ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span
+                    style={{
+                      padding: "0.5rem 0.75rem",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--bg-secondary)",
+                      fontSize: "1rem",
+                      minWidth: "100px",
+                      cursor: "not-allowed",
+                      userSelect: "none",
+                    }}
+                    title="編集できません（錠前をクリックで解除）"
+                  >
+                    ¥{(selectedUser!.hourlyWage ?? 1000).toLocaleString()}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setHourlyWageLocked(false)}
+                    title="ロック解除"
+                    aria-label="ロック解除"
+                    style={{ padding: "0.5rem 0.6rem", lineHeight: 1 }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <input
+                      id="admin-hourly-wage"
+                      type="number"
+                      min={0}
+                      value={editingHourlyWage}
+                      onChange={(e) => setEditingHourlyWage(Math.max(0, Math.floor(Number(e.target.value)) || 0))}
+                      style={{
+                        padding: "0.5rem",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-md)",
+                        width: "120px",
+                        fontSize: "1rem",
+                      }}
+                    />
+                    <span style={{ color: "var(--text-muted)" }}>円</span>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleSaveHourlyWage}
+                      disabled={savingWage}
+                    >
+                      {savingWage ? "保存中..." : "時給を保存"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => {
+                        setHourlyWageLocked(true);
+                        setEditingHourlyWage(selectedUser!.hourlyWage ?? 1000);
+                      }}
+                      disabled={savingWage}
+                      title="ロックして編集不可に戻す"
+                      aria-label="ロック"
+                      style={{ padding: "0.5rem 0.6rem", lineHeight: 1 }}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                給与集計やアルバイトの概算給与に反映されます。
+                給与集計やアルバイトの概算給与に反映されます。編集する場合は錠前アイコンをクリックして解除してください。
               </p>
             </div>
           )}
