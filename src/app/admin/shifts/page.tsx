@@ -40,6 +40,8 @@ export default function AdminShiftGrid() {
   const [workSummary, setWorkSummary] = useState<{ userId: string; name: string; totalHours: number; hourlyWage: number; salary: number }[]>([]);
   const [editingCell, setEditingCell] = useState<{ userId: string; day: number } | null>(null);
   const [savingCell, setSavingCell] = useState(false);
+  const [cellModalStart, setCellModalStart] = useState("09:00");
+  const [cellModalEnd, setCellModalEnd] = useState("18:00");
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -48,6 +50,15 @@ export default function AdminShiftGrid() {
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  useEffect(() => {
+    if (!editingCell) return;
+    const shift = shifts.find(
+      (s) => s.userId === editingCell.userId && parseInt(s.date.split("-")[2], 10) === editingCell.day
+    );
+    setCellModalStart(shift?.startTime ?? "09:00");
+    setCellModalEnd(shift?.endTime ?? "18:00");
+  }, [editingCell, shifts]);
 
   const lastDay = new Date(year, month + 1, 0).getDate();
   const DAYS = Array.from({ length: lastDay }, (_, i) => i + 1);
@@ -622,74 +633,126 @@ export default function AdminShiftGrid() {
 
       {/* セル編集モーダル（管理者・締切後編集は赤字で表示） */}
       {editingCell && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0,0,0,0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 50,
-          }}
-          onClick={() => !savingCell && setEditingCell(null)}
-        >
           <div
-            className="card"
-            style={{ minWidth: "280px", maxWidth: "90%" }}
-            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(0,0,0,0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 50,
+            }}
+            onClick={() => !savingCell && setEditingCell(null)}
           >
-            <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>
-              {month + 1}月{editingCell.day}日　{staffList.find((s) => s.id === editingCell.userId)?.name ?? editingCell.userId}
-            </h3>
-            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "1rem" }}>希望の勤務に変更（締切後は赤字で記録）</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {[
-                { label: "09:00-18:00", start: "09:00", end: "18:00" },
-                { label: "10:00-19:00", start: "10:00", end: "19:00" },
-                { label: "OFF", start: "00:00", end: "00:00" },
-              ].map((opt) => (
-                <button
-                  key={opt.label}
-                  className="btn btn-outline"
-                  disabled={savingCell}
-                  onClick={async () => {
-                    setSavingCell(true);
-                    try {
-                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
-                      await saveShift(
-                        {
-                          userId: editingCell.userId,
-                          date: dateStr,
-                          startTime: opt.start,
-                          endTime: opt.end,
-                          status: "confirmed",
-                        },
-                        { byAdmin: true }
-                      );
-                      setEditingCell(null);
-                    } catch (e) {
-                      console.error(e);
-                      alert("更新に失敗しました");
-                    } finally {
-                      setSavingCell(false);
-                    }
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <button
-              className="btn btn-outline"
-              style={{ marginTop: "1rem", width: "100%" }}
-              onClick={() => setEditingCell(null)}
-              disabled={savingCell}
+            <div
+              className="card"
+              style={{ minWidth: "280px", maxWidth: "90%" }}
+              onClick={(e) => e.stopPropagation()}
             >
-              キャンセル
-            </button>
+              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>
+                {month + 1}月{editingCell.day}日　{staffList.find((s) => s.id === editingCell.userId)?.name ?? editingCell.userId}
+              </h3>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "1rem" }}>勤務時間を設定（締切後は赤字で記録）</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {[
+                  { label: "09:00-18:00", start: "09:00", end: "18:00" },
+                  { label: "10:00-19:00", start: "10:00", end: "19:00" },
+                  { label: "OFF", start: "00:00", end: "00:00" },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    className="btn btn-outline"
+                    disabled={savingCell}
+                    onClick={async () => {
+                      setSavingCell(true);
+                      try {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
+                        await saveShift(
+                          {
+                            userId: editingCell.userId,
+                            date: dateStr,
+                            startTime: opt.start,
+                            endTime: opt.end,
+                            status: "confirmed",
+                          },
+                          { byAdmin: true }
+                        );
+                        setEditingCell(null);
+                      } catch (e) {
+                        console.error(e);
+                        alert("更新に失敗しました");
+                      } finally {
+                        setSavingCell(false);
+                      }
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>自由に設定</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <input
+                      type="time"
+                      value={cellModalStart}
+                      onChange={(e) => setCellModalStart(e.target.value)}
+                      style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                    />
+                    <span style={{ fontSize: "0.875rem" }}>～</span>
+                    <input
+                      type="time"
+                      value={cellModalEnd}
+                      onChange={(e) => setCellModalEnd(e.target.value)}
+                      style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                    />
+                    <button
+                      className="btn btn-outline"
+                      disabled={savingCell}
+                      onClick={async () => {
+                        const startM = parseInt(cellModalStart.slice(0, 2), 10) * 60 + parseInt(cellModalStart.slice(3), 10);
+                        const endM = parseInt(cellModalEnd.slice(0, 2), 10) * 60 + parseInt(cellModalEnd.slice(3), 10);
+                        if (startM >= endM) {
+                          alert("終了時刻は開始時刻より後にしてください。");
+                          return;
+                        }
+                        setSavingCell(true);
+                        try {
+                          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
+                          await saveShift(
+                            {
+                              userId: editingCell.userId,
+                              date: dateStr,
+                              startTime: cellModalStart,
+                              endTime: cellModalEnd,
+                              status: "confirmed",
+                            },
+                            { byAdmin: true }
+                          );
+                          setEditingCell(null);
+                        } catch (e) {
+                          console.error(e);
+                          alert("更新に失敗しました");
+                        } finally {
+                          setSavingCell(false);
+                        }
+                      }}
+                    >
+                      適用
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button
+                className="btn btn-outline"
+                style={{ marginTop: "1rem", width: "100%" }}
+                onClick={() => setEditingCell(null)}
+                disabled={savingCell}
+              >
+                キャンセル
+              </button>
+            </div>
           </div>
-        </div>
       )}
     </div>
   );

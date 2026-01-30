@@ -20,6 +20,10 @@ export default function ShiftCalendar() {
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
     const [deadlinePassed, setDeadlinePassed] = useState(false);
+    const [editingDay, setEditingDay] = useState<number | null>(null);
+    const [modalStart, setModalStart] = useState("09:00");
+    const [modalEnd, setModalEnd] = useState("18:00");
+    const [modalIsOff, setModalIsOff] = useState(false);
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -71,12 +75,42 @@ export default function ShiftCalendar() {
     const handleShiftClick = (day: number) => {
         if (deadlinePassed) return;
         const current = shifts[day];
-        let next = "";
-        if (!current) next = "09:00 - 18:00";
-        else if (current === "09:00 - 18:00") next = "10:00 - 19:00";
-        else if (current === "10:00 - 19:00") next = "OFF";
-        else next = "";
-        setShifts((prev) => ({ ...prev, [day]: next }));
+        if (current === "OFF") {
+            setModalIsOff(true);
+            setModalStart("09:00");
+            setModalEnd("18:00");
+        } else if (current && current.includes(" - ")) {
+            const [s, e] = current.split(" - ");
+            setModalStart(s ?? "09:00");
+            setModalEnd(e ?? "18:00");
+            setModalIsOff(false);
+        } else {
+            setModalStart("09:00");
+            setModalEnd("18:00");
+            setModalIsOff(false);
+        }
+        setEditingDay(day);
+    };
+
+    const applyModalShift = () => {
+        if (editingDay === null) return;
+        if (modalIsOff) {
+            setShifts((prev) => ({ ...prev, [editingDay]: "OFF" }));
+        } else {
+            const startM = parseInt(modalStart.slice(0, 2), 10) * 60 + parseInt(modalStart.slice(3), 10);
+            const endM = parseInt(modalEnd.slice(0, 2), 10) * 60 + parseInt(modalEnd.slice(3), 10);
+            if (startM >= endM) {
+                alert("終了時刻は開始時刻より後にしてください。");
+                return;
+            }
+            setShifts((prev) => ({ ...prev, [editingDay]: `${modalStart} - ${modalEnd}` }));
+        }
+        setEditingDay(null);
+    };
+
+    const formatShiftLabel = (label: string) => {
+        if (!label || label === "OFF") return "OFF";
+        return label.replace(" - ", "-");
     };
 
     const handleSave = async () => {
@@ -195,13 +229,71 @@ export default function ShiftCalendar() {
                             <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.9rem", marginBottom: "0.5rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
                             {shifts[day] && (
                                 <div style={{ backgroundColor: shifts[day] === "OFF" ? "#F3F4F6" : "#EEF2FF", color: shifts[day] === "OFF" ? "#4B5563" : "#4F46E5", padding: "0.1rem", borderRadius: "4px", fontSize: "0.7rem", textAlign: "center", fontWeight: 500, lineHeight: "1.2" }}>
-                                    {shifts[day] === "OFF" ? "OFF" : "9-18"}
+                                    {formatShiftLabel(shifts[day])}
                                 </div>
                             )}
                         </div>
                     );
                 })}
             </div>
+
+            {/* 時刻選択モーダル */}
+            {editingDay !== null && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(0,0,0,0.4)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                    onClick={() => setEditingDay(null)}
+                >
+                    <div
+                        className="card"
+                        style={{ minWidth: "280px", maxWidth: "90%" }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>{month + 1}月{editingDay}日　勤務時間</h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                                <input type="checkbox" checked={modalIsOff} onChange={(e) => setModalIsOff(e.target.checked)} />
+                                OFF（休み）
+                            </label>
+                            {!modalIsOff && (
+                                <>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                        <label style={{ fontSize: "0.875rem" }}>開始</label>
+                                        <input
+                                            type="time"
+                                            value={modalStart}
+                                            onChange={(e) => setModalStart(e.target.value)}
+                                            style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                                        />
+                                        <label style={{ fontSize: "0.875rem" }}>終了</label>
+                                        <input
+                                            type="time"
+                                            value={modalEnd}
+                                            onChange={(e) => setModalEnd(e.target.value)}
+                                            style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+                                <button type="button" className="btn btn-primary" onClick={applyModalShift}>
+                                    適用
+                                </button>
+                                <button type="button" className="btn btn-outline" onClick={() => setEditingDay(null)}>
+                                    キャンセル
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

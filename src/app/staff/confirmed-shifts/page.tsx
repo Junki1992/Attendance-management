@@ -34,7 +34,9 @@ export default function StaffConfirmedShiftsPage() {
   const [myRequests, setMyRequests] = useState<ShiftChangeRequest[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [modalDate, setModalDate] = useState("");
-  const [modalHope, setModalHope] = useState("09:00-18:00");
+  const [modalHopeStart, setModalHopeStart] = useState("09:00");
+  const [modalHopeEnd, setModalHopeEnd] = useState("18:00");
+  const [modalHopeIsOff, setModalHopeIsOff] = useState(false);
   const [modalReason, setModalReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -100,7 +102,9 @@ export default function StaffConfirmedShiftsPage() {
 
   const openModal = () => {
     setModalDate(shifts[0]?.date ?? "");
-    setModalHope("09:00-18:00");
+    setModalHopeStart("09:00");
+    setModalHopeEnd("18:00");
+    setModalHopeIsOff(false);
     setModalReason("");
     setModalError("");
     setShowModal(true);
@@ -111,13 +115,18 @@ export default function StaffConfirmedShiftsPage() {
       setModalError("対象日と理由を入力してください。");
       return;
     }
+    if (!modalHopeIsOff) {
+      const startM = parseInt(modalHopeStart.slice(0, 2), 10) * 60 + parseInt(modalHopeStart.slice(3), 10);
+      const endM = parseInt(modalHopeEnd.slice(0, 2), 10) * 60 + parseInt(modalHopeEnd.slice(3), 10);
+      if (startM >= endM) {
+        setModalError("終了時刻は開始時刻より後にしてください。");
+        return;
+      }
+    }
     setSubmitting(true);
     setModalError("");
     try {
-      const [start, end] =
-        modalHope === "OFF"
-          ? ["00:00", "00:00"]
-          : modalHope.split("-").map((s) => s.trim());
+      const [start, end] = modalHopeIsOff ? ["00:00", "00:00"] : [modalHopeStart, modalHopeEnd];
       await createShiftChangeRequest(user.uid, modalDate, start, end, modalReason.trim());
       loadRequests();
       setShowModal(false);
@@ -240,15 +249,27 @@ export default function StaffConfirmedShiftsPage() {
             </div>
             <div style={{ marginBottom: "0.75rem" }}>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>希望する時刻</label>
-              <select
-                value={modalHope}
-                onChange={(e) => setModalHope(e.target.value)}
-                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
-              >
-                <option value="09:00-18:00">09:00-18:00</option>
-                <option value="10:00-19:00">10:00-19:00</option>
-                <option value="OFF">OFF（休み希望）</option>
-              </select>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", cursor: "pointer" }}>
+                <input type="checkbox" checked={modalHopeIsOff} onChange={(e) => setModalHopeIsOff(e.target.checked)} />
+                OFF（休み希望）
+              </label>
+              {!modalHopeIsOff && (
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <input
+                    type="time"
+                    value={modalHopeStart}
+                    onChange={(e) => setModalHopeStart(e.target.value)}
+                    style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                  />
+                  <span style={{ fontSize: "0.875rem" }}>～</span>
+                  <input
+                    type="time"
+                    value={modalHopeEnd}
+                    onChange={(e) => setModalHopeEnd(e.target.value)}
+                    style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
+                  />
+                </div>
+              )}
             </div>
             <div style={{ marginBottom: "0.75rem" }}>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>理由（必須）</label>
