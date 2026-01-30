@@ -7,7 +7,6 @@ import Link from "next/link";
 import NotificationList from "@/components/NotificationList";
 import Avatar from "@/components/Avatar";
 import { subscribeNotifications } from "@/services/notificationService";
-import HelpButton from "@/components/HelpButton";
 
 export default function AdminLayout({
     children,
@@ -190,8 +189,6 @@ export default function AdminLayout({
                             <Link href="/admin/shift-change-requests" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>変更申請</Link>
                             <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>チャット</Link>
                             <Link href="/admin/settings" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>設定</Link>
-                            <Link href="/manual/admin" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>マニュアル</Link>
-                            <HelpButton scope="admin" />
                             <button 
                                 onClick={handleLogout}
                                 style={{ 
@@ -337,25 +334,6 @@ export default function AdminLayout({
                         >
                             チャット
                         </Link>
-                        <Link 
-                            href="/manual/admin" 
-                            onClick={() => setShowMobileMenu(false)}
-                            className="menu-item-enter"
-                            style={{ 
-                                textDecoration: 'none', 
-                                color: '#e0e7ff', 
-                                padding: '0.75rem 1rem',
-                                borderRadius: '8px',
-                                backgroundColor: pathname === '/manual/admin' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
-                                transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/manual/admin' ? 600 : 400
-                            }}
-                        >
-                            マニュアル
-                        </Link>
-                        <div style={{ padding: '0.25rem 1rem' }}>
-                            <HelpButton scope="admin" />
-                        </div>
                         <Link 
                             href="/admin/settings" 
                             onClick={() => setShowMobileMenu(false)}
