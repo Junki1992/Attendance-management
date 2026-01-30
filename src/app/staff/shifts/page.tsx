@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 import { getUserProfile } from "@/services/userService";
@@ -24,6 +24,13 @@ export default function ShiftCalendar() {
     const [modalStart, setModalStart] = useState("09:00");
     const [modalEnd, setModalEnd] = useState("18:00");
     const [modalIsOff, setModalIsOff] = useState(false);
+    const [bulkStart, setBulkStart] = useState("09:00");
+    const [bulkEnd, setBulkEnd] = useState("18:00");
+    const [bulkIsOff, setBulkIsOff] = useState(false);
+    const [bulkSelectedDays, setBulkSelectedDays] = useState<number[]>([]);
+    const [dragStartDay, setDragStartDay] = useState<number | null>(null);
+    const [dragCurrentDay, setDragCurrentDay] = useState<number | null>(null);
+    const openModalRef = useRef<(day: number) => void>(() => {});
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -58,6 +65,32 @@ export default function ShiftCalendar() {
         init();
     }, [user, year, month]);
 
+    useEffect(() => {
+        setBulkSelectedDays([]);
+        setDragStartDay(null);
+        setDragCurrentDay(null);
+    }, [year, month]);
+
+    useEffect(() => {
+        if (dragStartDay === null) return;
+        const onMouseUp = () => {
+            const start = dragStartDay;
+            const current = dragCurrentDay ?? start;
+            const lo = Math.min(start, current);
+            const hi = Math.max(start, current);
+            const moved = dragCurrentDay !== null && dragCurrentDay !== dragStartDay;
+            if (moved) {
+                setBulkSelectedDays(Array.from({ length: hi - lo + 1 }, (_, i) => lo + i));
+            } else {
+                openModalRef.current(start);
+            }
+            setDragStartDay(null);
+            setDragCurrentDay(null);
+        };
+        window.addEventListener("mouseup", onMouseUp);
+        return () => window.removeEventListener("mouseup", onMouseUp);
+    }, [dragStartDay, dragCurrentDay]);
+
     const changeMonth = (delta: number) => {
         let m = month + delta;
         let y = year;
@@ -91,6 +124,7 @@ export default function ShiftCalendar() {
         }
         setEditingDay(day);
     };
+    openModalRef.current = handleShiftClick;
 
     const applyModalShift = () => {
         if (editingDay === null) return;
@@ -111,6 +145,47 @@ export default function ShiftCalendar() {
     const formatShiftLabel = (label: string) => {
         if (!label || label === "OFF") return "OFF";
         return label.replace(" - ", "-");
+    };
+
+    const bulkSelectWeekdays = () => {
+        const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
+            const dow = new Date(year, month, d).getDay();
+            return dow >= 1 && dow <= 5;
+        });
+        setBulkSelectedDays(days);
+    };
+    const bulkSelectWeekends = () => {
+        const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
+            const dow = new Date(year, month, d).getDay();
+            return dow === 0 || dow === 6;
+        });
+        setBulkSelectedDays(days);
+    };
+    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1));
+    const bulkClearSelection = () => setBulkSelectedDays([]);
+
+    const applyBulkShift = () => {
+        if (deadlinePassed) return;
+        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth);
+        if (targetDays.length === 0) {
+            alert("適用する日を1日以上選択してください。");
+            return;
+        }
+        const value = bulkIsOff ? "OFF" : `${bulkStart} - ${bulkEnd}`;
+        if (!bulkIsOff) {
+            const startM = parseInt(bulkStart.slice(0, 2), 10) * 60 + parseInt(bulkStart.slice(3), 10);
+            const endM = parseInt(bulkEnd.slice(0, 2), 10) * 60 + parseInt(bulkEnd.slice(3), 10);
+            if (startM >= endM) {
+                alert("終了時刻は開始時刻より後にしてください。");
+                return;
+            }
+        }
+        setShifts((prev) => {
+            const next = { ...prev };
+            targetDays.forEach((d) => (next[d] = value));
+            return next;
+        });
+        alert(`${targetDays.length}日分を一括で設定しました。内容を確認して「提出内容を保存」で送信してください。`);
     };
 
     const handleSave = async () => {
@@ -168,7 +243,7 @@ export default function ShiftCalendar() {
     const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
 
     return (
-        <div className="card">
+        <div className="card" style={{ overflow: "visible", maxWidth: "100%", minWidth: 0 }}>
             {deadlinePassed && (
                 <div
                     style={{
@@ -182,6 +257,66 @@ export default function ShiftCalendar() {
                     }}
                 >
                     この月のシフト提出は締め切りを過ぎているため、編集できません。
+                </div>
+            )}
+
+            {!deadlinePassed && (
+                <div
+                    style={{
+                        marginBottom: "1rem",
+                        padding: "0.75rem 1rem",
+                        backgroundColor: "var(--surface-hover)",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border)",
+                    }}
+                >
+                    <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.5rem" }}>一括設定</div>
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                        カレンダーでドラッグして日付を選択 → 勤務時間を指定して「一括適用」
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem", marginBottom: "0.5rem" }}>
+                        <button type="button" className="btn btn-outline" onClick={bulkSelectWeekdays} style={{ fontSize: "0.75rem" }}>
+                            平日を選択
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={bulkSelectWeekends} style={{ fontSize: "0.75rem" }}>
+                            土日を選択
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={bulkSelectAll} style={{ fontSize: "0.75rem" }}>
+                            全選択
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={bulkClearSelection} style={{ fontSize: "0.75rem" }}>
+                            クリア
+                        </button>
+                        {bulkSelectedDays.length > 0 && (
+                            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{bulkSelectedDays.length}日選択中</span>
+                        )}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", fontSize: "0.875rem" }}>
+                            <input type="checkbox" checked={bulkIsOff} onChange={(e) => setBulkIsOff(e.target.checked)} />
+                            OFF（休み）
+                        </label>
+                        {!bulkIsOff && (
+                            <>
+                                <input
+                                    type="time"
+                                    value={bulkStart}
+                                    onChange={(e) => setBulkStart(e.target.value)}
+                                    style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem" }}
+                                />
+                                <span style={{ fontSize: "0.875rem" }}>～</span>
+                                <input
+                                    type="time"
+                                    value={bulkEnd}
+                                    onChange={(e) => setBulkEnd(e.target.value)}
+                                    style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem" }}
+                                />
+                            </>
+                        )}
+                        <button type="button" className="btn btn-outline" onClick={applyBulkShift} style={{ fontSize: "0.875rem" }}>
+                            一括適用
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -205,36 +340,96 @@ export default function ShiftCalendar() {
                 </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "1px", backgroundColor: "var(--border)", border: "1px solid var(--border)", opacity: deadlinePassed ? 0.85 : 1 }}>
-                {dayOfWeek.map((d) => (
-                    <div key={d} style={{ backgroundColor: "var(--surface-hover)", padding: "0.5rem", textAlign: "center", fontSize: "0.875rem", fontWeight: 600 }}>
-                        {d}
-                    </div>
-                ))}
-                {daysArray.map((day, index) => {
-                    if (day === null) {
-                        return <div key={`empty-${index}`} style={{ backgroundColor: "var(--surface-hover)", minHeight: "100px", padding: "0.5rem" }} />;
-                    }
-                    const date = new Date(year, month, day);
-                    const dow = date.getDay();
-                    const isWeekend = dow === 0 || dow === 6;
-                    const isHoliday = isJapaneseHoliday(date);
-                    const isRed = isWeekend || isHoliday;
-                    return (
-                        <div
-                            key={day}
-                            onClick={() => handleShiftClick(day)}
-                            style={{ backgroundColor: "var(--surface)", minHeight: "100px", padding: "0.5rem", cursor: deadlinePassed ? "default" : "pointer", position: "relative", transition: "background-color 0.2s" }}
-                        >
-                            <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.9rem", marginBottom: "0.5rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
-                            {shifts[day] && (
-                                <div style={{ backgroundColor: shifts[day] === "OFF" ? "#F3F4F6" : "#EEF2FF", color: shifts[day] === "OFF" ? "#4B5563" : "#4F46E5", padding: "0.1rem", borderRadius: "4px", fontSize: "0.7rem", textAlign: "center", fontWeight: 500, lineHeight: "1.2" }}>
-                                    {formatShiftLabel(shifts[day])}
-                                </div>
-                            )}
+            <div
+                style={{
+                    overflowX: "auto",
+                    overflowY: "visible",
+                    marginLeft: "-0.25rem",
+                    marginRight: "-0.25rem",
+                    paddingLeft: "0.25rem",
+                    paddingRight: "0.25rem",
+                    WebkitOverflowScrolling: "touch",
+                    borderRadius: "var(--radius-md)",
+                }}
+            >
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                        gap: "1px",
+                        backgroundColor: "var(--border)",
+                        border: "1px solid var(--border)",
+                        opacity: deadlinePassed ? 0.85 : 1,
+                        userSelect: dragStartDay !== null ? "none" : undefined,
+                        minWidth: "280px",
+                    }}
+                >
+                    {dayOfWeek.map((d) => (
+                        <div key={d} style={{ backgroundColor: "var(--surface-hover)", padding: "0.4rem 0.25rem", textAlign: "center", fontSize: "0.8rem", fontWeight: 600, minWidth: 0 }}>
+                            {d}
                         </div>
-                    );
-                })}
+                    ))}
+                    {daysArray.map((day, index) => {
+                        if (day === null) {
+                            return <div key={`empty-${index}`} style={{ backgroundColor: "var(--surface-hover)", minHeight: "80px", padding: "0.4rem", minWidth: 0 }} />;
+                        }
+                        const date = new Date(year, month, day);
+                        const dow = date.getDay();
+                        const isWeekend = dow === 0 || dow === 6;
+                        const isHoliday = isJapaneseHoliday(date);
+                        const isRed = isWeekend || isHoliday;
+                        const isBulkSelected = bulkSelectedDays.includes(day);
+                        const dragLo = dragStartDay !== null ? Math.min(dragStartDay, dragCurrentDay ?? dragStartDay) : 0;
+                        const dragHi = dragStartDay !== null ? Math.max(dragStartDay, dragCurrentDay ?? dragStartDay) : 0;
+                        const isInDragRange = dragStartDay !== null && day >= dragLo && day <= dragHi;
+                        const cellBg =
+                            isInDragRange
+                                ? "rgba(79, 70, 229, 0.25)"
+                                : isBulkSelected
+                                  ? "rgba(79, 70, 229, 0.15)"
+                                  : "var(--surface)";
+                        const cellBorder = isBulkSelected || isInDragRange ? "2px solid var(--primary)" : undefined;
+                        return (
+                            <div
+                                key={day}
+                                onMouseDown={() => !deadlinePassed && setDragStartDay(day)}
+                                onMouseEnter={() => dragStartDay !== null && setDragCurrentDay(day)}
+                                style={{
+                                    backgroundColor: cellBg,
+                                    minHeight: "80px",
+                                    padding: "0.4rem 0.25rem",
+                                    cursor: deadlinePassed ? "default" : "pointer",
+                                    position: "relative",
+                                    transition: "background-color 0.15s",
+                                    border: cellBorder,
+                                    boxSizing: "border-box",
+                                    minWidth: 0,
+                                }}
+                            >
+                                <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
+                                {shifts[day] && (
+                                    <div
+                                        style={{
+                                            backgroundColor: shifts[day] === "OFF" ? "#F3F4F6" : "#EEF2FF",
+                                            color: shifts[day] === "OFF" ? "#4B5563" : "#4F46E5",
+                                            padding: "0.15rem 0.2rem",
+                                            borderRadius: "4px",
+                                            fontSize: "0.65rem",
+                                            textAlign: "center",
+                                            fontWeight: 500,
+                                            lineHeight: "1.2",
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                        }}
+                                    >
+                                        {formatShiftLabel(shifts[day])}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* 時刻選択モーダル */}

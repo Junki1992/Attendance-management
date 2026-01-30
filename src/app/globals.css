@@ -161,6 +161,8 @@ a {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: 1.25rem;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .btn {

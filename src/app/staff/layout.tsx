@@ -98,19 +98,21 @@ export default function StaffLayout({
             overflow: isChatPage ? 'hidden' : undefined,
             overflowX: 'hidden',
             width: '100%',
-            maxWidth: '100%',
-            padding: isChatPage ? '0' : undefined,
-            margin: isChatPage ? '0' : undefined,
+            maxWidth: '100vw',
+            margin: 0,
+            padding: 0,
             boxSizing: 'border-box',
         }}>
             {pathname !== '/staff/chat' && (
             <header style={{
                 backgroundColor: 'var(--surface)',
                 borderBottom: '1px solid var(--border)',
-                padding: '0.75rem 1rem',
+                padding: isMobile ? '0.75rem max(1rem, env(safe-area-inset-left)) 0.75rem max(1rem, env(safe-area-inset-right))' : '0.75rem 1rem',
                 position: 'sticky',
                 top: 0,
-                zIndex: 100
+                zIndex: 100,
+                width: '100%',
+                boxSizing: 'border-box',
             }}>
                 {/* モバイル用ヘッダー */}
                 {isMobile && (
@@ -452,18 +454,20 @@ export default function StaffLayout({
                 className={isChatPage ? '' : (isWide ? '' : 'container')}
                 style={{
                     flex: isChatPage ? '1 1 0' : 1,
-                    padding: isChatPage ? '0' : (isWide ? '2rem 1rem' : '2rem 1rem'),
+                    padding: isChatPage ? 0 : '2rem max(1rem, env(safe-area-inset-left)) 2rem max(1rem, env(safe-area-inset-right))',
                     maxWidth: isChatPage ? '100%' : (isWide ? '1600px' : undefined),
-                    margin: isChatPage ? '0' : (isWide ? '0 auto' : undefined),
-                    width: isChatPage ? '100%' : (isWide ? '100%' : undefined),
+                    marginLeft: isChatPage ? 0 : 'auto',
+                    marginRight: isChatPage ? 0 : 'auto',
+                    width: '100%',
+                    minWidth: 0,
                     height: isChatPage ? '100%' : undefined,
                     minHeight: isChatPage ? 0 : undefined,
-                    display: isChatPage ? 'flex' : (isWide ? 'block' : 'block'),
+                    display: isChatPage ? 'flex' : 'block',
                     flexDirection: isChatPage ? 'column' : undefined,
                     overflow: isChatPage ? 'hidden' : undefined,
-                    overflowX: isChatPage ? 'hidden' : undefined,
+                    overflowX: 'hidden',
                     position: isChatPage ? 'relative' : undefined,
-                    boxSizing: isChatPage ? 'border-box' : undefined,
+                    boxSizing: 'border-box',
                 }}
             >
                 {children}

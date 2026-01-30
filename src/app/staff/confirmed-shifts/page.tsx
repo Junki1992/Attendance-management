@@ -149,7 +149,7 @@ export default function StaffConfirmedShiftsPage() {
   if (!user) return null;
 
   return (
-    <div className="card">
+    <div className="card" style={{ overflow: "visible", maxWidth: "100%", minWidth: 0 }}>
       <div
         style={{
           display: "flex",
@@ -309,78 +309,97 @@ export default function StaffConfirmedShiftsPage() {
       ) : (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            gap: "1px",
-            backgroundColor: "var(--border)",
-            border: "1px solid var(--border)",
+            overflowX: "auto",
+            overflowY: "visible",
+            marginLeft: "-0.25rem",
+            marginRight: "-0.25rem",
+            paddingLeft: "0.25rem",
+            paddingRight: "0.25rem",
+            WebkitOverflowScrolling: "touch",
+            borderRadius: "var(--radius-md)",
           }}
         >
-          {dayOfWeek.map((d) => (
-            <div
-              key={d}
-              style={{
-                backgroundColor: "var(--surface-hover)",
-                padding: "0.5rem",
-                textAlign: "center",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-              }}
-            >
-              {d}
-            </div>
-          ))}
-          {daysArray.map((day) => {
-            const date = new Date(year, month, day);
-            const dow = date.getDay();
-            const isWeekend = dow === 0 || dow === 6;
-            const isHoliday = isJapaneseHoliday(date);
-            const isRed = isWeekend || isHoliday;
-            const s = shiftByDay[day];
-            const label = !s
-              ? ""
-              : s.startTime === "00:00" && s.endTime === "00:00"
-                ? "OFF"
-                : `${s.startTime} - ${s.endTime}`;
-
-            return (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+              gap: "1px",
+              backgroundColor: "var(--border)",
+              border: "1px solid var(--border)",
+              minWidth: "280px",
+            }}
+          >
+            {dayOfWeek.map((d) => (
               <div
-                key={day}
+                key={d}
                 style={{
-                  backgroundColor: "var(--surface)",
-                  minHeight: "80px",
-                  padding: "0.5rem",
+                  backgroundColor: "var(--surface-hover)",
+                  padding: "0.4rem 0.25rem",
+                  textAlign: "center",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  minWidth: 0,
                 }}
               >
+                {d}
+              </div>
+            ))}
+            {daysArray.map((day) => {
+              const date = new Date(year, month, day);
+              const dow = date.getDay();
+              const isWeekend = dow === 0 || dow === 6;
+              const isHoliday = isJapaneseHoliday(date);
+              const isRed = isWeekend || isHoliday;
+              const s = shiftByDay[day];
+              const label = !s
+                ? ""
+                : s.startTime === "00:00" && s.endTime === "00:00"
+                  ? "OFF"
+                  : `${s.startTime} - ${s.endTime}`;
+
+              return (
                 <div
+                  key={day}
                   style={{
-                    fontWeight: isRed ? "bold" : 500,
-                    fontSize: "0.9rem",
-                    marginBottom: "0.25rem",
-                    color: isRed ? "#DC2626" : "var(--text-main)",
+                    backgroundColor: "var(--surface)",
+                    minHeight: "80px",
+                    padding: "0.4rem 0.25rem",
+                    minWidth: 0,
                   }}
                 >
-                  {day}
-                </div>
-                {label && (
                   <div
                     style={{
-                      backgroundColor:
-                        label === "OFF" ? "#F3F4F6" : "#EEF2FF",
-                      color: label === "OFF" ? "#4B5563" : "#4F46E5",
-                      padding: "0.1rem",
-                      borderRadius: "4px",
-                      fontSize: "0.7rem",
-                      textAlign: "center",
-                      fontWeight: 500,
+                      fontWeight: isRed ? "bold" : 500,
+                      fontSize: "0.85rem",
+                      marginBottom: "0.25rem",
+                      color: isRed ? "#DC2626" : "var(--text-main)",
                     }}
                   >
-                    {label === "OFF" ? "OFF" : label}
+                    {day}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                  {label && (
+                    <div
+                      style={{
+                        backgroundColor:
+                          label === "OFF" ? "#F3F4F6" : "#EEF2FF",
+                        color: label === "OFF" ? "#4B5563" : "#4F46E5",
+                        padding: "0.15rem 0.2rem",
+                        borderRadius: "4px",
+                        fontSize: "0.65rem",
+                        textAlign: "center",
+                        fontWeight: 500,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {label === "OFF" ? "OFF" : label}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
