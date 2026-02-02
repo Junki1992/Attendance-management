@@ -42,6 +42,7 @@ export default function StaffConfirmedShiftsPage() {
   const [modalReason, setModalReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
 
   const lastDay = getDaysInMonth(year, month);
   const daysArray = Array.from({ length: lastDay }, (_, i) => i + 1);
@@ -231,6 +232,109 @@ export default function StaffConfirmedShiftsPage() {
         </div>
       )}
 
+      {detailModalDay != null && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => setDetailModalDay(null)}
+        >
+          <div
+            className="card"
+            style={{ width: "90%", maxWidth: "360px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: "1rem" }}>
+              {month + 1}月{detailModalDay}日
+              {dayOfWeek[new Date(year, month, detailModalDay - 1).getDay()]}のシフト
+            </h3>
+            {(() => {
+              const s = shiftByDay[detailModalDay];
+              if (!s) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(detailModalDay).padStart(2, "0")}`;
+                return (
+                  <>
+                    <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>
+                      この日のシフトはありません
+                    </p>
+                    <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => {
+                          setDetailModalDay(null);
+                          setModalDate(dateStr);
+                          setModalHopeStart("09:00");
+                          setModalHopeEnd("18:00");
+                          setModalHopeIsOff(false);
+                          setModalHopeIsRemote(false);
+                          setModalReason("");
+                          setModalError("");
+                          setShowModal(true);
+                        }}
+                      >
+                        変更申請
+                      </button>
+                      <button className="btn btn-primary" onClick={() => setDetailModalDay(null)}>
+                        閉じる
+                      </button>
+                    </div>
+                  </>
+                );
+              }
+              const isOff = s.startTime === "00:00" && s.endTime === "00:00";
+              const hours = calcHours(s);
+              const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(detailModalDay).padStart(2, "0")}`;
+              return (
+                <>
+                  <div style={{ marginBottom: "1rem" }}>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                      {isOff ? "OFF" : `${s.startTime} ～ ${s.endTime}`}
+                    </div>
+                    {!isOff && (
+                      <>
+                        <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+                          {s.isRemote ? "在宅勤務" : "出社"}
+                        </div>
+                        <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                          勤務時間: <strong>{hours.toFixed(1)}h</strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => {
+                        setDetailModalDay(null);
+                        setModalDate(dateStr);
+                        setModalHopeStart(s.startTime);
+                        setModalHopeEnd(s.endTime);
+                        setModalHopeIsOff(isOff);
+                        setModalHopeIsRemote(s.isRemote ?? false);
+                        setModalReason("");
+                        setModalError("");
+                        setShowModal(true);
+                      }}
+                    >
+                      変更申請
+                    </button>
+                    <button className="btn btn-primary" onClick={() => setDetailModalDay(null)}>
+                      閉じる
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {showModal && (
         <div
           style={{
@@ -394,11 +498,16 @@ export default function StaffConfirmedShiftsPage() {
               return (
                 <div
                   key={day}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailModalDay(day)}
+                  onKeyDown={(e) => e.key === "Enter" && setDetailModalDay(day)}
                   style={{
                     backgroundColor: "var(--surface)",
                     minHeight: "80px",
                     padding: "0.4rem 0.25rem",
                     minWidth: 0,
+                    cursor: "pointer",
                   }}
                 >
                   <div
