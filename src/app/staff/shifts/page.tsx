@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 import { getUserProfile } from "@/services/userService";
@@ -21,19 +21,11 @@ export default function ShiftCalendar() {
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
     const [deadlinePassed, setDeadlinePassed] = useState(false);
-    const [editingDay, setEditingDay] = useState<number | null>(null);
-    const [modalStart, setModalStart] = useState("09:00");
-    const [modalEnd, setModalEnd] = useState("18:00");
-    const [modalIsOff, setModalIsOff] = useState(false);
-    const [modalIsRemote, setModalIsRemote] = useState(false);
     const [bulkStart, setBulkStart] = useState("09:00");
     const [bulkEnd, setBulkEnd] = useState("18:00");
     const [bulkIsOff, setBulkIsOff] = useState(false);
     const [bulkIsRemote, setBulkIsRemote] = useState(false);
     const [bulkSelectedDays, setBulkSelectedDays] = useState<number[]>([]);
-    const [dragStartDay, setDragStartDay] = useState<number | null>(null);
-    const [dragCurrentDay, setDragCurrentDay] = useState<number | null>(null);
-    const openModalRef = useRef<(day: number) => void>(() => {});
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -73,29 +65,14 @@ export default function ShiftCalendar() {
 
     useEffect(() => {
         setBulkSelectedDays([]);
-        setDragStartDay(null);
-        setDragCurrentDay(null);
     }, [year, month]);
 
-    useEffect(() => {
-        if (dragStartDay === null) return;
-        const onMouseUp = () => {
-            const start = dragStartDay;
-            const current = dragCurrentDay ?? start;
-            const lo = Math.min(start, current);
-            const hi = Math.max(start, current);
-            const moved = dragCurrentDay !== null && dragCurrentDay !== dragStartDay;
-            if (moved) {
-                setBulkSelectedDays(Array.from({ length: hi - lo + 1 }, (_, i) => lo + i));
-            } else {
-                openModalRef.current(start);
-            }
-            setDragStartDay(null);
-            setDragCurrentDay(null);
-        };
-        window.addEventListener("mouseup", onMouseUp);
-        return () => window.removeEventListener("mouseup", onMouseUp);
-    }, [dragStartDay, dragCurrentDay]);
+    const toggleDaySelection = (day: number) => {
+        if (deadlinePassed) return;
+        setBulkSelectedDays((prev) =>
+            prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+        );
+    };
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -109,46 +86,6 @@ export default function ShiftCalendar() {
         }
         setMonth(m);
         setYear(y);
-    };
-
-    const handleShiftClick = (day: number) => {
-        if (deadlinePassed) return;
-        const current = shifts[day];
-        if (current === "OFF") {
-            setModalIsOff(true);
-            setModalStart("09:00");
-            setModalEnd("18:00");
-        } else if (current && current.includes(" - ")) {
-            const [s, e] = current.split(" - ");
-            setModalStart(s ?? "09:00");
-            setModalEnd(e ?? "18:00");
-            setModalIsOff(false);
-        } else {
-            setModalStart("09:00");
-            setModalEnd("18:00");
-            setModalIsOff(false);
-        }
-        setModalIsRemote(!!remoteByDay[day]);
-        setEditingDay(day);
-    };
-    openModalRef.current = handleShiftClick;
-
-    const applyModalShift = () => {
-        if (editingDay === null) return;
-        if (modalIsOff) {
-            setShifts((prev) => ({ ...prev, [editingDay]: "OFF" }));
-            setRemoteByDay((prev) => ({ ...prev, [editingDay]: false }));
-        } else {
-            const startM = parseInt(modalStart.slice(0, 2), 10) * 60 + parseInt(modalStart.slice(3), 10);
-            const endM = parseInt(modalEnd.slice(0, 2), 10) * 60 + parseInt(modalEnd.slice(3), 10);
-            if (startM >= endM) {
-                alert("終了時刻は開始時刻より後にしてください。");
-                return;
-            }
-            setShifts((prev) => ({ ...prev, [editingDay]: `${modalStart} - ${modalEnd}` }));
-            setRemoteByDay((prev) => ({ ...prev, [editingDay]: modalIsRemote }));
-        }
-        setEditingDay(null);
     };
 
     const formatShiftLabel = (label: string) => {
@@ -287,7 +224,7 @@ export default function ShiftCalendar() {
                 >
                     <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.5rem" }}>一括設定</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                        カレンダーでドラッグして日付を選択 → 勤務時間を指定して「一括適用」
+                        日付をタップして選択（再度タップで解除）→ 勤務時間を指定して「一括適用」
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem", marginBottom: "0.5rem" }}>
                         <button type="button" className="btn btn-outline" onClick={bulkSelectWeekdays} style={{ fontSize: "0.75rem" }}>
@@ -379,7 +316,6 @@ export default function ShiftCalendar() {
                         backgroundColor: "var(--border)",
                         border: "1px solid var(--border)",
                         opacity: deadlinePassed ? 0.85 : 1,
-                        userSelect: dragStartDay !== null ? "none" : undefined,
                         minWidth: "280px",
                     }}
                 >
@@ -398,21 +334,15 @@ export default function ShiftCalendar() {
                         const isHoliday = isJapaneseHoliday(date);
                         const isRed = isWeekend || isHoliday;
                         const isBulkSelected = bulkSelectedDays.includes(day);
-                        const dragLo = dragStartDay !== null ? Math.min(dragStartDay, dragCurrentDay ?? dragStartDay) : 0;
-                        const dragHi = dragStartDay !== null ? Math.max(dragStartDay, dragCurrentDay ?? dragStartDay) : 0;
-                        const isInDragRange = dragStartDay !== null && day >= dragLo && day <= dragHi;
-                        const cellBg =
-                            isInDragRange
-                                ? "rgba(79, 70, 229, 0.25)"
-                                : isBulkSelected
-                                  ? "rgba(79, 70, 229, 0.15)"
-                                  : "var(--surface)";
-                        const cellBorder = isBulkSelected || isInDragRange ? "2px solid var(--primary)" : undefined;
+                        const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
+                        const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
                         return (
                             <div
                                 key={day}
-                                onMouseDown={() => !deadlinePassed && setDragStartDay(day)}
-                                onMouseEnter={() => dragStartDay !== null && setDragCurrentDay(day)}
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => toggleDaySelection(day)}
+                                onKeyDown={(e) => e.key === "Enter" && toggleDaySelection(day)}
                                 style={{
                                     backgroundColor: cellBg,
                                     minHeight: "80px",
@@ -451,67 +381,6 @@ export default function ShiftCalendar() {
                 </div>
             </div>
 
-            {/* 時刻選択モーダル */}
-            {editingDay !== null && (
-                <div
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        backgroundColor: "rgba(0,0,0,0.4)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 50,
-                    }}
-                    onClick={() => setEditingDay(null)}
-                >
-                    <div
-                        className="card"
-                        style={{ minWidth: "280px", maxWidth: "90%" }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <h3 style={{ fontSize: "1rem", marginBottom: "0.75rem" }}>{month + 1}月{editingDay}日　勤務時間</h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-                                <input type="checkbox" checked={modalIsOff} onChange={(e) => setModalIsOff(e.target.checked)} />
-                                OFF（休み）
-                            </label>
-                            {!modalIsOff && (
-                                <>
-                                    <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.875rem" }}>
-                                        <input type="checkbox" checked={modalIsRemote} onChange={(e) => setModalIsRemote(e.target.checked)} />
-                                        在宅
-                                    </label>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                                        <label style={{ fontSize: "0.875rem" }}>開始</label>
-                                        <input
-                                            type="time"
-                                            value={modalStart}
-                                            onChange={(e) => setModalStart(e.target.value)}
-                                            style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
-                                        />
-                                        <label style={{ fontSize: "0.875rem" }}>終了</label>
-                                        <input
-                                            type="time"
-                                            value={modalEnd}
-                                            onChange={(e) => setModalEnd(e.target.value)}
-                                            style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
-                                        />
-                                    </div>
-                                </>
-                            )}
-                            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
-                                <button type="button" className="btn btn-primary" onClick={applyModalShift}>
-                                    適用
-                                </button>
-                                <button type="button" className="btn btn-outline" onClick={() => setEditingDay(null)}>
-                                    キャンセル
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
