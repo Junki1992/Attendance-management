@@ -24,6 +24,34 @@ function calcHours(s: Shift): number | "OFF" {
   return h > 0 ? Math.round(h * 10) / 10 : 0;
 }
 
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+/** スプレッドシート用のセル表記（例: 10-18\n（出社/休憩1h）、13-18\n(在宅)） */
+function formatShiftForSheet(s: Shift): string {
+  if (s.startTime === "00:00" && s.endTime === "00:00") return "";
+  const loc = s.isRemote ? "在宅" : "出社";
+  const [sH, sM] = s.startTime.split(":").map(Number);
+  const [eH, eM] = s.endTime.split(":").map(Number);
+  const durationHours = eH + eM / 60 - (sH + sM / 60);
+  const breakNote = durationHours >= 6 ? "/休憩1h" : "";
+  return `${sH}-${eH}\n（${loc}${breakNote}）`;
+}
+
+function escapeCsvCell(val: string): string {
+  if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+}
+
+/** TSV貼り付け時、改行をセル内に収めるため改行・タブ・"を含むセルはクォートする */
+function escapeTsvCell(val: string): string {
+  if (val.includes("\t") || val.includes('"') || val.includes("\n")) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+}
+
 export default function AdminShiftGrid() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -265,23 +293,18 @@ export default function AdminShiftGrid() {
   const buildCsv = (): string => {
     const confirmed = shifts.filter((s) => s.status === "confirmed");
     const nameMap = Object.fromEntries(staffList.map((s) => [s.id, s.name]));
-    const header = ["アルバイト", ...DAYS.map((d) => String(d)), "合計"].join(",");
-    const rows = staffList.map((staff) => {
-      let total = 0;
-      const cells = DAYS.map((d) => {
+    // Googleスプレッドシート形式（タブ区切り）: 1行目=日付,スタッフ1,スタッフ2,... 2行目以降=日付,各スタッフのシフト（改行含むセルはクォートでセル内改行になる）
+    const header = ["日付", ...staffList.map((s) => nameMap[s.id] || s.id)].join("\t");
+    const rows = DAYS.map((d) => {
+      const date = new Date(year, month, d);
+      const dateLabel = `${month + 1}/${d}(${WEEKDAY_LABELS[date.getDay()]})`;
+      const cells = staffList.map((staff) => {
         const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-        const s = confirmed.find(
-          (x) => x.userId === staff.id && x.date === dateStr
-        );
+        const s = confirmed.find((x) => x.userId === staff.id && x.date === dateStr);
         if (!s) return "";
-        const h = calcHours(s);
-        if (h === "OFF") return "OFF";
-        total += h as number;
-        return String(h);
+        return escapeTsvCell(formatShiftForSheet(s));
       });
-      return [nameMap[staff.id] || staff.id, ...cells, String(total)].join(
-        ","
-      );
+      return [dateLabel, ...cells].join("\t");
     });
     return [header, ...rows].join("\n");
   };
