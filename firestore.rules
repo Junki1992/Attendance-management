@@ -39,6 +39,13 @@ service cloud.firestore {
       
       // 削除：自分のドキュメントのみ
       allow delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 時給変更履歴サブコレクション（管理者のみ読める・管理者のみ追記可）
+      match /wageHistory/{logId} {
+        allow read: if request.auth != null && isAdmin();
+        allow create: if request.auth != null && isAdmin();
+        allow update, delete: if false;
+      }
     }
     
     // shifts コレクション（既存のルールがあれば追加）

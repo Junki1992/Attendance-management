@@ -85,11 +85,14 @@ export default function StaffConfirmedShiftsPage() {
   });
 
   let totalHours = 0;
-  let salary = 0;
+  let salaryExact = 0;
   shifts.forEach((s) => {
-    totalHours += calcHours(s);
+    const h = calcHours(s);
+    totalHours += h;
+    const wage = s.hourlyWage ?? hourlyWage;
+    salaryExact += h * wage;
   });
-  salary = Math.floor(totalHours * hourlyWage);
+  const salary = Math.floor(salaryExact);
 
   const changeMonth = (delta: number) => {
     let m = month + delta;

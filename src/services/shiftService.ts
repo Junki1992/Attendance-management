@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase/firebase";
-import { getDocs } from "@/lib/firebase/firestoreHelpers";
+import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot } from "firebase/firestore";
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
 import { isPastSubmitDeadline } from "@/services/settingsService";
@@ -27,14 +27,27 @@ export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promi
     const shiftRef = doc(db, "shifts", docId);
 
     let editedAfterDeadline: boolean | undefined;
+    let hourlyWage = shift.hourlyWage;
+    if (options?.byAdmin && shift.status === "confirmed" && hourlyWage == null) {
+        const existing = await getDoc(shiftRef);
+        const existingWage = existing.exists() ? (existing.data()?.hourlyWage as number | undefined) : undefined;
+        if (existingWage != null) {
+            hourlyWage = existingWage;
+        } else {
+            const profile = await getUserProfile(shift.userId);
+            hourlyWage = profile?.hourlyWage ?? 1000;
+        }
+    }
     if (options?.byAdmin) {
         const [y, m] = shift.date.split("-").map(Number);
         const past = await isPastSubmitDeadline(y, m - 1); // m は 1-12 → 0-indexed
         editedAfterDeadline = past;
     }
 
+    const { hourlyWage: _skip, ...shiftRest } = shift;
     const data = {
-        ...shift,
+        ...shiftRest,
+        ...(hourlyWage != null && { hourlyWage }),
         updatedAt: Timestamp.now(),
         ...(editedAfterDeadline !== undefined && { editedAfterDeadline }),
     };
@@ -134,18 +147,21 @@ export const deleteShift = async (userId: string, date: string) => {
 export const confirmShifts = async (year: number, month: number) => {
     // 1. Get all shifts for the month
     const shifts = await getAllShifts(year, month);
-    const affectedUserIds = new Set<string>();
+    const toConfirm = shifts.filter((s) => s.status !== "confirmed");
+    const affectedUserIds = new Set<string>(toConfirm.map((s) => s.userId));
 
-    // 2. Update each shift in parallel
-    // (Ideally use WriteBatch for atomicity, but simple loops for now)
-    const promises = shifts.map(async (shift) => {
-        if (shift.status === 'confirmed') return; // Skip if already confirmed
+    // 2. 確定時に時給スナップショットを保存（月途中の時給変更に備える）
+    const uidToWage = new Map<string, number>();
+    for (const uid of affectedUserIds) {
+        const profile = await getUserProfile(uid);
+        uidToWage.set(uid, profile?.hourlyWage ?? 1000);
+    }
 
+    const promises = toConfirm.map((shift) => {
         const docId = `${shift.userId}_${shift.date}`;
         const shiftRef = doc(db, "shifts", docId);
-
-        affectedUserIds.add(shift.userId);
-        return setDoc(shiftRef, { status: 'confirmed' }, { merge: true });
+        const wage = uidToWage.get(shift.userId) ?? 1000;
+        return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage }, { merge: true });
     });
 
     await Promise.all(promises);
@@ -158,12 +174,15 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     const userShifts = shifts.filter((s) => s.userId === userId);
     if (userShifts.length === 0) return false;
 
+    const profile = await getUserProfile(userId);
+    const wage = profile?.hourlyWage ?? 1000;
+
     const toUpdate = userShifts.filter((s) => s.status !== "confirmed");
     await Promise.all(
         toUpdate.map((shift) => {
             const docId = `${shift.userId}_${shift.date}`;
             const shiftRef = doc(db, "shifts", docId);
-            return setDoc(shiftRef, { status: "confirmed" }, { merge: true });
+            return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage }, { merge: true });
         })
     );
     // 確定通知を送ったので editedAfterConfirmed をクリア（再通知不要に）
@@ -194,7 +213,7 @@ export interface MonthlyWorkSummaryRow {
     salary: number;
 }
 
-/** 確定シフトベースの月別・アルバイト別 勤務時間と給与 */
+/** 確定シフトベースの月別・アルバイト別 勤務時間と給与（シフトごとの時給スナップショットで計算） */
 export const getMonthlyWorkSummary = async (year: number, month: number): Promise<MonthlyWorkSummaryRow[]> => {
     const shifts = await getAllShifts(year, month);
     const confirmed = shifts.filter((s) => s.status === "confirmed");
@@ -203,16 +222,28 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
     const rows: MonthlyWorkSummaryRow[] = [];
     for (const uid of uids) {
         const profile = await getUserProfile(uid);
-        const wage = profile?.hourlyWage ?? 1000;
-        const totalHours = confirmed
-            .filter((s) => s.userId === uid)
-            .reduce((sum, s) => sum + calcHoursForShift(s), 0);
+        const fallbackWage = profile?.hourlyWage ?? 1000;
+        const userShifts = confirmed.filter((s) => s.userId === uid);
+
+        let totalHours = 0;
+        let salaryExact = 0;
+        for (const s of userShifts) {
+            const hours = calcHoursForShift(s);
+            const wage = s.hourlyWage ?? fallbackWage;
+            totalHours += hours;
+            salaryExact += hours * wage;
+        }
+
+        totalHours = Math.round(totalHours * 10) / 10;
+        const salary = Math.floor(salaryExact);
+        const displayWage = totalHours > 0 ? Math.round(salary / totalHours) : fallbackWage;
+
         rows.push({
             userId: uid,
             name: profile?.name ?? uid,
-            totalHours: Math.round(totalHours * 10) / 10,
-            hourlyWage: wage,
-            salary: Math.floor(totalHours * wage),
+            totalHours,
+            hourlyWage: displayWage,
+            salary,
         });
     }
     rows.sort((a, b) => a.name.localeCompare(b.name));

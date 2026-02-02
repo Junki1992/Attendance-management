@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
 import { getAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
+import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
@@ -21,6 +22,7 @@ export default function AdminSettingsPage() {
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
   const [hourlyWageLocked, setHourlyWageLocked] = useState(true);
+  const [wageChangeLog, setWageChangeLog] = useState<WageChangeLogEntry[]>([]);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -87,14 +89,31 @@ export default function AdminSettingsPage() {
     }
   }, [selectedUser?.uid, selectedUser?.hourlyWage]);
 
+  // スタッフ選択時に時給変更ログを取得
+  useEffect(() => {
+    if (selectedUser?.role === "staff") {
+      getWageChangeLog(selectedUser.uid)
+        .then(setWageChangeLog)
+        .catch(() => setWageChangeLog([]));
+    } else {
+      setWageChangeLog([]);
+    }
+  }, [selectedUser?.uid, selectedUser?.role]);
+
   const handleSaveHourlyWage = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || !currentUser) return;
     const wage = Math.max(0, Math.floor(Number(editingHourlyWage)) || 0);
     setSavingWage(true);
     try {
-      await updateUserHourlyWage(selectedUser.uid, wage);
+      await updateUserHourlyWage(selectedUser.uid, wage, {
+        changedByUid: currentUser.uid,
+        changedByName: currentUser.name ?? "管理者",
+      });
       setEditingHourlyWage(wage);
       setHourlyWageLocked(true);
+      setSelectedUser((prev) => (prev ? { ...prev, hourlyWage: wage } : null));
+      const log = await getWageChangeLog(selectedUser.uid);
+      setWageChangeLog(log);
       await createNotification(
         selectedUser.uid,
         "hourly_wage_changed",
@@ -367,6 +386,53 @@ export default function AdminSettingsPage() {
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
                 給与集計やアルバイトの概算給与に反映されます。編集する場合は錠前アイコンをクリックして解除してください。
               </p>
+              <div style={{ marginTop: "1rem" }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
+                  時給変更履歴
+                </label>
+                <div
+                  style={{
+                    maxHeight: "160px",
+                    overflowY: "auto",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  {wageChangeLog.length === 0 ? (
+                    <p style={{ padding: "0.75rem", margin: 0, color: "var(--text-muted)" }}>変更履歴はありません</p>
+                  ) : (
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ backgroundColor: "var(--bg-secondary)" }}>
+                          <th style={{ padding: "0.4rem 0.5rem", textAlign: "left" }}>日時</th>
+                          <th style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>変更前</th>
+                          <th style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>変更後</th>
+                          <th style={{ padding: "0.4rem 0.5rem", textAlign: "left" }}>変更者</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {wageChangeLog.map((entry) => (
+                          <tr key={entry.id} style={{ borderTop: "1px solid var(--border)" }}>
+                            <td style={{ padding: "0.4rem 0.5rem", color: "var(--text-muted)" }}>
+                              {entry.changedAt.toLocaleString("ja-JP", {
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                            <td style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>¥{entry.previousWage.toLocaleString()}</td>
+                            <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 500 }}>¥{entry.newWage.toLocaleString()}</td>
+                            <td style={{ padding: "0.4rem 0.5rem", color: "var(--text-muted)" }}>{entry.changedByName}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
             </div>
           )}
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>

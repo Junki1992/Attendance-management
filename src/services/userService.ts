@@ -63,10 +63,31 @@ export const saveUserProfile = async (user: UserProfile) => {
     await setDoc(docRef, user, { merge: true });
 };
 
-/** 指定ユーザーの時給のみ更新（管理者用・Firestore の update で部分更新） */
-export const updateUserHourlyWage = async (uid: string, hourlyWage: number): Promise<void> => {
+export interface UpdateWageOptions {
+    changedByUid?: string;
+    changedByName?: string;
+}
+
+/** 指定ユーザーの時給のみ更新（管理者用・Firestore の update で部分更新）。変更ログを記録する場合は options を渡す */
+export const updateUserHourlyWage = async (
+    uid: string,
+    hourlyWage: number,
+    options?: UpdateWageOptions
+): Promise<void> => {
     const docRef = doc(db, "users", uid);
+    const snap = await getDoc(docRef);
+    const previousWage = snap.exists() ? (snap.data()?.hourlyWage ?? 1000) : 1000;
+
     await updateDoc(docRef, { hourlyWage });
+
+    if (options?.changedByUid && options?.changedByName) {
+        try {
+            const { recordWageChange } = await import("./wageChangeLogService");
+            await recordWageChange(uid, previousWage, hourlyWage, options.changedByUid, options.changedByName);
+        } catch (e) {
+            console.warn("[updateUserHourlyWage] 時給変更ログの記録に失敗（時給は保存済み）:", e);
+        }
+    }
 };
 
 export interface StaffItem {
