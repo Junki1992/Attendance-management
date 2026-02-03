@@ -10,7 +10,7 @@ import {
   getMonthlyWorkSummary,
   Shift,
 } from "@/services/shiftService";
-import { getAllStaff, StaffItem } from "@/services/userService";
+import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
 
 const MOBILE_BREAKPOINT = 768;
@@ -71,6 +71,7 @@ export default function AdminShiftGrid() {
   const [confirmedNotifs, setConfirmedNotifs] = useState<Notification[]>([]);
   const [workSummary, setWorkSummary] = useState<{ userId: string; name: string; totalHours: number; hourlyWage: number; salary: number }[]>([]);
   const [editingCell, setEditingCell] = useState<{ userId: string; day: number } | null>(null);
+  const [editingCellHourlyWage, setEditingCellHourlyWage] = useState<number | null>(null);
   const [savingCell, setSavingCell] = useState(false);
   const [cellModalStart, setCellModalStart] = useState("09:00");
   const [cellModalEnd, setCellModalEnd] = useState("18:00");
@@ -85,14 +86,24 @@ export default function AdminShiftGrid() {
   }, []);
 
   useEffect(() => {
-    if (!editingCell) return;
+    if (!editingCell) {
+      setEditingCellHourlyWage(null);
+      return;
+    }
     const shift = shifts.find(
       (s) => s.userId === editingCell.userId && parseInt(s.date.split("-")[2], 10) === editingCell.day
     );
     setCellModalStart(shift?.startTime ?? "09:00");
     setCellModalEnd(shift?.endTime ?? "18:00");
     setCellModalIsRemote(shift?.isRemote ?? false);
-  }, [editingCell, shifts]);
+    const wage = shift?.hourlyWage ?? workSummary.find((r) => r.userId === editingCell.userId)?.hourlyWage ?? null;
+    if (wage != null) {
+      setEditingCellHourlyWage(wage);
+    } else {
+      setEditingCellHourlyWage(null);
+      getUserProfile(editingCell.userId).then((p) => setEditingCellHourlyWage(p?.hourlyWage ?? 1000));
+    }
+  }, [editingCell, shifts, workSummary]);
 
   const lastDay = new Date(year, month + 1, 0).getDate();
   const DAYS = Array.from({ length: lastDay }, (_, i) => i + 1);
@@ -833,6 +844,11 @@ export default function AdminShiftGrid() {
               <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>
                 {month + 1}月{editingCell.day}日　{staffList.find((s) => s.id === editingCell.userId)?.name ?? editingCell.userId}
               </h3>
+              {editingCellHourlyWage != null && (
+                <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+                  時給: <strong>¥{editingCellHourlyWage.toLocaleString()}</strong>
+                </p>
+              )}
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "1rem" }}>勤務時間を設定（締切後は赤字で記録）</p>
               <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", cursor: "pointer", fontSize: "0.9rem" }}>
                 <input
