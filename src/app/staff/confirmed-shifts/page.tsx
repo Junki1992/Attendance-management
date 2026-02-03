@@ -304,6 +304,9 @@ export default function StaffConfirmedShiftsPage() {
                         <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
                           勤務時間: <strong>{hours.toFixed(1)}h</strong>
                         </div>
+                        <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                          時給: <strong>¥{(s.hourlyWage ?? hourlyWage).toLocaleString()}</strong>
+                        </div>
                       </>
                     )}
                   </div>
