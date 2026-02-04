@@ -76,6 +76,8 @@ export default function AdminShiftGrid() {
   const [cellModalStart, setCellModalStart] = useState("09:00");
   const [cellModalEnd, setCellModalEnd] = useState("18:00");
   const [cellModalIsRemote, setCellModalIsRemote] = useState(false);
+  const [cellModalOffEditExpanded, setCellModalOffEditExpanded] = useState(false);
+  const [cellModalWasOff, setCellModalWasOff] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -96,6 +98,8 @@ export default function AdminShiftGrid() {
     setCellModalStart(shift?.startTime ?? "09:00");
     setCellModalEnd(shift?.endTime ?? "18:00");
     setCellModalIsRemote(shift?.isRemote ?? false);
+    setCellModalOffEditExpanded(false);
+    setCellModalWasOff(shift?.startTime === "00:00" && shift?.endTime === "00:00");
     const wage = shift?.hourlyWage ?? workSummary.find((r) => r.userId === editingCell.userId)?.hourlyWage ?? null;
     if (wage != null) {
       setEditingCellHourlyWage(wage);
@@ -850,7 +854,7 @@ export default function AdminShiftGrid() {
                 </p>
               )}
               {(() => {
-                const isOff = cellModalStart === "00:00" && cellModalEnd === "00:00";
+                const isOff = cellModalWasOff;
                 const applyWorkingHours = async () => {
                   const startM = parseInt(cellModalStart.slice(0, 2), 10) * 60 + parseInt(cellModalStart.slice(3), 10);
                   const endM = parseInt(cellModalEnd.slice(0, 2), 10) * 60 + parseInt(cellModalEnd.slice(3), 10);
@@ -917,58 +921,100 @@ export default function AdminShiftGrid() {
                         <p style={{ fontSize: "1.15rem", color: "var(--text-main)", fontWeight: 700, marginBottom: "0.75rem" }}>
                           この日はOFFです
                         </p>
-                        <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>勤務日に変更する場合は、下の時間を設定して適用してください。</p>
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                          <input
+                            type="checkbox"
+                            checked={cellModalOffEditExpanded}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setCellModalOffEditExpanded(checked);
+                              if (checked) {
+                                setCellModalStart("09:00");
+                                setCellModalEnd("18:00");
+                              }
+                            }}
+                          />
+                          変更
+                        </label>
+                        {cellModalOffEditExpanded && (
+                          <>
+                            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.75rem", marginBottom: "0.5rem" }}>勤務日に変更する場合は、下の時間を設定して適用してください。</p>
+                            <div style={{ marginBottom: "0.5rem" }}>
+                              <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>勤務時間を設定</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                <input
+                                  type="time"
+                                  value={cellModalStart}
+                                  onChange={(e) => setCellModalStart(e.target.value)}
+                                  style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
+                                />
+                                <span style={{ fontSize: "1.1rem" }}>～</span>
+                                <input
+                                  type="time"
+                                  value={cellModalEnd}
+                                  onChange={(e) => setCellModalEnd(e.target.value)}
+                                  style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
+                                />
+                                <button
+                                  className="btn btn-outline"
+                                  disabled={savingCell}
+                                  onClick={applyWorkingHours}
+                                >
+                                  適用
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ) : (
-                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", cursor: "pointer", fontSize: "0.9rem" }}>
-                        <input
-                          type="checkbox"
-                          checked={cellModalIsRemote}
-                          onChange={(e) => setCellModalIsRemote(e.target.checked)}
-                        />
-                        在宅
-                      </label>
+                      <>
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                          <input
+                            type="checkbox"
+                            checked={cellModalIsRemote}
+                            onChange={(e) => setCellModalIsRemote(e.target.checked)}
+                          />
+                          在宅
+                        </label>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                          <div style={{ marginBottom: "0.25rem" }}>
+                            <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>時間を設定</div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                              <input
+                                type="time"
+                                value={cellModalStart}
+                                onChange={(e) => setCellModalStart(e.target.value)}
+                                style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
+                              />
+                              <span style={{ fontSize: "1.1rem" }}>～</span>
+                              <input
+                                type="time"
+                                value={cellModalEnd}
+                                onChange={(e) => setCellModalEnd(e.target.value)}
+                                style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
+                              />
+                              <button
+                                className="btn btn-outline"
+                                disabled={savingCell}
+                                onClick={applyWorkingHours}
+                              >
+                                適用
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
+                            <button
+                              className="btn btn-outline"
+                              disabled={savingCell}
+                              onClick={setToOff}
+                            >
+                              この日をOFFにする
+                            </button>
+                          </div>
+                        </div>
+                      </>
                     )}
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                      <div style={{ marginBottom: isOff ? "0.5rem" : "0.25rem" }}>
-                        <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>
-                          {isOff ? "勤務時間を設定" : "時間を設定"}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                          <input
-                            type="time"
-                            value={cellModalStart}
-                            onChange={(e) => setCellModalStart(e.target.value)}
-                            style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
-                          />
-                          <span style={{ fontSize: "1.1rem" }}>～</span>
-                          <input
-                            type="time"
-                            value={cellModalEnd}
-                            onChange={(e) => setCellModalEnd(e.target.value)}
-                            style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1.1rem" }}
-                          />
-                          <button
-                            className="btn btn-outline"
-                            disabled={savingCell}
-                            onClick={applyWorkingHours}
-                          >
-                            適用
-                          </button>
-                        </div>
-                      </div>
-                      {!isOff && (
-                        <div style={{ paddingTop: "0.5rem", borderTop: "1px solid var(--border)" }}>
-                          <button
-                            className="btn btn-outline"
-                            disabled={savingCell}
-                            onClick={setToOff}
-                          >
-                            この日をOFFにする
-                          </button>
-                        </div>
-                      )}
-                    </div>
                   </>
                 );
               })()}
