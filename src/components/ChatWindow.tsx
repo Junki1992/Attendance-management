@@ -504,7 +504,10 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
             <form 
                 onSubmit={handleSend} 
                 style={{ 
-                    padding: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem 0') : '1rem', 
+                    paddingTop: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
+                    paddingRight: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
+                    paddingBottom: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
+                    paddingLeft: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
                     borderTop: '1px solid var(--border)', 
                     display: 'flex', 
                     gap: '0.75rem',
