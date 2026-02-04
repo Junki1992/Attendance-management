@@ -52,7 +52,7 @@ export default function StaffLayout({
     }, [user]);
 
     useEffect(() => {
-        if (pathname === '/staff/chat') {
+        if (pathname.replace(/\/$/, "") === '/staff/chat') {
             // グローバルCSSクラスを適用して確実にスクロールを無効化
             document.documentElement.classList.add('chat-fullscreen');
             
@@ -83,9 +83,10 @@ export default function StaffLayout({
 
     if (loading || !user) return <div className="p-4 text-center">Loading...</div>;
 
-    const isWide = pathname === "/staff/shifts" || pathname === "/staff/confirmed-shifts" || pathname === "/staff/chat";
+    const path = pathname.replace(/\/$/, "") || "/";
+    const isWide = path === "/staff/shifts" || path === "/staff/confirmed-shifts" || path === "/staff/chat";
 
-    const isChatPage = pathname === '/staff/chat';
+    const isChatPage = path === '/staff/chat';
     const isChatMobile = isChatPage && isMobile;
 
     return (
@@ -94,15 +95,14 @@ export default function StaffLayout({
             height: isChatPage ? '100vh' : undefined,
             display: 'flex', 
             flexDirection: 'column',
-            overflow: isChatPage ? 'hidden' : undefined,
             overflowX: 'hidden',
+            overflowY: isChatPage ? 'hidden' : undefined,
             width: '100%',
             maxWidth: '100vw',
             margin: 0,
             padding: 0,
             boxSizing: 'border-box',
         }}>
-            {pathname !== '/staff/chat' && (
             <header style={{
                 backgroundColor: 'var(--surface)',
                 borderBottom: '1px solid var(--border)',
@@ -120,7 +120,10 @@ export default function StaffLayout({
                     justifyContent: 'space-between', 
                     alignItems: 'center'
                 }}>
-                    <h1 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>アルバイト用</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h1 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>勤怠入力</h1>
+                        <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px', backgroundColor: 'var(--primary)', color: 'white', fontWeight: 600 }}>アルバイト</span>
+                    </div>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative' }}>
                             <button 
@@ -184,12 +187,16 @@ export default function StaffLayout({
 
                 {/* デスクトップ用ヘッダー */}
                 {!isMobile && (
-                <div className="container" style={{ 
+                <div className={`container ${isWide ? 'container-wide' : ''}`} style={{ 
                     display: 'flex',
                     justifyContent: 'space-between', 
-                    alignItems: 'center' 
+                    alignItems: 'center',
+                    minWidth: 0,
                 }}>
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>アルバイト用</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h1 style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--primary)' }}>勤怠入力</h1>
+                        <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', borderRadius: '4px', backgroundColor: 'var(--primary)', color: 'white', fontWeight: 600 }}>アルバイト</span>
+                    </div>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div
                             role="button"
@@ -237,11 +244,11 @@ export default function StaffLayout({
                             </button>
                             {showNotifications && <NotificationList onClose={() => setShowNotifications(false)} />}
                         </div>
-                        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Link href="/staff" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>ホーム</Link>
-                            <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>シフト提出</Link>
-                            <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>確定シフト</Link>
-                            <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>チャット</Link>
+                        <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
+                            <Link href="/staff" style={{ textDecoration: 'none', color: path === '/staff' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff' ? '2px solid var(--primary)' : '2px solid transparent' }}>ホーム</Link>
+                            <Link href="/staff/shifts" style={{ textDecoration: 'none', color: path === '/staff/shifts' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/shifts' ? '2px solid var(--primary)' : '2px solid transparent' }}>シフト提出</Link>
+                            <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: path === '/staff/confirmed-shifts' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/confirmed-shifts' ? '2px solid var(--primary)' : '2px solid transparent' }}>確定シフト</Link>
+                            <Link href="/staff/chat" style={{ textDecoration: 'none', color: path === '/staff/chat' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/chat' ? '2px solid var(--primary)' : '2px solid transparent' }}>チャット</Link>
 <button 
                             onClick={handleLogout}
                             style={{ 
@@ -301,17 +308,17 @@ export default function StaffLayout({
                                 color: 'var(--text-main)', 
                                 padding: '0.75rem 1rem',
                                 borderRadius: '8px',
-                                backgroundColor: pathname === '/staff' ? 'var(--surface-hover)' : 'transparent',
+                                backgroundColor: path === '/staff' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
                                 fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
-                                if (pathname !== '/staff') {
+                                if (path !== '/staff') {
                                     e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
                                 }
                             }}
                             onMouseLeave={(e) => {
-                                if (pathname !== '/staff') {
+                                if (path !== '/staff') {
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }
                             }}
@@ -327,17 +334,17 @@ export default function StaffLayout({
                                 color: 'var(--text-main)', 
                                 padding: '0.75rem 1rem',
                                 borderRadius: '8px',
-                                backgroundColor: pathname === '/staff/shifts' ? 'var(--surface-hover)' : 'transparent',
+                                backgroundColor: path === '/staff/shifts' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
                                 fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
-                                if (pathname !== '/staff/shifts') {
+                                if (path !== '/staff/shifts') {
                                     e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
                                 }
                             }}
                             onMouseLeave={(e) => {
-                                if (pathname !== '/staff/shifts') {
+                                if (path !== '/staff/shifts') {
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }
                             }}
@@ -353,17 +360,17 @@ export default function StaffLayout({
                                 color: 'var(--text-main)', 
                                 padding: '0.75rem 1rem',
                                 borderRadius: '8px',
-                                backgroundColor: pathname === '/staff/confirmed-shifts' ? 'var(--surface-hover)' : 'transparent',
+                                backgroundColor: path === '/staff/confirmed-shifts' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
                                 fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
-                                if (pathname !== '/staff/confirmed-shifts') {
+                                if (path !== '/staff/confirmed-shifts') {
                                     e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
                                 }
                             }}
                             onMouseLeave={(e) => {
-                                if (pathname !== '/staff/confirmed-shifts') {
+                                if (path !== '/staff/confirmed-shifts') {
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }
                             }}
@@ -379,17 +386,17 @@ export default function StaffLayout({
                                 color: 'var(--text-main)', 
                                 padding: '0.75rem 1rem',
                                 borderRadius: '8px',
-                                backgroundColor: pathname === '/staff/chat' ? 'var(--surface-hover)' : 'transparent',
+                                backgroundColor: path === '/staff/chat' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
                                 fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
-                                if (pathname !== '/staff/chat') {
+                                if (path !== '/staff/chat') {
                                     e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
                                 }
                             }}
                             onMouseLeave={(e) => {
-                                if (pathname !== '/staff/chat') {
+                                if (path !== '/staff/chat') {
                                     e.currentTarget.style.backgroundColor = 'transparent';
                                 }
                             }}
@@ -429,23 +436,22 @@ export default function StaffLayout({
                     </div>
                 )}
             </header>
-            )}
             <main
                 className={isChatPage ? '' : (isWide ? '' : 'container')}
                 style={{
                     flex: isChatPage ? '1 1 0' : 1,
-                    padding: isChatPage ? 0 : '2rem max(1rem, env(safe-area-inset-left)) 2rem max(1rem, env(safe-area-inset-right))',
-                    maxWidth: isChatPage ? '100%' : (isWide ? '1600px' : undefined),
-                    marginLeft: isChatPage ? 0 : 'auto',
-                    marginRight: isChatPage ? 0 : 'auto',
+                    padding: isChatPage ? '0 1rem' : '2rem max(1rem, env(safe-area-inset-left)) 2rem max(1rem, env(safe-area-inset-right))',
+                    maxWidth: isWide ? '1600px' : undefined,
+                    marginLeft: isWide ? 'auto' : undefined,
+                    marginRight: isWide ? 'auto' : undefined,
                     width: '100%',
                     minWidth: 0,
                     height: isChatPage ? '100%' : undefined,
                     minHeight: isChatPage ? 0 : undefined,
                     display: isChatPage ? 'flex' : 'block',
                     flexDirection: isChatPage ? 'column' : undefined,
-                    overflow: isChatPage ? 'hidden' : undefined,
                     overflowX: 'hidden',
+                    overflowY: isChatPage ? 'hidden' : undefined,
                     position: isChatPage ? 'relative' : undefined,
                     boxSizing: 'border-box',
                 }}

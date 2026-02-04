@@ -21,11 +21,13 @@ interface ChatWindowProps {
     partnerPhotoURL?: string | null;
     /** 戻るボタンを表示するか（チャット画面でヘッダー非表示のとき） */
     showBackButton?: boolean;
+    /** ヘッダー（相手名など）を非表示にするか */
+    hideHeader?: boolean;
     /** true の場合、常に画面幅いっぱいに表示（アルバイトチャット用） */
     forceFullWidth?: boolean;
 }
 
-export default function ChatWindow({ className, partnerName, partnerId, partnerIds, subscribeAllForMe, partnerPhotoURL, showBackButton, forceFullWidth }: ChatWindowProps) {
+export default function ChatWindow({ className, partnerName, partnerId, partnerIds, subscribeAllForMe, partnerPhotoURL, showBackButton, hideHeader, forceFullWidth }: ChatWindowProps) {
     const { user } = useAuth();
     const router = useRouter();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -333,9 +335,9 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
             className={isFullWidthMode ? "chat-window-fullwidth" : `flex flex-col bg-white rounded-lg shadow border border-gray-200 ${className ?? ""}`}
             style={baseStyle}
         >
-            {/* Header */}
+            {!hideHeader && (
             <div style={{ 
-                padding: isFullWidthMode ? '1rem 3rem' : '1rem', 
+                padding: isFullWidthMode ? '1rem 0' : '1rem', 
                 borderBottom: '1px solid var(--border)', 
                 backgroundColor: 'var(--surface-hover)', 
                 fontWeight: 600, 
@@ -356,7 +358,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                             background: 'none',
                             cursor: 'pointer',
                             padding: '0.25rem',
-                            marginRight: '0.25rem',
+                            marginRight: '0.5rem',
                             fontSize: '1.2rem',
                             color: 'var(--text-main)',
                             display: 'flex',
@@ -366,6 +368,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                         onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
                         onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                         aria-label="戻る"
+                        title="戻る"
                     >
                         ←
                     </button>
@@ -373,14 +376,17 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 <Avatar photoURL={partnerPhotoURL} name={partnerName} size="sm" />
                 <span style={{ fontSize: isMobile ? '0.95rem' : '1rem' }}>{partnerName}</span>
             </div>
+            )}
 
             {/* Messages Area */}
             <div style={{ 
                 flex: '1 1 0',
                 overflowY: 'auto', 
                 overflowX: 'hidden', 
-                padding: isFullWidthMode ? (isMobile ? '1rem 0.75rem' : '1rem 3rem') : '1rem', 
+                paddingTop: '1rem',
+                paddingRight: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
                 paddingBottom: isFullWidthMode && isMobile ? '4.5rem' : '1rem',
+                paddingLeft: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
                 display: 'flex', 
                 flexDirection: 'column', 
                 gap: '0.75rem', 
@@ -498,7 +504,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
             <form 
                 onSubmit={handleSend} 
                 style={{ 
-                    padding: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem 3rem') : '1rem', 
+                    padding: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem 0') : '1rem', 
                     borderTop: '1px solid var(--border)', 
                     display: 'flex', 
                     gap: '0.75rem',

@@ -8,24 +8,10 @@ import { useAuth } from "@/context/AuthContext";
 export default function StaffChatPage() {
     const { user } = useAuth();
     const [adminIds, setAdminIds] = useState<string[]>([]);
-    const [adminName, setAdminName] = useState<string>("管理者");
+    const [adminName, setAdminName] = useState<string>("職場");
     const [adminPhotoURL, setAdminPhotoURL] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const checkMobile = () => {
-            const mobile = window.innerWidth < 768;
-            setIsMobile(mobile);
-            if (process.env.NODE_ENV === 'development') {
-                console.log('[staff/chat] isMobile:', mobile, 'width:', window.innerWidth);
-            }
-        };
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
 
     // 認証済みユーザーが確定してから管理者一覧を取得（auth.currentUser が null だと getAdminIds が空を返す）
     useEffect(() => {
@@ -51,7 +37,7 @@ export default function StaffChatPage() {
             if (first) {
                 getUserProfile(first).then((admin) => {
                     if (admin) {
-                        setAdminName(admin.name || "管理者");
+                        setAdminName(admin.name || "職場");
                         setAdminPhotoURL(admin.photoURL ?? null);
                     }
                     setLoading(false);
@@ -183,28 +169,22 @@ export default function StaffChatPage() {
         <div 
             id="staff-chat-container"
             style={{ 
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
+                width: '100%',
+                maxWidth: '100%',
+                flex: 1,
+                minHeight: 0,
                 display: 'flex',
                 flexDirection: 'column',
+                justifyContent: 'center',
                 alignItems: 'center',
-                padding: 0, 
-                margin: 0, 
-                boxSizing: 'border-box', 
-                overflow: 'hidden',
-                backgroundColor: 'var(--surface)',
-                zIndex: 0,
+                boxSizing: 'border-box',
             }}
         >
-            <div
-                style={{
+            <div 
+                className="chat-inner"
+                style={{ 
                     width: '100%',
-                    maxWidth: isMobile ? '100%' : 1200,
-                    margin: '0 auto',
-                    padding: isMobile ? 0 : '0 1rem',
+                    maxWidth: '1600px',
                     flex: 1,
                     minHeight: 0,
                     display: 'flex',
@@ -219,7 +199,7 @@ export default function StaffChatPage() {
                     partnerName={adminName}
                     partnerPhotoURL={adminPhotoURL}
                     subscribeAllForMe
-                    showBackButton
+                    hideHeader
                     forceFullWidth
                 />
             )}

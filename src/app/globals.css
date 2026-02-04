@@ -86,7 +86,7 @@ html.chat-fullscreen body {
   position: relative !important;
 }
 
-/* チャット画面のmain要素とその子要素を画面全体の幅にする */
+/* チャット画面のmain要素 */
 html.chat-fullscreen main {
   max-width: 100% !important;
   width: 100% !important;
@@ -100,31 +100,23 @@ html.chat-fullscreen main > div {
   max-width: 100% !important;
   width: 100% !important;
   padding: 0 !important;
-  margin: 0 !important;
   overflow-x: hidden !important;
   box-sizing: border-box !important;
 }
 
-html.chat-fullscreen main > div > div {
-  max-width: 100% !important;
-  width: 100% !important;
-  overflow-x: hidden !important;
-  box-sizing: border-box !important;
-}
-
-html.chat-fullscreen main > div > div > div {
-  max-width: 100% !important;
-  width: 100% !important;
-  overflow-x: hidden !important;
-  box-sizing: border-box !important;
-}
-
-/* チャットページ：画面幅いっぱいに表示（flex レイアウトで親から継承） */
+/* チャット：外側は100%、インナーのみカレンダーと同じ幅 */
 #staff-chat-container {
   width: 100% !important;
   max-width: 100% !important;
-  min-width: 0 !important;
 }
+
+.chat-inner {
+  max-width: 1600px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1rem;
+}
+
 #staff-chat-container .chat-window-fullwidth {
   width: 100% !important;
   max-width: 100% !important;
