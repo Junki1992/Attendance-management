@@ -33,7 +33,7 @@ export default function AdminDashboard() {
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
                         シフト表で8h超・週40h超を確認できます。
                     </p>
-                    <Link href="/admin/shifts" className="link-hover-slide" style={{ fontSize: '0.875rem', fontWeight: 'bold' }}>シフト表で確認 →</Link>
+                    <Link href="/admin/shifts" className="link-hover-slide" style={{ fontSize: '0.875rem', fontWeight: 'bold', color: '#4f46e5' }}>シフト表で確認 →</Link>
                 </div>
 
                 <div className="card">
