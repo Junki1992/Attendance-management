@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 import { getUserProfile } from "@/services/userService";
@@ -26,6 +26,8 @@ export default function ShiftCalendar() {
     const [bulkIsOff, setBulkIsOff] = useState(false);
     const [bulkIsRemote, setBulkIsRemote] = useState(false);
     const [bulkSelectedDays, setBulkSelectedDays] = useState<number[]>([]);
+    const dragStartDayRef = useRef<number | null>(null);
+    const hasMovedRef = useRef(false);
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -67,12 +69,62 @@ export default function ShiftCalendar() {
         setBulkSelectedDays([]);
     }, [year, month]);
 
-    const toggleDaySelection = (day: number) => {
+    const toggleDaySelection = useCallback((day: number) => {
         if (deadlinePassed) return;
         setBulkSelectedDays((prev) =>
             prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
         );
-    };
+    }, [deadlinePassed]);
+
+    const getRangeDays = useCallback((from: number, to: number) => {
+        const [min, max] = from <= to ? [from, to] : [to, from];
+        return Array.from({ length: max - min + 1 }, (_, i) => min + i).filter(
+            (d) => d >= 1 && d <= daysInMonth
+        );
+    }, [daysInMonth]);
+
+    const handleDayPointerDown = useCallback((e: React.PointerEvent, day: number) => {
+        if (deadlinePassed) return;
+        e.preventDefault();
+        dragStartDayRef.current = day;
+        hasMovedRef.current = false;
+    }, [deadlinePassed]);
+
+    useEffect(() => {
+        if (deadlinePassed) return;
+        const handlePointerMove = (e: PointerEvent) => {
+            const start = dragStartDayRef.current;
+            if (start === null) return;
+            hasMovedRef.current = true;
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            const dayEl = target?.closest("[data-day]");
+            const dayStr = dayEl?.getAttribute("data-day");
+            if (dayStr) {
+                const day = parseInt(dayStr, 10);
+                setBulkSelectedDays(getRangeDays(start, day));
+            }
+        };
+        const handlePointerUp = (e: PointerEvent) => {
+            const start = dragStartDayRef.current;
+            if (start === null) return;
+            const target = document.elementFromPoint(e.clientX, e.clientY);
+            const dayEl = target?.closest("[data-day]");
+            const dayStr = dayEl?.getAttribute("data-day");
+            const day = dayStr ? parseInt(dayStr, 10) : null;
+            if (!hasMovedRef.current && day !== null) {
+                toggleDaySelection(day);
+            }
+            dragStartDayRef.current = null;
+        };
+        document.addEventListener("pointermove", handlePointerMove);
+        document.addEventListener("pointerup", handlePointerUp);
+        document.addEventListener("pointercancel", handlePointerUp);
+        return () => {
+            document.removeEventListener("pointermove", handlePointerMove);
+            document.removeEventListener("pointerup", handlePointerUp);
+            document.removeEventListener("pointercancel", handlePointerUp);
+        };
+    }, [deadlinePassed, getRangeDays, toggleDaySelection]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -224,7 +276,7 @@ export default function ShiftCalendar() {
                 >
                     <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.5rem" }}>一括設定</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                        日付をタップして選択（再度タップで解除）→ 勤務時間を指定して「一括適用」
+                        日付をタップまたはドラッグで選択（再度タップで解除）→ 勤務時間を指定して「一括適用」
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem", marginBottom: "0.5rem" }}>
                         <button type="button" className="btn btn-outline" onClick={bulkSelectWeekdays} style={{ fontSize: "0.75rem" }}>
@@ -236,7 +288,7 @@ export default function ShiftCalendar() {
                         <button type="button" className="btn btn-outline" onClick={bulkSelectAll} style={{ fontSize: "0.75rem" }}>
                             全選択
                         </button>
-                        <button type="button" className="btn btn-outline" onClick={bulkClearSelection} style={{ fontSize: "0.75rem" }}>
+                        <button type="button" className="btn btn-outline" onClick={bulkClearSelection} disabled={bulkSelectedDays.length === 0} style={{ fontSize: "0.75rem" }}>
                             クリア
                         </button>
                         {bulkSelectedDays.length > 0 && (
@@ -341,8 +393,9 @@ export default function ShiftCalendar() {
                                 key={day}
                                 role="button"
                                 tabIndex={0}
-                                onClick={() => toggleDaySelection(day)}
-                                onKeyDown={(e) => e.key === "Enter" && toggleDaySelection(day)}
+                                data-day={day}
+                                onPointerDown={(e) => handleDayPointerDown(e, day)}
+                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDaySelection(day); } }}
                                 style={{
                                     backgroundColor: cellBg,
                                     minHeight: "80px",
