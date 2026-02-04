@@ -50,6 +50,14 @@ export default function LoginPage() {
     const [submitError, setSubmitError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [devOpen, setDevOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < 768);
+        check();
+        window.addEventListener("resize", check);
+        return () => window.removeEventListener("resize", check);
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -178,7 +186,16 @@ export default function LoginPage() {
                     {submitError && (
                         <p style={{ color: "var(--destructive)", fontSize: "0.875rem", margin: 0 }}>{submitError}</p>
                     )}
-                    <button type="submit" className="btn btn-primary" style={{ width: "100%" }} disabled={submitting}>
+                    <button
+                        type="submit"
+                        className="btn btn-primary"
+                        style={{
+                            width: isMobile ? "85%" : "100%",
+                            alignSelf: isMobile ? "center" : undefined,
+                            padding: isMobile ? "0.85rem 1.25rem" : undefined,
+                        }}
+                        disabled={submitting}
+                    >
                         {submitting ? "ログイン中..." : "ログイン"}
                     </button>
                 </form>
