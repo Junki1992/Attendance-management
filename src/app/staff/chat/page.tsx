@@ -190,6 +190,7 @@ export default function StaffChatPage() {
                 bottom: 0,
                 display: 'flex',
                 flexDirection: 'column',
+                alignItems: 'center',
                 padding: 0, 
                 margin: 0, 
                 boxSizing: 'border-box', 
@@ -198,6 +199,19 @@ export default function StaffChatPage() {
                 zIndex: 0,
             }}
         >
+            <div
+                style={{
+                    width: '100%',
+                    maxWidth: isMobile ? '100%' : 1200,
+                    margin: '0 auto',
+                    padding: isMobile ? 0 : '0 1rem',
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    boxSizing: 'border-box',
+                }}
+            >
             {adminIds.length > 0 && (
                 <ChatWindow
                     partnerId={adminIds[0]}
@@ -209,6 +223,7 @@ export default function StaffChatPage() {
                     forceFullWidth
                 />
             )}
+            </div>
         </div>
     );
 }
