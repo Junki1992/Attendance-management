@@ -238,25 +238,26 @@ export default function StaffLayout({
                             {showNotifications && <NotificationList onClose={() => setShowNotifications(false)} />}
                         </div>
                         <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Link href="/staff" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>ホーム</Link>
-                            <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>シフト提出</Link>
-                            <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>確定シフト</Link>
-                            <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>チャット</Link>
-                            <button 
-                                onClick={handleLogout}
-                                style={{ 
-                                    background: 'transparent', 
-                                    border: '1px solid var(--border)', 
-                                    color: 'var(--text-main)', 
-                                    padding: '0.25rem 0.75rem', 
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8rem',
-                                    whiteSpace: 'nowrap'
-                                }}
-                            >
-                                ログアウト
-                            </button>
+                            <Link href="/staff" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>ホーム</Link>
+                            <Link href="/staff/shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>シフト提出</Link>
+                            <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>確定シフト</Link>
+                            <Link href="/staff/chat" style={{ textDecoration: 'none', color: 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>チャット</Link>
+<button 
+                            onClick={handleLogout}
+                            style={{ 
+                                background: 'transparent', 
+                                border: '1px solid var(--border)', 
+                                color: 'var(--text-main)', 
+                                padding: '0.25rem 0.75rem', 
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                whiteSpace: 'nowrap',
+                                fontWeight: 600
+                            }}
+                        >
+                            ログアウト
+                        </button>
                         </nav>
                     </div>
                 </div>
@@ -302,7 +303,7 @@ export default function StaffLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/staff' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/staff' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/staff') {
@@ -328,7 +329,7 @@ export default function StaffLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/staff/shifts' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/staff/shifts' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/staff/shifts') {
@@ -354,7 +355,7 @@ export default function StaffLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/staff/confirmed-shifts' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/staff/confirmed-shifts' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/staff/confirmed-shifts') {
@@ -380,7 +381,7 @@ export default function StaffLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/staff/chat' ? 'var(--surface-hover)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/staff/chat' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/staff/chat') {
@@ -412,7 +413,7 @@ export default function StaffLayout({
                                 textAlign: 'left',
                                 marginTop: '0.5rem',
                                 transition: 'all 0.2s ease',
-                                fontWeight: 500
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = 'var(--surface-hover)';

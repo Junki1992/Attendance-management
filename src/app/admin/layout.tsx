@@ -184,11 +184,11 @@ export default function AdminLayout({
                             {showNotifications && <NotificationList onClose={() => setShowNotifications(false)} />}
                         </div>
                         <nav style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <Link href="/admin" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>ホーム</Link>
-                            <Link href="/admin/shifts" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>シフト表</Link>
-                            <Link href="/admin/shift-change-requests" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>変更申請</Link>
-                            <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>チャット</Link>
-                            <Link href="/admin/settings" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>設定</Link>
+                            <Link href="/admin" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>ホーム</Link>
+                            <Link href="/admin/shifts" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>シフト表</Link>
+                            <Link href="/admin/shift-change-requests" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>変更申請</Link>
+                            <Link href="/admin/chat" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>チャット</Link>
+                            <Link href="/admin/settings" style={{ textDecoration: 'none', color: '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600 }}>設定</Link>
                             <button 
                                 onClick={handleLogout}
                                 style={{ 
@@ -199,7 +199,8 @@ export default function AdminLayout({
                                     borderRadius: '4px',
                                     cursor: 'pointer',
                                     fontSize: '0.8rem',
-                                    whiteSpace: 'nowrap'
+                                    whiteSpace: 'nowrap',
+                                    fontWeight: 600
                                 }}
                             >
                                 ログアウト
@@ -241,7 +242,7 @@ export default function AdminLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/admin' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/admin' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/admin') {
@@ -267,7 +268,7 @@ export default function AdminLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/admin/shifts' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/admin/shifts' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/admin/shifts') {
@@ -293,7 +294,7 @@ export default function AdminLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/admin/shift-change-requests' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/admin/shift-change-requests' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/admin/shift-change-requests') {
@@ -319,7 +320,7 @@ export default function AdminLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/admin/chat' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/admin/chat' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/admin/chat') {
@@ -345,7 +346,7 @@ export default function AdminLayout({
                                 borderRadius: '8px',
                                 backgroundColor: pathname === '/admin/settings' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: pathname === '/admin/settings' ? 600 : 400
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 if (pathname !== '/admin/settings') {
@@ -377,7 +378,7 @@ export default function AdminLayout({
                                 textAlign: 'left',
                                 marginTop: '0.5rem',
                                 transition: 'all 0.2s ease',
-                                fontWeight: 500
+                                fontWeight: 600
                             }}
                             onMouseEnter={(e) => {
                                 e.currentTarget.style.backgroundColor = 'rgba(224, 231, 255, 0.1)';
