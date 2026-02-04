@@ -143,6 +143,15 @@ a {
   text-decoration: none;
 }
 
+/* リンク：ホバーで少し右にスライド（クリックできることが分かりやすく） */
+.link-hover-slide {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.link-hover-slide:hover {
+  transform: translateX(4px);
+}
+
 /* Layout & Components */
 .container {
   max-width: 1200px;
