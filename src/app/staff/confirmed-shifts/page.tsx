@@ -434,12 +434,15 @@ export default function StaffConfirmedShiftsPage() {
               )}
             </div>
             <div style={{ marginBottom: "0.75rem" }}>
-              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>理由（必須）</label>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+                理由 <span style={{ color: "var(--destructive)" }}>*必須</span>
+              </label>
               <textarea
                 value={modalReason}
                 onChange={(e) => setModalReason(e.target.value)}
                 rows={3}
                 placeholder="例: 用事が入ったため"
+                required
                 style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", resize: "vertical" }}
               />
             </div>
@@ -448,7 +451,11 @@ export default function StaffConfirmedShiftsPage() {
               <button className="btn btn-outline" onClick={() => setShowModal(false)} disabled={submitting}>
                 キャンセル
               </button>
-              <button className="btn btn-primary" onClick={handleSubmitRequest} disabled={submitting}>
+              <button
+                className="btn btn-primary"
+                onClick={handleSubmitRequest}
+                disabled={submitting || !modalDate.trim() || !modalReason.trim()}
+              >
                 {submitting ? "送信中..." : "送信"}
               </button>
             </div>
@@ -519,7 +526,7 @@ export default function StaffConfirmedShiftsPage() {
               const isRed = isWeekend || isHoliday;
               const s = shiftByDay[day];
               const label = !s
-                ? ""
+                ? "OFF"
                 : s.startTime === "00:00" && s.endTime === "00:00"
                   ? "OFF"
                   : `${s.startTime} - ${s.endTime}${s.isRemote ? " 在宅" : ""}`;

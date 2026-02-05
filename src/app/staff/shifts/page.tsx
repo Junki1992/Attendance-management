@@ -419,25 +419,28 @@ export default function ShiftCalendar() {
                                 }}
                             >
                                 <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
-                                {shifts[day] && (
-                                    <div
-                                        style={{
-                                            backgroundColor: isConfirmed ? "#D1FAE5" : (shifts[day] === "OFF" ? "#F3F4F6" : "#EEF2FF"),
-                                            color: isConfirmed ? "#065F46" : (shifts[day] === "OFF" ? "#4B5563" : "#4F46E5"),
-                                            padding: "0.15rem 0.2rem",
-                                            borderRadius: "4px",
-                                            fontSize: "0.65rem",
-                                            textAlign: "center",
-                                            fontWeight: 500,
-                                            lineHeight: "1.2",
-                                            overflow: "hidden",
-                                            textOverflow: "ellipsis",
-                                            whiteSpace: "nowrap",
-                                        }}
-                                    >
-                                        {formatShiftLabel(shifts[day])}{remoteByDay[day] ? " 在宅" : ""}{isConfirmed ? " 確定" : ""}
-                                    </div>
-                                )}
+                                {(() => {
+                                    const displayLabel = shifts[day] || "OFF";
+                                    return (
+                                        <div
+                                            style={{
+                                                backgroundColor: isConfirmed ? "#D1FAE5" : (displayLabel === "OFF" ? "#F3F4F6" : "#EEF2FF"),
+                                                color: isConfirmed ? "#065F46" : (displayLabel === "OFF" ? "#4B5563" : "#4F46E5"),
+                                                padding: "0.15rem 0.2rem",
+                                                borderRadius: "4px",
+                                                fontSize: "0.65rem",
+                                                textAlign: "center",
+                                                fontWeight: 500,
+                                                lineHeight: "1.2",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                                whiteSpace: "nowrap",
+                                            }}
+                                        >
+                                            {formatShiftLabel(displayLabel)}{remoteByDay[day] ? " 在宅" : ""}{isConfirmed ? " 確定" : ""}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         );
                     })}
