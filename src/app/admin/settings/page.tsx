@@ -25,6 +25,7 @@ export default function AdminSettingsPage() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [chatworkToken, setChatworkToken] = useState("");
   const [chatworkRoomId, setChatworkRoomId] = useState("");
+  const [chatworkEditing, setChatworkEditing] = useState(false);
   const [chatworkSaving, setChatworkSaving] = useState(false);
   const [chatworkSending, setChatworkSending] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
@@ -228,69 +229,98 @@ export default function AdminSettingsPage() {
 
       <div className="card" style={{ maxWidth: "400px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>Chatwork 通知</h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>API トークン</label>
-            <input
-              type="password"
-              value={chatworkToken}
-              onChange={(e) => setChatworkToken(e.target.value)}
-              placeholder="Chatwork の API トークン"
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
-            />
+        {chatworkEditing || (!chatworkToken.trim() && !chatworkRoomId.trim()) ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>API トークン</label>
+              <input
+                type="password"
+                value={chatworkToken}
+                onChange={(e) => setChatworkToken(e.target.value)}
+                placeholder="Chatwork の API トークン"
+                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>ルーム ID</label>
+              <input
+                type="text"
+                value={chatworkRoomId}
+                onChange={(e) => setChatworkRoomId(e.target.value)}
+                placeholder="421966365"
+                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={chatworkSaving || !chatworkToken.trim() || !chatworkRoomId.trim()}
+                onClick={async () => {
+                  setChatworkSaving(true);
+                  try {
+                    await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim() });
+                    setChatworkEditing(false);
+                    alert("保存しました");
+                  } catch (e) {
+                    console.error(e);
+                    alert("保存に失敗しました");
+                  } finally {
+                    setChatworkSaving(false);
+                  }
+                }}
+              >
+                {chatworkSaving ? "保存中..." : "保存"}
+              </button>
+              {chatworkToken.trim() && chatworkRoomId.trim() && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setChatworkEditing(false)}
+                  disabled={chatworkSaving}
+                >
+                  キャンセル
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>ルーム ID</label>
-            <input
-              type="text"
-              value={chatworkRoomId}
-              onChange={(e) => setChatworkRoomId(e.target.value)}
-              placeholder="421966365"
-              style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
-            />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+            <div>
+              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>API トークン: </span>
+              <span>••••••••</span>
+            </div>
+            <div>
+              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>ルーム ID: </span>
+              <span>{chatworkRoomId}</span>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <button type="button" className="btn btn-outline" onClick={() => setChatworkEditing(true)}>
+                編集
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={chatworkSending}
+                onClick={async () => {
+                  setChatworkSending(true);
+                  try {
+                    const r = await sendNextDayAttendanceToChatwork();
+                    if (r.ok) alert(`送信しました（${r.count}件）`);
+                    else alert(r.error || "送信に失敗しました");
+                  } catch (e) {
+                    console.error(e);
+                    alert("送信に失敗しました");
+                  } finally {
+                    setChatworkSending(false);
+                  }
+                }}
+              >
+                {chatworkSending ? "送信中..." : "翌日出勤を通知"}
+              </button>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={chatworkSaving || !chatworkToken.trim() || !chatworkRoomId.trim()}
-              onClick={async () => {
-                setChatworkSaving(true);
-                try {
-                  await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim() });
-                  alert("保存しました");
-                } catch (e) {
-                  console.error(e);
-                  alert("保存に失敗しました");
-                } finally {
-                  setChatworkSaving(false);
-                }
-              }}
-            >
-              {chatworkSaving ? "保存中..." : "保存"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline"
-              disabled={chatworkSending || !chatworkToken.trim() || !chatworkRoomId.trim()}
-              onClick={async () => {
-                setChatworkSending(true);
-                try {
-                  const r = await sendNextDayAttendanceToChatwork();
-                  if (r.ok) alert(`送信しました（${r.count}件）`);
-                  else alert(r.error || "送信に失敗しました");
-                } catch (e) {
-                  console.error(e);
-                  alert("送信に失敗しました");
-                } finally {
-                  setChatworkSending(false);
-                }
-              }}
-            >
-              {chatworkSending ? "送信中..." : "翌日出勤を通知"}
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       <div className="card" style={{ maxWidth: "600px" }}>
