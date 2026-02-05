@@ -73,12 +73,14 @@ export default function ShiftCalendar() {
         setBulkSelectedDays([]);
     }, [year, month]);
 
+    const monthIsConfirmed = Object.keys(confirmedByDay).length > 0;
+
     const toggleDaySelection = useCallback((day: number) => {
-        if (deadlinePassed || confirmedByDay[day]) return;
+        if (deadlinePassed || confirmedByDay[day] || monthIsConfirmed) return;
         setBulkSelectedDays((prev) =>
             prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
         );
-    }, [deadlinePassed, confirmedByDay]);
+    }, [deadlinePassed, confirmedByDay, monthIsConfirmed]);
 
     const getRangeDays = useCallback((from: number, to: number) => {
         const [min, max] = from <= to ? [from, to] : [to, from];
@@ -88,14 +90,14 @@ export default function ShiftCalendar() {
     }, [daysInMonth]);
 
     const handleDayPointerDown = useCallback((e: React.PointerEvent, day: number) => {
-        if (deadlinePassed || confirmedByDay[day]) return;
+        if (deadlinePassed || confirmedByDay[day] || monthIsConfirmed) return;
         e.preventDefault();
         dragStartDayRef.current = day;
         hasMovedRef.current = false;
-    }, [deadlinePassed, confirmedByDay]);
+    }, [deadlinePassed, confirmedByDay, monthIsConfirmed]);
 
     useEffect(() => {
-        if (deadlinePassed) return;
+        if (deadlinePassed || monthIsConfirmed) return;
         const handlePointerMove = (e: PointerEvent) => {
             const start = dragStartDayRef.current;
             if (start === null) return;
@@ -129,7 +131,7 @@ export default function ShiftCalendar() {
             document.removeEventListener("pointerup", handlePointerUp);
             document.removeEventListener("pointercancel", handlePointerUp);
         };
-    }, [deadlinePassed, getRangeDays, toggleDaySelection, confirmedByDay]);
+    }, [deadlinePassed, monthIsConfirmed, getRangeDays, toggleDaySelection, confirmedByDay]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -168,7 +170,7 @@ export default function ShiftCalendar() {
     const bulkClearSelection = () => setBulkSelectedDays([]);
 
     const applyBulkShift = () => {
-        if (deadlinePassed) return;
+        if (deadlinePassed || monthIsConfirmed) return;
         const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d]);
         if (targetDays.length === 0) {
             alert("適用する日を1日以上選択してください。");
@@ -197,7 +199,7 @@ export default function ShiftCalendar() {
     };
 
     const handleSave = async () => {
-        if (!user || deadlinePassed) return;
+        if (!user || deadlinePassed || monthIsConfirmed) return;
         setLoading(true);
         try {
             const promises = Object.entries(shifts)
@@ -255,6 +257,21 @@ export default function ShiftCalendar() {
 
     return (
         <div className="card" style={{ overflow: "visible", maxWidth: "100%", minWidth: 0 }}>
+            {monthIsConfirmed && (
+                <div
+                    style={{
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                        backgroundColor: "#D1FAE5",
+                        border: "1px solid #10B981",
+                        borderRadius: "var(--radius-md)",
+                        color: "#065F46",
+                        fontWeight: 500,
+                    }}
+                >
+                    この月のシフトは確定しています。
+                </div>
+            )}
             {deadlinePassed && (
                 <div
                     style={{
@@ -271,7 +288,7 @@ export default function ShiftCalendar() {
                 </div>
             )}
 
-            {!deadlinePassed && (
+            {!deadlinePassed && !monthIsConfirmed && (
                 <div
                     style={{
                         marginBottom: "1rem",
@@ -349,8 +366,8 @@ export default function ShiftCalendar() {
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed}>
-                        {loading ? "保存中..." : deadlinePassed ? "締切済" : "提出内容を保存"}
+                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed}>
+                        {loading ? "保存中..." : monthIsConfirmed ? "確定済" : deadlinePassed ? "締切済" : "提出内容を保存"}
                     </button>
                 </div>
             </div>
@@ -396,21 +413,21 @@ export default function ShiftCalendar() {
                         const isBulkSelected = bulkSelectedDays.includes(day);
                         const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
-                        const isEditable = !deadlinePassed && !isConfirmed;
+                        const isEditable = !deadlinePassed && !isConfirmed && !monthIsConfirmed;
                         return (
                             <div
                                 key={day}
                                 role="button"
                                 tabIndex={isEditable ? 0 : undefined}
                                 data-day={day}
-                                title={isConfirmed ? "確定済みのため編集できません" : deadlinePassed ? "締切済みのため編集できません" : undefined}
+                                title={isConfirmed || monthIsConfirmed ? "確定済みのため編集できません" : deadlinePassed ? "締切済みのため編集できません" : undefined}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
                                 onKeyDown={(e) => { if (isEditable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleDaySelection(day); } }}
                                 style={{
                                     backgroundColor: cellBg,
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
-                                    cursor: isEditable ? "pointer" : (isConfirmed ? "not-allowed" : "default"),
+                                    cursor: isEditable ? "pointer" : (isConfirmed || monthIsConfirmed ? "not-allowed" : "default"),
                                     position: "relative",
                                     transition: "background-color 0.15s",
                                     border: cellBorder,
@@ -420,7 +437,6 @@ export default function ShiftCalendar() {
                             >
                                 <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
                                 {(() => {
-                                    const monthIsConfirmed = Object.keys(confirmedByDay).length > 0;
                                     const displayLabel = shifts[day] ?? (monthIsConfirmed ? "OFF" : null);
                                     if (!displayLabel) return null;
                                     return (
