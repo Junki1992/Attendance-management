@@ -25,6 +25,10 @@ if (typeof window !== "undefined" && !firebaseConfig.projectId) {
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
+// パスワードリセット等のメールを日本語で送信
+if (typeof window !== "undefined") {
+  auth.languageCode = "ja";
+}
 
 // Firestore:
 // オフライン永続化（複数タブ対応）は FirestoreSettings.localCache で指定（非推奨の enableMultiTabIndexedDbPersistence の代替）。

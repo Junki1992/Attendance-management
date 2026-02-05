@@ -1,7 +1,8 @@
 import React from "react";
+import { APP_NAME } from "@/lib/app-config";
 
 export const metadata = {
-  title: "管理者向けマニュアル - 勤怠管理ツール",
+  title: `管理者向けマニュアル - ${APP_NAME}`,
 };
 
 export default function AdminManual() {
