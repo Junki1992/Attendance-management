@@ -277,77 +277,85 @@ export default function StaffConfirmedShiftsPage() {
             </h3>
             {(() => {
               const s = shiftByDay[detailModalDay];
-              if (!s) {
-                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(detailModalDay).padStart(2, "0")}`;
-                return (
-                  <>
+              const pendingReq = pendingRequestByDay[detailModalDay];
+              const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(detailModalDay).padStart(2, "0")}`;
+
+              const openChangeRequestForm = () => {
+                setDetailModalDay(null);
+                setModalDate(dateStr);
+                if (s) {
+                  const isOff = s.startTime === "00:00" && s.endTime === "00:00";
+                  setModalHopeStart(s.startTime);
+                  setModalHopeEnd(s.endTime);
+                  setModalHopeIsOff(isOff);
+                  setModalHopeIsRemote(s.isRemote ?? false);
+                } else {
+                  setModalHopeStart("09:00");
+                  setModalHopeEnd("18:00");
+                  setModalHopeIsOff(false);
+                  setModalHopeIsRemote(false);
+                }
+                setModalReason("");
+                setModalError("");
+                setShowModal(true);
+              };
+
+              return (
+                <>
+                  {s ? (
+                    <div style={{ marginBottom: "1rem" }}>
+                      <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>確定シフト</div>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                        {s.startTime === "00:00" && s.endTime === "00:00" ? "OFF" : `${s.startTime} ～ ${s.endTime}`}
+                      </div>
+                      {!(s.startTime === "00:00" && s.endTime === "00:00") && (
+                        <>
+                          <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+                            {s.isRemote ? "在宅勤務" : "出社"}
+                          </div>
+                          <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                            勤務時間: <strong>{calcHours(s).toFixed(1)}h</strong>
+                          </div>
+                          <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                            時給: <strong>¥{(s.hourlyWage ?? hourlyWage).toLocaleString()}</strong>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ) : (
                     <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>
                       この日のシフトはありません
                     </p>
-                    <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => {
-                          setDetailModalDay(null);
-                          setModalDate(dateStr);
-                          setModalHopeStart("09:00");
-                          setModalHopeEnd("18:00");
-                          setModalHopeIsOff(false);
-                          setModalHopeIsRemote(false);
-                          setModalReason("");
-                          setModalError("");
-                          setShowModal(true);
-                        }}
-                      >
-                        変更申請
-                      </button>
-                      <button className="btn btn-primary" onClick={() => setDetailModalDay(null)}>
-                        閉じる
-                      </button>
-                    </div>
-                  </>
-                );
-              }
-              const isOff = s.startTime === "00:00" && s.endTime === "00:00";
-              const hours = calcHours(s);
-              const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(detailModalDay).padStart(2, "0")}`;
-              return (
-                <>
-                  <div style={{ marginBottom: "1rem" }}>
-                    <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
-                      {isOff ? "OFF" : `${s.startTime} ～ ${s.endTime}`}
-                    </div>
-                    {!isOff && (
-                      <>
-                        <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                          {s.isRemote ? "在宅勤務" : "出社"}
-                        </div>
-                        <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
-                          勤務時間: <strong>{hours.toFixed(1)}h</strong>
-                        </div>
-                        <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
-                          時給: <strong>¥{(s.hourlyWage ?? hourlyWage).toLocaleString()}</strong>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                    <button
-                      className="btn btn-outline"
-                      onClick={() => {
-                        setDetailModalDay(null);
-                        setModalDate(dateStr);
-                        setModalHopeStart(s.startTime);
-                        setModalHopeEnd(s.endTime);
-                        setModalHopeIsOff(isOff);
-                        setModalHopeIsRemote(s.isRemote ?? false);
-                        setModalReason("");
-                        setModalError("");
-                        setShowModal(true);
+                  )}
+
+                  {pendingReq && (
+                    <div
+                      style={{
+                        marginBottom: "1rem",
+                        padding: "0.75rem",
+                        backgroundColor: "#FFFBEB",
+                        border: "1px solid #F59E0B",
+                        borderRadius: "var(--radius-md)",
                       }}
                     >
-                      変更申請
-                    </button>
+                      <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#F59E0B", marginBottom: "0.5rem" }}>
+                        変更申請中
+                      </div>
+                      <div style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+                        希望: {formatHope(pendingReq)}
+                      </div>
+                      <div style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+                        理由: {pendingReq.reason}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                    {!pendingReq && (
+                      <button className="btn btn-outline" onClick={openChangeRequestForm}>
+                        変更申請
+                      </button>
+                    )}
                     <button className="btn btn-primary" onClick={() => setDetailModalDay(null)}>
                       閉じる
                     </button>
@@ -512,7 +520,7 @@ export default function StaffConfirmedShiftsPage() {
                   : `${s.startTime} - ${s.endTime}${s.isRemote ? " 在宅" : ""}`;
 
               const pendingReq = pendingRequestByDay[day];
-              const isClickable = changeRequestMode;
+              const isClickable = changeRequestMode || !!pendingReq;
               return (
                 <div
                   key={day}
@@ -520,7 +528,7 @@ export default function StaffConfirmedShiftsPage() {
                   tabIndex={isClickable ? 0 : undefined}
                   onClick={() => isClickable && setDetailModalDay(day)}
                   onKeyDown={(e) => { if (isClickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDetailModalDay(day); } }}
-                  title={isClickable ? `${day}日のシフト詳細・変更申請` : "変更申請を押すと日付をクリックできます"}
+                  title={pendingReq ? `${day}日の変更申請内容を表示` : isClickable ? `${day}日のシフト詳細・変更申請` : "変更申請を押すと日付をクリックできます"}
                   style={{
                     backgroundColor: "var(--surface)",
                     minHeight: "80px",
