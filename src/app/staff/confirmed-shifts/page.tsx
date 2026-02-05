@@ -87,6 +87,17 @@ export default function StaffConfirmedShiftsPage() {
     shiftByDay[d] = s;
   });
 
+  /** 当月の変更申請中（pending）の日付 → 申請 */
+  const pendingRequestByDay: Record<number, ShiftChangeRequest> = {};
+  myRequests
+    .filter((r) => r.status === "pending")
+    .forEach((r) => {
+      const [y, m, d] = r.date.split("-").map(Number);
+      if (y === year && m === month + 1) {
+        pendingRequestByDay[d] = r;
+      }
+    });
+
   let totalHours = 0;
   let salaryExact = 0;
   shifts.forEach((s) => {
@@ -112,17 +123,6 @@ export default function StaffConfirmedShiftsPage() {
   };
 
   const dayOfWeek = ["日", "月", "火", "水", "木", "金", "土"];
-
-  const openModal = () => {
-    setModalDate(allDatesInMonth[0] ?? shifts[0]?.date ?? "");
-    setModalHopeStart("09:00");
-    setModalHopeEnd("18:00");
-    setModalHopeIsOff(false);
-    setModalHopeIsRemote(false);
-    setModalReason("");
-    setModalError("");
-    setShowModal(true);
-  };
 
   const enterChangeRequestMode = () => {
     setChangeRequestMode(true);
@@ -378,31 +378,11 @@ export default function StaffConfirmedShiftsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ marginBottom: "1rem" }}>変更申請</h3>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>対象の日</label>
-              <select
-                value={modalDate}
-                onChange={(e) => setModalDate(e.target.value)}
-                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}
-              >
-                <option value="">選択</option>
-                {allDatesInMonth.map((dateStr) => {
-                  const [, m, d] = dateStr.split("-");
-                  const dayNum = parseInt(d, 10);
-                  const s = shiftByDay[dayNum];
-                  const label = s
-                    ? s.startTime === "00:00"
-                      ? "OFF"
-                      : `${s.startTime}-${s.endTime}${s.isRemote ? " 在宅" : ""}`
-                    : "—";
-                  return (
-                    <option key={dateStr} value={dateStr}>
-                      {parseInt(m, 10)}/{d}日 {label}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+            {modalDate && (
+              <div style={{ marginBottom: "0.75rem", fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                    対象: {modalDate.split("-").map((v, i) => (i === 0 ? `${v}年` : i === 1 ? `${parseInt(v, 10)}月` : `${parseInt(v, 10)}日`)).join("")}
+              </div>
+            )}
             <div style={{ marginBottom: "0.75rem" }}>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>希望する時刻</label>
               <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", cursor: "pointer" }}>
@@ -531,6 +511,7 @@ export default function StaffConfirmedShiftsPage() {
                   ? "OFF"
                   : `${s.startTime} - ${s.endTime}${s.isRemote ? " 在宅" : ""}`;
 
+              const pendingReq = pendingRequestByDay[day];
               const isClickable = changeRequestMode;
               return (
                 <div
@@ -575,6 +556,20 @@ export default function StaffConfirmedShiftsPage() {
                       }}
                     >
                       {label === "OFF" ? "OFF" : label}
+                    </div>
+                  )}
+                  {pendingReq && (
+                    <div
+                      style={{
+                        marginTop: "0.15rem",
+                        fontSize: "0.7rem",
+                        color: "#F59E0B",
+                        fontWeight: 600,
+                        textAlign: "center",
+                      }}
+                      title={`変更申請中: ${formatHope(pendingReq)}`}
+                    >
+                      変更申請中
                     </div>
                   )}
                 </div>
