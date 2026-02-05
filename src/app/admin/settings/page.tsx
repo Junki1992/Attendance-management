@@ -9,6 +9,9 @@ import { useAuth } from "@/context/AuthContext";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import Avatar from "@/components/Avatar";
 
+/** 管理者昇格・降格機能を無効にする（一旦無効） */
+const ROLE_CHANGE_ENABLED = false;
+
 export default function AdminSettingsPage() {
   const { user: currentUser, refreshUserProfile } = useAuth();
   const [deadlineDay, setDeadlineDay] = useState(25);
@@ -189,7 +192,9 @@ export default function AdminSettingsPage() {
       <div className="card" style={{ maxWidth: "600px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>ユーザー管理</h2>
           <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-          アルバイトを管理者に昇格させたり、管理者をアルバイトに降格させることができます。
+          {ROLE_CHANGE_ENABLED
+            ? "アルバイトを管理者に昇格させたり、管理者をアルバイトに降格させることができます。"
+            : "ユーザー一覧です。（昇格・降格機能は現在無効です）"}
         </p>
 
         {usersLoading ? (
@@ -226,7 +231,7 @@ export default function AdminSettingsPage() {
                       padding: "0.25rem 0.5rem",
                       borderRadius: "var(--radius-sm)",
                       fontSize: "0.75rem",
-                      fontWeight: 500,
+                      fontWeight: user.role === "admin" ? 500 : 600,
                       backgroundColor: user.role === "admin" ? "var(--primary)" : "var(--bg-secondary)",
                       color: user.role === "admin" ? "white" : "var(--text)",
                       flexShrink: 0,
@@ -234,7 +239,7 @@ export default function AdminSettingsPage() {
                   >
                     {user.role === "admin" ? "管理者" : "アルバイト"}
                   </span>
-                  {user.uid !== currentUser?.uid && (
+                  {ROLE_CHANGE_ENABLED && user.uid !== currentUser?.uid && (
                     <button
                       className="btn btn-outline"
                       style={{ fontSize: "0.875rem", padding: "0.25rem 0.5rem", flexShrink: 0 }}
@@ -297,7 +302,7 @@ export default function AdminSettingsPage() {
           </div>
           <div style={{ marginBottom: "0.75rem" }}>
             <strong>役割:</strong>{" "}
-            <span style={{ padding: "0.25rem 0.5rem", borderRadius: 6, background: selectedUser!.role === "admin" ? "var(--primary)" : "var(--bg-secondary)", color: selectedUser!.role === "admin" ? "#fff" : "inherit" }}>
+            <span style={{ padding: "0.25rem 0.5rem", borderRadius: 6, fontWeight: selectedUser!.role === "admin" ? 500 : 600, background: selectedUser!.role === "admin" ? "var(--primary)" : "var(--bg-secondary)", color: selectedUser!.role === "admin" ? "#fff" : "inherit" }}>
               {selectedUser!.role === "admin" ? "管理者" : "アルバイト"}
             </span>
           </div>
@@ -436,7 +441,7 @@ export default function AdminSettingsPage() {
             </div>
           )}
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-            {selectedUser!.uid !== currentUser?.uid && (
+            {ROLE_CHANGE_ENABLED && selectedUser!.uid !== currentUser?.uid && (
               <button
                 className="btn btn-outline"
                 onClick={async () => {
