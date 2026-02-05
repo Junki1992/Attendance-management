@@ -1,6 +1,6 @@
 import { db, auth, storage } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, updateDoc, query, where, getDocFromCache, onSnapshot } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, getDocFromCache, getDocsFromServer, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export interface UserProfile {
@@ -159,6 +159,17 @@ function mapDocToUserProfile(d: { id: string; data: () => Record<string, unknown
     };
 }
 
+/** 全ユーザー一覧をサーバーから取得（管理者用・キャッシュをスキップ） */
+export const getAllUsersFromServer = async (): Promise<UserProfile[]> => {
+    if (!auth.currentUser) return [];
+    const myProfile = await getUserProfile(auth.currentUser.uid);
+    if (!myProfile || myProfile.role !== "admin") return [];
+    const snap = await getDocsFromServer(collection(db, "users"));
+    const list: UserProfile[] = [];
+    snap.forEach((d) => list.push(mapDocToUserProfile(d)));
+    return list;
+};
+
 /** 全ユーザー一覧を取得（管理者用）。管理者以外が呼ぶと permission-denied になるため、事前にロールを確認する */
 export const getAllUsers = async (): Promise<UserProfile[]> => {
     if (!auth.currentUser) return [];
@@ -178,17 +189,34 @@ export const subscribeAllUsers = (callback: (users: UserProfile[]) => void): (()
     }
     let unsub: (() => void) | null = null;
     let cancelled = false;
-    getUserProfile(auth.currentUser.uid).then((myProfile) => {
+    getUserProfile(auth.currentUser.uid).then(async (myProfile) => {
         if (cancelled) return;
         if (!myProfile || myProfile.role !== "admin") {
             callback([]);
             return;
         }
-        unsub = onSnapshot(collection(db, "users"), (snap) => {
+        // 初回はサーバーから取得（キャッシュの古いデータで削除済みユーザーが残るのを防ぐ）
+        try {
+            const serverSnap = await getDocsFromServer(collection(db, "users"));
+            if (cancelled) return;
             const list: UserProfile[] = [];
-            snap.forEach((d) => list.push(mapDocToUserProfile(d)));
+            serverSnap.forEach((d) => list.push(mapDocToUserProfile(d)));
             callback(list);
-        });
+        } catch (e) {
+            if (!cancelled) callback([]);
+        }
+        if (cancelled) return;
+        // 以降はリアルタイム購読。キャッシュ由来のスナップショットはスキップ（DBと乖離するため）
+        unsub = onSnapshot(
+            collection(db, "users"),
+            { includeMetadataChanges: true },
+            (snap) => {
+                if (snap.metadata.fromCache) return;
+                const list: UserProfile[] = [];
+                snap.forEach((d) => list.push(mapDocToUserProfile(d)));
+                callback(list);
+            }
+        );
     }).catch(() => {
         if (!cancelled) callback([]);
     });
@@ -252,6 +280,12 @@ export const uploadProfileImage = async (uid: string, file: File): Promise<strin
 export const updateUserRole = async (uid: string, role: "admin" | "staff"): Promise<void> => {
     const docRef = doc(db, "users", uid);
     await setDoc(docRef, { role }, { merge: true });
+};
+
+/** ユーザーを Firestore から削除（管理者用）。一覧から消える。Firebase Auth の削除は別途コンソールで行うこと */
+export const deleteUserDocument = async (uid: string): Promise<void> => {
+    const docRef = doc(db, "users", uid);
+    await deleteDoc(docRef);
 };
 
 /** 管理者のUIDを1件取得（表示用など） */

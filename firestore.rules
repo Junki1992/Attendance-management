@@ -37,8 +37,11 @@ service cloud.firestore {
                         || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
                             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
       
-      // 削除：自分のドキュメントのみ
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      // 削除：自分のドキュメント、または管理者が他ユーザーを削除可能
+      allow delete: if request.auth != null 
+                    && (request.auth.uid == userId 
+                        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+                            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
       
       // 時給変更履歴サブコレクション（管理者のみ読める・管理者のみ追記可）
       match /wageHistory/{logId} {

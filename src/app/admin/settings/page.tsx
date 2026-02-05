@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
-import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
+import { getAllUsers, getAllUsersFromServer, subscribeAllUsers, updateUserRole, updateUserHourlyWage, deleteUserDocument, UserProfile } from "@/services/userService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +21,8 @@ export default function AdminSettingsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
@@ -34,11 +36,15 @@ export default function AdminSettingsPage() {
     }).catch(() => setLoading(false));
 
     setUsersLoading(true);
+    const timeout = setTimeout(() => setUsersLoading(false), 15000);
     const unsubscribe = subscribeAllUsers((list) => {
       setUsers(list);
       setUsersLoading(false);
     });
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,6 +62,43 @@ export default function AdminSettingsPage() {
       alert("保存に失敗しました");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRefreshUsers = async () => {
+    setRefreshingUsers(true);
+    try {
+      const list = await getAllUsersFromServer();
+      setUsers(list);
+    } catch (err) {
+      console.error(err);
+      alert("再読み込みに失敗しました");
+    } finally {
+      setRefreshingUsers(false);
+    }
+  };
+
+  const handleDeleteUser = async (uid: string, name: string, role: "admin" | "staff") => {
+    if (role === "admin") {
+      const adminCount = users.filter((u) => u.role === "admin").length;
+      if (adminCount <= 1) {
+        alert("最後の管理者は削除できません");
+        return;
+      }
+    }
+    if (!confirm(`${name} をユーザー一覧から削除しますか？\n\n※Firebase Authentication の削除は Firebase コンソールで別途行ってください。`)) {
+      return;
+    }
+    setDeletingUserId(uid);
+    try {
+      await deleteUserDocument(uid);
+      setSelectedUser(null);
+      alert("削除しました");
+    } catch (err) {
+      console.error(err);
+      alert("削除に失敗しました");
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -187,11 +230,26 @@ export default function AdminSettingsPage() {
       </div>
 
       <div className="card" style={{ maxWidth: "600px" }}>
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>ユーザー管理</h2>
-          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+          <h2 style={{ fontSize: "1.25rem", margin: 0 }}>ユーザー管理</h2>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ fontSize: "0.875rem", padding: "0.35rem 0.75rem", cursor: refreshingUsers ? "wait" : "pointer" }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!refreshingUsers) handleRefreshUsers();
+            }}
+            disabled={refreshingUsers}
+          >
+            {refreshingUsers ? "再読み込み中..." : "再読み込み"}
+          </button>
+        </div>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
           {ROLE_CHANGE_ENABLED
             ? "アルバイトを管理者に昇格させたり、管理者をアルバイトに降格させることができます。"
-            : "ユーザー一覧です。（昇格・降格機能は現在無効です）"}
+            : "ユーザー一覧です。"}
         </p>
 
         {usersLoading ? (
@@ -458,7 +516,22 @@ export default function AdminSettingsPage() {
                 {updatingUserId === selectedUser!.uid ? "変更中..." : selectedUser!.role === "admin" ? "アルバイトに降格" : "管理者に昇格"}
               </button>
             )}
-            <button className="btn btn-primary" onClick={() => setSelectedUser(null)}>閉じる</button>
+            {selectedUser!.uid !== currentUser?.uid && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDeleteUser(selectedUser!.uid, selectedUser!.name, selectedUser!.role);
+                }}
+                disabled={deletingUserId === selectedUser!.uid}
+              >
+                {deletingUserId === selectedUser!.uid ? "削除中..." : "ユーザーを削除"}
+              </button>
+            )}
+            <button type="button" className="btn btn-primary" onClick={() => setSelectedUser(null)}>閉じる</button>
           </div>
         </div>
       </div>
