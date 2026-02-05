@@ -361,6 +361,10 @@ export default function AdminSettingsPage() {
               {selectedUser!.role === "admin" ? "管理者" : "アルバイト"}
             </span>
           </div>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <strong>Chatwork ID:</strong>{" "}
+            <span style={{ color: "var(--text-muted)" }}>{selectedUser!.chatworkAccountId || "未設定"}</span>
+          </div>
           {selectedUser!.role === "staff" && (
             <div style={{ marginBottom: "0.75rem" }}>
               <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
