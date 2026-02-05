@@ -47,6 +47,7 @@ export default function SignupPage() {
     const [password, setPassword] = useState("");
     const [passwordConfirm, setPasswordConfirm] = useState("");
     const [name, setName] = useState("");
+    const [chatworkAccountId, setChatworkAccountId] = useState("");
     const [submitError, setSubmitError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
@@ -76,6 +77,14 @@ export default function SignupPage() {
             setSubmitError("名前を入力してください");
             return;
         }
+        if (!chatworkAccountId.trim()) {
+            setSubmitError("Chatwork IDを入力してください");
+            return;
+        }
+        if (!/^[a-zA-Z0-9]+$/.test(chatworkAccountId.trim())) {
+            setSubmitError("Chatwork IDは英数字で入力してください");
+            return;
+        }
         if (password.length < 6) {
             setSubmitError("パスワードは6文字以上にしてください");
             return;
@@ -86,7 +95,7 @@ export default function SignupPage() {
         }
         setSubmitting(true);
         try {
-            await register(email.trim(), password, name.trim());
+            await register(email.trim(), password, name.trim(), chatworkAccountId.trim());
             // リダイレクトは useEffect（user の変化）に任せる。user がセットされるまで
             // submitting は true のまま「登録中...」を表示し二重送信を防ぐ
         } catch (err: unknown) {
@@ -172,6 +181,30 @@ export default function SignupPage() {
                                 boxSizing: "border-box",
                             }}
                         />
+                    </div>
+                    <div>
+                        <label htmlFor="chatworkAccountId" style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-main)" }}>
+                            Chatwork ID
+                        </label>
+                        <input
+                            id="chatworkAccountId"
+                            type="text"
+                            autoComplete="off"
+                            value={chatworkAccountId}
+                            onChange={(e) => setChatworkAccountId(e.target.value)}
+                            placeholder="例: abc123xyz"
+                            style={{
+                                width: "100%",
+                                padding: "0.5rem 0.75rem",
+                                borderRadius: "var(--radius-md)",
+                                border: "1px solid var(--border)",
+                                fontSize: "1rem",
+                                boxSizing: "border-box",
+                            }}
+                        />
+                        <p style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                            Chatwork のプロフィール画面に表示される「Chatwork ID」です。通知時に To: メンションでお知らせします。
+                        </p>
                     </div>
                     <div>
                         <label htmlFor="password" style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-main)" }}>

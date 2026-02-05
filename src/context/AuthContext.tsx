@@ -62,7 +62,7 @@ interface AuthContextType {
     /** メール+パスワードでログイン（Firebase Auth） */
     login: (email: string, password: string) => Promise<void>;
     /** 新規登録。Firestore users/{uid} を作成してから完了。role=staff 固定 */
-    register: (email: string, password: string, name: string) => Promise<void>;
+    register: (email: string, password: string, name: string, chatworkAccountId?: string) => Promise<void>;
     /** 開発・検証用：パスワードなしでロールを選んで入る */
     loginMock: (role: UserRole) => Promise<void>;
     logout: () => Promise<void>;
@@ -297,7 +297,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    const register = async (email: string, password: string, name: string) => {
+    const register = async (email: string, password: string, name: string, chatworkAccountId?: string) => {
         setLoading(true);
         localStorage.removeItem("mock_user");
         const t0 = nowMs();
@@ -322,6 +322,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     name: name.trim(),
                     role,
                     hourlyWage: 1000,
+                    chatworkAccountId: chatworkAccountId?.trim() || undefined,
                 });
                 devInfo("[Auth] register: createUser(users/{uid})", { ms: Math.round(nowMs() - tDb0), uid: firebaseUser.uid, role });
             } catch (err: unknown) {

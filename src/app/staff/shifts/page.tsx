@@ -11,6 +11,16 @@ function getDaysInMonth(year: number, month: number) {
     return new Date(year, month + 1, 0).getDate();
 }
 
+function calcHours(label: string): number {
+    if (!label || label === "OFF" || !label.includes("-")) return 0;
+    const [start, end] = label.split(" - ");
+    const [sH, sM] = start.split(":").map(Number);
+    const [eH, eM] = end.split(":").map(Number);
+    let h = eH + eM / 60 - (sH + sM / 60);
+    if (h > 6) h -= 1;
+    return h > 0 ? h : 0;
+}
+
 export default function ShiftCalendar() {
     const { user } = useAuth();
     const now = new Date();
@@ -27,6 +37,7 @@ export default function ShiftCalendar() {
     const [bulkIsOff, setBulkIsOff] = useState(false);
     const [bulkIsRemote, setBulkIsRemote] = useState(false);
     const [bulkSelectedDays, setBulkSelectedDays] = useState<number[]>([]);
+    const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
     const dragStartDayRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
 
@@ -75,13 +86,6 @@ export default function ShiftCalendar() {
 
     const monthIsConfirmed = Object.keys(confirmedByDay).length > 0;
 
-    const toggleDaySelection = useCallback((day: number) => {
-        if (deadlinePassed || confirmedByDay[day] || monthIsConfirmed) return;
-        setBulkSelectedDays((prev) =>
-            prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-        );
-    }, [deadlinePassed, confirmedByDay, monthIsConfirmed]);
-
     const getRangeDays = useCallback((from: number, to: number) => {
         const [min, max] = from <= to ? [from, to] : [to, from];
         return Array.from({ length: max - min + 1 }, (_, i) => min + i).filter(
@@ -90,17 +94,17 @@ export default function ShiftCalendar() {
     }, [daysInMonth]);
 
     const handleDayPointerDown = useCallback((e: React.PointerEvent, day: number) => {
-        if (deadlinePassed || confirmedByDay[day] || monthIsConfirmed) return;
         e.preventDefault();
         dragStartDayRef.current = day;
         hasMovedRef.current = false;
-    }, [deadlinePassed, confirmedByDay, monthIsConfirmed]);
+    }, []);
 
     useEffect(() => {
         if (deadlinePassed || monthIsConfirmed) return;
         const handlePointerMove = (e: PointerEvent) => {
             const start = dragStartDayRef.current;
             if (start === null) return;
+            if (deadlinePassed || monthIsConfirmed) return;
             hasMovedRef.current = true;
             const target = document.elementFromPoint(e.clientX, e.clientY);
             const dayEl = target?.closest("[data-day]");
@@ -119,7 +123,7 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             const day = dayStr ? parseInt(dayStr, 10) : null;
             if (!hasMovedRef.current && day !== null) {
-                toggleDaySelection(day);
+                setDetailModalDay(day);
             }
             dragStartDayRef.current = null;
         };
@@ -131,7 +135,7 @@ export default function ShiftCalendar() {
             document.removeEventListener("pointerup", handlePointerUp);
             document.removeEventListener("pointercancel", handlePointerUp);
         };
-    }, [deadlinePassed, monthIsConfirmed, getRangeDays, toggleDaySelection, confirmedByDay]);
+    }, [deadlinePassed, monthIsConfirmed, getRangeDays, confirmedByDay]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -288,6 +292,75 @@ export default function ShiftCalendar() {
                 </div>
             )}
 
+            {detailModalDay != null && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        backgroundColor: "rgba(0,0,0,0.4)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 50,
+                    }}
+                    onClick={() => setDetailModalDay(null)}
+                >
+                    <div
+                        className="card"
+                        style={{ width: "90%", maxWidth: "360px" }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 style={{ marginBottom: "1rem" }}>
+                            {month + 1}月{detailModalDay}日
+                            {dayOfWeek[new Date(year, month, detailModalDay - 1).getDay()]}のシフト
+                        </h3>
+                        {(() => {
+                            const label = shifts[detailModalDay];
+                            const isConfirmed = confirmedByDay[detailModalDay];
+                            if (!label) {
+                                return (
+                                    <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>
+                                        この日のシフトは未入力です
+                                    </p>
+                                );
+                            }
+                            const isOff = label === "OFF";
+                            const hours = calcHours(label);
+                            return (
+                                <>
+                                    <div style={{ marginBottom: "1rem" }}>
+                                        <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
+                                            {isConfirmed ? "確定シフト" : "提出シフト"}
+                                        </div>
+                                        <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
+                                            {isOff ? "OFF" : label.replace(" - ", " ～ ")}
+                                        </div>
+                                        {!isOff && (
+                                            <>
+                                                <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
+                                                    {remoteByDay[detailModalDay] ? "在宅勤務" : "出社"}
+                                                </div>
+                                                <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                                                    勤務時間: <strong>{hours.toFixed(1)}h</strong>
+                                                </div>
+                                                <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
+                                                    時給: <strong>¥{hourlyWage.toLocaleString()}</strong>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                        <button className="btn btn-primary" onClick={() => setDetailModalDay(null)}>
+                                            閉じる
+                                        </button>
+                                    </div>
+                                </>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
+
             {!deadlinePassed && !monthIsConfirmed && (
                 <div
                     style={{
@@ -300,7 +373,7 @@ export default function ShiftCalendar() {
                 >
                     <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.5rem" }}>一括設定</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                        日付をタップまたはドラッグで選択（再度タップで解除）→ 勤務時間を指定して「一括適用」
+                        日付をドラッグで選択 → 勤務時間を指定して「一括適用」。クリックで詳細表示
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem", marginBottom: "0.5rem" }}>
                         <button type="button" className="btn btn-outline" onClick={bulkSelectWeekdays} style={{ fontSize: "0.75rem" }}>
@@ -418,11 +491,11 @@ export default function ShiftCalendar() {
                             <div
                                 key={day}
                                 role="button"
-                                tabIndex={isEditable ? 0 : undefined}
+                                tabIndex={0}
                                 data-day={day}
-                                title={isConfirmed || monthIsConfirmed ? "確定済みのため編集できません" : deadlinePassed ? "締切済みのため編集できません" : undefined}
+                                title="クリックで詳細表示"
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
-                                onKeyDown={(e) => { if (isEditable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleDaySelection(day); } }}
+                                onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{
                                     backgroundColor: cellBg,
                                     minHeight: "80px",

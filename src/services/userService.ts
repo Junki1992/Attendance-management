@@ -1,6 +1,6 @@
 import { db, auth, storage } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, updateDoc, query, where, getDocFromCache } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, query, where, getDocFromCache, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 export interface UserProfile {
@@ -10,6 +10,7 @@ export interface UserProfile {
     email: string;
     hourlyWage: number; // Required now, default 1000
     photoURL?: string;
+    chatworkAccountId?: string; // Chatwork の個人アカウントID（通知の To: メンション用）
 }
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
@@ -49,13 +50,16 @@ export interface CreateUserParams {
     name: string;
     role: "admin" | "staff";
     hourlyWage?: number;
+    chatworkAccountId?: string;
 }
 
 /** Firestore の users/{uid} を作成。登録直後に呼ぶ。 */
 export const createUser = async (params: CreateUserParams): Promise<void> => {
-    const { uid, email, name, role, hourlyWage = 1000 } = params;
+    const { uid, email, name, role, hourlyWage = 1000, chatworkAccountId } = params;
     const docRef = doc(db, "users", uid);
-    await setDoc(docRef, { email, name, role, hourlyWage });
+    const data: Record<string, unknown> = { email, name, role, hourlyWage };
+    if (chatworkAccountId?.trim()) data.chatworkAccountId = chatworkAccountId.trim();
+    await setDoc(docRef, data);
 };
 
 export const saveUserProfile = async (user: UserProfile) => {
@@ -142,6 +146,19 @@ export const getAllStaff = async (): Promise<StaffItem[]> => {
     }
 };
 
+function mapDocToUserProfile(d: { id: string; data: () => Record<string, unknown> }): UserProfile {
+    const data = d.data();
+    return {
+        uid: d.id,
+        email: (data.email as string) || "",
+        name: (data.name as string) || "（名前なし）",
+        role: data.role === "admin" ? "admin" : "staff",
+        hourlyWage: (data.hourlyWage as number) ?? 1000,
+        photoURL: (data.photoURL as string) ?? undefined,
+        chatworkAccountId: (data.chatworkAccountId as string) ?? undefined,
+    };
+}
+
 /** 全ユーザー一覧を取得（管理者用）。管理者以外が呼ぶと permission-denied になるため、事前にロールを確認する */
 export const getAllUsers = async (): Promise<UserProfile[]> => {
     if (!auth.currentUser) return [];
@@ -149,18 +166,36 @@ export const getAllUsers = async (): Promise<UserProfile[]> => {
     if (!myProfile || myProfile.role !== "admin") return [];
     const snap = await getDocs(collection(db, "users"));
     const list: UserProfile[] = [];
-    snap.forEach((d) => {
-        const data = d.data();
-        list.push({
-            uid: d.id,
-            email: data.email || "",
-            name: data.name || "（名前なし）",
-            role: data.role === "admin" ? "admin" : "staff",
-            hourlyWage: data.hourlyWage ?? 1000,
-            photoURL: data.photoURL ?? undefined,
-        });
-    });
+    snap.forEach((d) => list.push(mapDocToUserProfile(d)));
     return list;
+};
+
+/** 全ユーザー一覧をリアルタイム購読（管理者用）。DBで削除されたユーザーは即座に一覧から消える */
+export const subscribeAllUsers = (callback: (users: UserProfile[]) => void): (() => void) => {
+    if (!auth.currentUser) {
+        callback([]);
+        return () => {};
+    }
+    let unsub: (() => void) | null = null;
+    let cancelled = false;
+    getUserProfile(auth.currentUser.uid).then((myProfile) => {
+        if (cancelled) return;
+        if (!myProfile || myProfile.role !== "admin") {
+            callback([]);
+            return;
+        }
+        unsub = onSnapshot(collection(db, "users"), (snap) => {
+            const list: UserProfile[] = [];
+            snap.forEach((d) => list.push(mapDocToUserProfile(d)));
+            callback(list);
+        });
+    }).catch(() => {
+        if (!cancelled) callback([]);
+    });
+    return () => {
+        cancelled = true;
+        unsub?.();
+    };
 };
 
 const UPLOAD_TIMEOUT_MS = 30000;

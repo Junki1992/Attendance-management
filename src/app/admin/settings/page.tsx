@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
-import { getAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
+import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
@@ -32,22 +32,14 @@ export default function AdminSettingsPage() {
       setDeadlineDay(s.shiftSubmitDeadlineDay);
       setLoading(false);
     }).catch(() => setLoading(false));
-    
-    loadUsers();
-  }, []);
 
-  const loadUsers = async () => {
     setUsersLoading(true);
-    try {
-      const list = await getAllUsers();
+    const unsubscribe = subscribeAllUsers((list) => {
       setUsers(list);
-    } catch (err) {
-      console.error(err);
-      alert("ユーザー一覧の取得に失敗しました");
-    } finally {
       setUsersLoading(false);
-    }
-  };
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,7 +66,6 @@ export default function AdminSettingsPage() {
     setUpdatingUserId(uid);
     try {
       await updateUserRole(uid, newRole);
-      await loadUsers();
       alert("変更しました");
     } catch (err) {
       console.error(err);
@@ -103,6 +94,13 @@ export default function AdminSettingsPage() {
     }
   }, [selectedUser?.uid, selectedUser?.role]);
 
+  // 選択中のユーザーがDBから削除されたらモーダルを閉じる
+  useEffect(() => {
+    if (selectedUser && !users.some((u) => u.uid === selectedUser.uid)) {
+      setSelectedUser(null);
+    }
+  }, [users, selectedUser]);
+
   const handleSaveHourlyWage = async () => {
     if (!selectedUser || !currentUser) return;
     const wage = Math.max(0, Math.floor(Number(editingHourlyWage)) || 0);
@@ -122,7 +120,6 @@ export default function AdminSettingsPage() {
         "hourly_wage_changed",
         `時給が¥${wage.toLocaleString()}に変更されました。確認してください。`
       );
-      await loadUsers();
       const updated = (await getAllUsers()).find((u) => u.uid === selectedUser.uid) ?? null;
       if (updated) setSelectedUser(updated);
       alert("時給を保存しました");
