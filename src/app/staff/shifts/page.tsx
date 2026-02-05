@@ -21,6 +21,15 @@ function calcHours(label: string): number {
     return h > 0 ? h : 0;
 }
 
+/** 指定日が今日より前か（月内でも過去日は編集不可） */
+function isPastDate(year: number, month: number, day: number): boolean {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cellDate = new Date(year, month, day);
+    cellDate.setHours(0, 0, 0, 0);
+    return cellDate < today;
+}
+
 export default function ShiftCalendar() {
     const { user } = useAuth();
     const now = new Date();
@@ -111,7 +120,7 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             if (dayStr) {
                 const day = parseInt(dayStr, 10);
-                const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d]);
+                const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d));
                 setBulkSelectedDays(range);
             }
         };
@@ -135,7 +144,7 @@ export default function ShiftCalendar() {
             document.removeEventListener("pointerup", handlePointerUp);
             document.removeEventListener("pointercancel", handlePointerUp);
         };
-    }, [deadlinePassed, monthIsConfirmed, getRangeDays, confirmedByDay]);
+    }, [deadlinePassed, monthIsConfirmed, getRangeDays, confirmedByDay, year, month]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -159,23 +168,23 @@ export default function ShiftCalendar() {
     const bulkSelectWeekdays = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return dow >= 1 && dow <= 5 && !confirmedByDay[d];
+            return dow >= 1 && dow <= 5 && !confirmedByDay[d] && !isPastDate(year, month, d);
         });
         setBulkSelectedDays(days);
     };
     const bulkSelectWeekends = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return (dow === 0 || dow === 6) && !confirmedByDay[d];
+            return (dow === 0 || dow === 6) && !confirmedByDay[d] && !isPastDate(year, month, d);
         });
         setBulkSelectedDays(days);
     };
-    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d]));
+    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d)));
     const bulkClearSelection = () => setBulkSelectedDays([]);
 
     const applyBulkShift = () => {
         if (deadlinePassed || monthIsConfirmed) return;
-        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d]);
+        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d] && !isPastDate(year, month, d));
         if (targetDays.length === 0) {
             alert("適用する日を1日以上選択してください。");
             return;
@@ -207,7 +216,10 @@ export default function ShiftCalendar() {
         setLoading(true);
         try {
             const promises = Object.entries(shifts)
-                .filter(([dayStr]) => !confirmedByDay[parseInt(dayStr, 10)])
+                .filter(([dayStr]) => {
+                    const d = parseInt(dayStr, 10);
+                    return !confirmedByDay[d] && !isPastDate(year, month, d);
+                })
                 .map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
                 const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -483,24 +495,26 @@ export default function ShiftCalendar() {
                         const isHoliday = isJapaneseHoliday(date);
                         const isRed = isWeekend || isHoliday;
                         const isConfirmed = confirmedByDay[day];
+                        const isPast = isPastDate(year, month, day);
                         const isBulkSelected = bulkSelectedDays.includes(day);
                         const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
-                        const isEditable = !deadlinePassed && !isConfirmed && !monthIsConfirmed;
+                        const isEditable = !deadlinePassed && !isConfirmed && !monthIsConfirmed && !isPast;
                         return (
                             <div
                                 key={day}
                                 role="button"
                                 tabIndex={0}
                                 data-day={day}
-                                title="クリックで詳細表示"
+                                title={isPast ? "過去の日付は編集できません" : "クリックで詳細表示"}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
                                 onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{
-                                    backgroundColor: cellBg,
+                                    backgroundColor: isPast ? "var(--surface-hover)" : cellBg,
+                                    opacity: isPast ? 0.7 : 1,
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
-                                    cursor: isEditable ? "pointer" : (isConfirmed || monthIsConfirmed ? "not-allowed" : "default"),
+                                    cursor: isEditable ? "pointer" : (isPast ? "default" : (isConfirmed || monthIsConfirmed ? "not-allowed" : "default")),
                                     position: "relative",
                                     transition: "background-color 0.15s",
                                     border: cellBorder,
