@@ -1,7 +1,7 @@
 name: Chatwork 翌日出勤通知
 on:
   schedule:
-    - cron: "0 12 * * *"  # 21:00 JST = 12:00 UTC
+    - cron: "0 * * * *"  # 毎時 0 分（日本時間の何時かは Firestore の notifyHour で設定）
   workflow_dispatch:
 jobs:
   notify:
@@ -16,3 +16,4 @@ jobs:
       - run: node scripts/chatwork-notify.js
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          CHATWORK_NOTIFY_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}

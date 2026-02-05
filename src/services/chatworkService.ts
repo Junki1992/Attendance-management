@@ -5,9 +5,12 @@ import { doc, setDoc, collection, query, where } from "firebase/firestore";
 export interface ChatworkConfig {
   apiToken: string;
   roomId: string;
+  /** 自動通知時刻（0-23、日本時間）デフォルト 21 */
+  notifyHour?: number;
 }
 
 const CHATWORK_CONFIG_DOC = "chatwork";
+const DEFAULT_NOTIFY_HOUR = 21;
 
 export const getChatworkConfig = async (): Promise<ChatworkConfig | null> => {
   const ref = doc(db, "settings", CHATWORK_CONFIG_DOC);
@@ -15,12 +18,21 @@ export const getChatworkConfig = async (): Promise<ChatworkConfig | null> => {
   if (!snap.exists()) return null;
   const d = snap.data();
   if (!d?.apiToken?.trim() || !d?.roomId?.trim()) return null;
-  return { apiToken: d.apiToken.trim(), roomId: d.roomId.trim() };
+  let notifyHour = d?.notifyHour;
+  if (typeof notifyHour !== "number" || notifyHour < 0 || notifyHour > 23) {
+    notifyHour = DEFAULT_NOTIFY_HOUR;
+  }
+  return { apiToken: d.apiToken.trim(), roomId: d.roomId.trim(), notifyHour };
 };
 
 export const saveChatworkConfig = async (config: ChatworkConfig): Promise<void> => {
   const ref = doc(db, "settings", CHATWORK_CONFIG_DOC);
-  await setDoc(ref, config, { merge: true });
+  const { apiToken, roomId, notifyHour } = config;
+  const data: Record<string, unknown> = { apiToken, roomId };
+  if (typeof notifyHour === "number" && notifyHour >= 0 && notifyHour <= 23) {
+    data.notifyHour = notifyHour;
+  }
+  await setDoc(ref, data, { merge: true });
 };
 
 /** 翌日出勤を Chatwork に送信（管理者が手動実行） */

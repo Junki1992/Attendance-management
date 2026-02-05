@@ -25,20 +25,29 @@ async function main() {
   }
   const db = admin.firestore();
 
-  let token = process.env.CHATWORK_API_TOKEN;
-  let roomId = process.env.CHATWORK_ROOM_ID;
+  const cfgSnap = await db.doc("settings/chatwork").get();
+  if (!cfgSnap.exists) {
+    console.error("Chatwork 設定が Firestore にありません。管理画面で設定してください。");
+    process.exit(1);
+  }
+  const cfgData = cfgSnap.data();
+  let token = process.env.CHATWORK_API_TOKEN || cfgData?.apiToken?.trim();
+  let roomId = process.env.CHATWORK_ROOM_ID || cfgData?.roomId?.trim();
   if (!token || !roomId) {
-    const cfg = await db.doc("settings/chatwork").get();
-    if (!cfg.exists) {
-      console.error("Chatwork 設定が Firestore にありません。管理画面で設定してください。");
-      process.exit(1);
-    }
-    const d = cfg.data();
-    token = d?.apiToken?.trim();
-    roomId = d?.roomId?.trim();
-    if (!token || !roomId) {
-      console.error("Chatwork API トークンとルーム ID を設定してください");
-      process.exit(1);
+    console.error("Chatwork API トークンとルーム ID を設定してください");
+    process.exit(1);
+  }
+
+  const forceSend = process.env.CHATWORK_NOTIFY_FORCE === "1";
+  if (!forceSend) {
+    const notifyHour = (typeof cfgData?.notifyHour === "number" && cfgData.notifyHour >= 0 && cfgData.notifyHour <= 23)
+      ? cfgData.notifyHour
+      : 21;
+    const now = new Date();
+    const jstHour = (now.getUTCHours() + 9) % 24;
+    if (jstHour !== notifyHour) {
+      console.log("Skip: current JST hour", jstHour, "!= configured", notifyHour);
+      process.exit(0);
     }
   }
 

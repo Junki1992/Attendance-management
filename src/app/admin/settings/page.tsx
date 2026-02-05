@@ -25,9 +25,11 @@ export default function AdminSettingsPage() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [chatworkToken, setChatworkToken] = useState("");
   const [chatworkRoomId, setChatworkRoomId] = useState("");
+  const [chatworkNotifyHour, setChatworkNotifyHour] = useState(21);
   const [chatworkEditing, setChatworkEditing] = useState(false);
   const [chatworkSaving, setChatworkSaving] = useState(false);
   const [chatworkSending, setChatworkSending] = useState(false);
+  const [chatworkNotifyModalOpen, setChatworkNotifyModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
@@ -43,6 +45,7 @@ export default function AdminSettingsPage() {
       if (c) {
         setChatworkToken(c.apiToken);
         setChatworkRoomId(c.roomId);
+        setChatworkNotifyHour(c.notifyHour ?? 21);
       }
     }).catch(() => {});
 
@@ -251,6 +254,21 @@ export default function AdminSettingsPage() {
                 style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
               />
             </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>自動通知時刻（日本時間）</label>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                GitHub Actions が毎時実行され、この時刻に通知を送信します
+              </p>
+              <select
+                value={chatworkNotifyHour}
+                onChange={(e) => setChatworkNotifyHour(Number(e.target.value))}
+                style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1rem" }}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
+                ))}
+              </select>
+            </div>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button
                 type="button"
@@ -259,7 +277,7 @@ export default function AdminSettingsPage() {
                 onClick={async () => {
                   setChatworkSaving(true);
                   try {
-                    await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim() });
+                    await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim(), notifyHour: chatworkNotifyHour });
                     setChatworkEditing(false);
                     alert("保存しました");
                   } catch (e) {
@@ -294,6 +312,10 @@ export default function AdminSettingsPage() {
               <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>ルーム ID: </span>
               <span>{chatworkRoomId}</span>
             </div>
+            <div>
+              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>自動通知時刻: </span>
+              <span>{String(chatworkNotifyHour).padStart(2, "0")}:00（日本時間）</span>
+            </div>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button type="button" className="btn btn-outline" onClick={() => setChatworkEditing(true)}>
                 編集
@@ -302,10 +324,54 @@ export default function AdminSettingsPage() {
                 type="button"
                 className="btn btn-outline"
                 disabled={chatworkSending}
+                onClick={() => setChatworkNotifyModalOpen(true)}
+              >
+                翌日出勤を通知
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {chatworkNotifyModalOpen && (
+        <div
+          role="dialog"
+          aria-label="翌日出勤通知の確認"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+            padding: "1rem",
+          }}
+          onClick={() => !chatworkSending && setChatworkNotifyModalOpen(false)}
+        >
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 360, padding: "1.25rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.1rem" }}>翌日出勤を通知</h3>
+            <p style={{ margin: "0 0 1rem 0", color: "var(--text-muted)", fontSize: "0.9rem" }}>
+              Chatwork に翌日の出勤メンバーを通知します。よろしいですか？
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setChatworkNotifyModalOpen(false)}
+                disabled={chatworkSending}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={chatworkSending}
                 onClick={async () => {
                   setChatworkSending(true);
                   try {
                     const r = await sendNextDayAttendanceToChatwork();
+                    setChatworkNotifyModalOpen(false);
                     if (r.ok) alert(`送信しました（${r.count}件）`);
                     else alert(r.error || "送信に失敗しました");
                   } catch (e) {
@@ -316,12 +382,12 @@ export default function AdminSettingsPage() {
                   }
                 }}
               >
-                {chatworkSending ? "送信中..." : "翌日出勤を通知"}
+                {chatworkSending ? "送信中..." : "送信する"}
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="card" style={{ maxWidth: "600px" }}>
         <h2 style={{ fontSize: "1.25rem", margin: 0, marginBottom: "1rem" }}>ユーザー管理</h2>
