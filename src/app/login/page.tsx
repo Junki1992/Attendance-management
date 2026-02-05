@@ -1,7 +1,9 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { auth } from "@/lib/firebase/firebase";
 import { APP_NAME } from "@/lib/app-config";
+import { signOut } from "firebase/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -52,6 +54,7 @@ export default function LoginPage() {
     const [submitting, setSubmitting] = useState(false);
     const [devOpen, setDevOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [sessionCleared, setSessionCleared] = useState(false);
 
     useEffect(() => {
         const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < 768);
@@ -60,12 +63,18 @@ export default function LoginPage() {
         return () => window.removeEventListener("resize", check);
     }, []);
 
+    // ログイン画面に来た時点でセッションを破棄。credentials なしで管理画面へ行くのを防ぐ
     useEffect(() => {
-        if (user) {
+        signOut(auth).then(() => setSessionCleared(true));
+    }, []);
+
+    // セッション破棄後にログイン成功した場合のみリダイレクト（既存セッションでの自動遷移を防ぐ）
+    useEffect(() => {
+        if (sessionCleared && user) {
             if (user.role === "admin") router.push("/admin");
             else router.push("/staff");
         }
-    }, [user, router]);
+    }, [sessionCleared, user, router]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();

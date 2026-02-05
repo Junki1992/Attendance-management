@@ -2,9 +2,9 @@
 
 import { auth } from "@/lib/firebase/firebase";
 import { APP_NAME } from "@/lib/app-config";
-import { sendPasswordResetEmail } from "firebase/auth";
+import { sendPasswordResetEmail, signOut } from "firebase/auth";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
@@ -24,6 +24,11 @@ export default function ForgotPasswordPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+
+  // このページに来た時点でセッションを破棄。 credentials なしで管理画面へ行くのを防ぐ
+  useEffect(() => {
+    signOut(auth);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,10 +93,10 @@ export default function ForgotPasswordPage() {
     <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
       <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
         <h1 style={{ marginBottom: "0.5rem", fontSize: "1.25rem", color: "var(--primary)", textAlign: "center" }}>
-          {APP_NAME} パスワードを忘れた場合
+          {APP_NAME}<br />パスワードを忘れた場合
         </h1>
         <p style={{ marginBottom: "1.5rem", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center" }}>
-          登録したメールアドレスを入力すると、パスワード再設定用のリンクをお送りします
+          登録したメールアドレスを入力すると、<br />パスワード再設定用のリンクをお送りします
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
