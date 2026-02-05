@@ -337,26 +337,51 @@ export default function AdminShiftGrid() {
   };
 
   const isDailyOver = (hours: number) => hours > 8;
-  const isWeeklyOver = (uid: string) => {
-    let t = 0;
-    DAYS.forEach((d) => (t += getShift(uid, d)));
-    return t > 40;
-  };
+
+  /** 週40時間超過: カレンダー週（日〜土）ごとの合計が40h超の週があるか */
+  const isWeeklyOver = useCallback(
+    (uid: string) => {
+      const weekTotals: Record<number, number> = {};
+      DAYS.forEach((d) => {
+        const date = new Date(year, month, d);
+        const dayOfWeek = date.getDay();
+        const weekStart = new Date(year, month, d - dayOfWeek);
+        const weekId = weekStart.getTime();
+        weekTotals[weekId] = (weekTotals[weekId] ?? 0) + getShift(uid, d);
+      });
+      return Object.values(weekTotals).some((t) => t > 40);
+    },
+    [year, month, DAYS, getShift]
+  );
 
   const alert36 = useMemo(() => {
     const daily: { name: string; day: number; hours: number }[] = [];
-    const weekly: { name: string; total: number }[] = [];
+    const weekly: { name: string; weekLabel: string; total: number }[] = [];
     staffList.forEach((s) => {
-      let total = 0;
+      const weekTotals: Record<number, { total: number; weekStart: Date }> = {};
       DAYS.forEach((d) => {
         const h = getShift(s.id, d);
-        total += h;
         if (h > 8) daily.push({ name: s.name, day: d, hours: h });
+
+        const date = new Date(year, month, d);
+        const dayOfWeek = date.getDay();
+        const weekStart = new Date(year, month, d - dayOfWeek);
+        const weekId = weekStart.getTime();
+        if (!weekTotals[weekId]) weekTotals[weekId] = { total: 0, weekStart };
+        weekTotals[weekId].total += h;
       });
-      if (total > 40) weekly.push({ name: s.name, total });
+      Object.values(weekTotals).forEach(({ total, weekStart }) => {
+        if (total > 40) {
+          const ws = weekStart;
+          const we = new Date(ws);
+          we.setDate(we.getDate() + 6);
+          const weekLabel = `${ws.getMonth() + 1}/${ws.getDate()}〜${we.getMonth() + 1}/${we.getDate()}`;
+          weekly.push({ name: s.name, weekLabel, total });
+        }
+      });
     });
     return { daily, weekly };
-  }, [staffList, DAYS, getShift]);
+  }, [staffList, DAYS, getShift, year, month]);
 
   return (
     <div>
@@ -513,7 +538,7 @@ export default function AdminShiftGrid() {
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {staffList.map((user) => {
                   const totalHours = DAYS.reduce((acc, d) => acc + getShift(user.id, d), 0);
-                  const weeklyWarning = totalHours > 40;
+                  const weeklyWarning = isWeeklyOver(user.id);
                   return (
                     <div key={user.id} className="card" style={{ padding: "0.75rem" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.25rem" }}>
@@ -634,7 +659,7 @@ export default function AdminShiftGrid() {
                   (acc, d) => acc + getShift(user.id, d),
                   0
                 );
-                const weeklyWarning = totalHours > 40;
+                const weeklyWarning = isWeeklyOver(user.id);
 
                 return (
                   <tr key={user.id}>
