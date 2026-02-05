@@ -420,7 +420,9 @@ export default function ShiftCalendar() {
                             >
                                 <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
                                 {(() => {
-                                    const displayLabel = shifts[day] || "OFF";
+                                    const monthIsConfirmed = Object.keys(confirmedByDay).length > 0;
+                                    const displayLabel = shifts[day] ?? (monthIsConfirmed ? "OFF" : null);
+                                    if (!displayLabel) return null;
                                     return (
                                         <div
                                             style={{
