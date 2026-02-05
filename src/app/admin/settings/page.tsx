@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
-import { getAllUsers, getAllUsersFromServer, subscribeAllUsers, updateUserRole, updateUserHourlyWage, deleteUserDocument, UserProfile } from "@/services/userService";
+import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, deleteUserDocument, UserProfile } from "@/services/userService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
@@ -22,7 +22,6 @@ export default function AdminSettingsPage() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
-  const [refreshingUsers, setRefreshingUsers] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
@@ -62,19 +61,6 @@ export default function AdminSettingsPage() {
       alert("保存に失敗しました");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleRefreshUsers = async () => {
-    setRefreshingUsers(true);
-    try {
-      const list = await getAllUsersFromServer();
-      setUsers(list);
-    } catch (err) {
-      console.error(err);
-      alert("再読み込みに失敗しました");
-    } finally {
-      setRefreshingUsers(false);
     }
   };
 
@@ -230,22 +216,7 @@ export default function AdminSettingsPage() {
       </div>
 
       <div className="card" style={{ maxWidth: "600px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
-          <h2 style={{ fontSize: "1.25rem", margin: 0 }}>ユーザー管理</h2>
-          <button
-            type="button"
-            className="btn btn-outline"
-            style={{ fontSize: "0.875rem", padding: "0.35rem 0.75rem", cursor: refreshingUsers ? "wait" : "pointer" }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (!refreshingUsers) handleRefreshUsers();
-            }}
-            disabled={refreshingUsers}
-          >
-            {refreshingUsers ? "再読み込み中..." : "再読み込み"}
-          </button>
-        </div>
+        <h2 style={{ fontSize: "1.25rem", margin: 0, marginBottom: "1rem" }}>ユーザー管理</h2>
         <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
           {ROLE_CHANGE_ENABLED
             ? "アルバイトを管理者に昇格させたり、管理者をアルバイトに降格させることができます。"
