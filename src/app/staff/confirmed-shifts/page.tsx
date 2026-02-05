@@ -43,6 +43,8 @@ export default function StaffConfirmedShiftsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [modalError, setModalError] = useState("");
   const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
+  /** 変更申請モード：true のときのみ日付をクリックしてモーダルを開ける */
+  const [changeRequestMode, setChangeRequestMode] = useState(false);
 
   const lastDay = getDaysInMonth(year, month);
   const daysArray = Array.from({ length: lastDay }, (_, i) => i + 1);
@@ -120,6 +122,15 @@ export default function StaffConfirmedShiftsPage() {
     setModalReason("");
     setModalError("");
     setShowModal(true);
+  };
+
+  const enterChangeRequestMode = () => {
+    setChangeRequestMode(true);
+  };
+
+  const exitChangeRequestMode = () => {
+    setChangeRequestMode(false);
+    setDetailModalDay(null);
   };
 
   const handleSubmitRequest = async () => {
@@ -207,14 +218,24 @@ export default function StaffConfirmedShiftsPage() {
             概算給与: <strong style={{ color: "var(--primary)" }}>¥{salary.toLocaleString()}</strong>（時給
             ¥{hourlyWage}）
           </div>
-          <button
-            className="btn btn-outline"
-            onClick={openModal}
-            disabled={loading}
-            title="シフトの変更・希望日の申請"
-          >
-            変更申請
-          </button>
+          {changeRequestMode ? (
+            <button
+              className="btn btn-outline"
+              onClick={exitChangeRequestMode}
+              title="選択モードを解除"
+            >
+              選択モード解除
+            </button>
+          ) : (
+            <button
+              className="btn btn-outline"
+              onClick={enterChangeRequestMode}
+              disabled={loading}
+              title="日付をクリックして変更申請ができます"
+            >
+              変更申請
+            </button>
+          )}
         </div>
       </div>
 
@@ -243,7 +264,7 @@ export default function StaffConfirmedShiftsPage() {
             justifyContent: "center",
             zIndex: 50,
           }}
-          onClick={() => setDetailModalDay(null)}
+          onClick={() => { setDetailModalDay(null); }}
         >
           <div
             className="card"
@@ -470,6 +491,11 @@ export default function StaffConfirmedShiftsPage() {
               minWidth: "280px",
             }}
           >
+            {changeRequestMode && (
+              <div style={{ gridColumn: "1 / -1", padding: "0.5rem", backgroundColor: "#EEF2FF", fontSize: "0.85rem", color: "var(--primary)" }}>
+                日付をクリックして変更申請
+              </div>
+            )}
             {dayOfWeek.map((d) => (
               <div
                 key={d}
@@ -498,19 +524,21 @@ export default function StaffConfirmedShiftsPage() {
                   ? "OFF"
                   : `${s.startTime} - ${s.endTime}${s.isRemote ? " 在宅" : ""}`;
 
+              const isClickable = changeRequestMode;
               return (
                 <div
                   key={day}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setDetailModalDay(day)}
-                  onKeyDown={(e) => e.key === "Enter" && setDetailModalDay(day)}
+                  role={isClickable ? "button" : undefined}
+                  tabIndex={isClickable ? 0 : undefined}
+                  onClick={() => isClickable && setDetailModalDay(day)}
+                  onKeyDown={(e) => { if (isClickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setDetailModalDay(day); } }}
+                  title={isClickable ? `${day}日のシフト詳細・変更申請` : "変更申請を押すと日付をクリックできます"}
                   style={{
                     backgroundColor: "var(--surface)",
                     minHeight: "80px",
                     padding: "0.4rem 0.25rem",
                     minWidth: 0,
-                    cursor: "pointer",
+                    cursor: isClickable ? "pointer" : "not-allowed",
                   }}
                 >
                   <div
