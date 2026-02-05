@@ -13,6 +13,6 @@ jobs:
           node-version: "20"
           cache: "npm"
       - run: npm ci
-      - run: npm run chatwork-notify
+      - run: node scripts/chatwork-notify.js
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
