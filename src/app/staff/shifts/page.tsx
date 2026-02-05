@@ -18,6 +18,7 @@ export default function ShiftCalendar() {
     const [month, setMonth] = useState(now.getMonth());
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
     const [remoteByDay, setRemoteByDay] = useState<{ [key: number]: boolean }>({});
+    const [confirmedByDay, setConfirmedByDay] = useState<{ [key: number]: boolean }>({});
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
     const [deadlinePassed, setDeadlinePassed] = useState(false);
@@ -47,6 +48,7 @@ export default function ShiftCalendar() {
                 setDeadlinePassed(past);
                 const shiftMap: { [key: number]: string } = {};
                 const remoteMap: { [key: number]: boolean } = {};
+                const confirmedMap: { [key: number]: boolean } = {};
                 data.forEach((s) => {
                     const day = parseInt(s.date.split("-")[2], 10);
                     if (s.startTime === "00:00" && s.endTime === "00:00") {
@@ -55,9 +57,11 @@ export default function ShiftCalendar() {
                         shiftMap[day] = `${s.startTime} - ${s.endTime}`;
                     }
                     if (s.isRemote) remoteMap[day] = true;
+                    if (s.status === "confirmed") confirmedMap[day] = true;
                 });
                 setShifts(shiftMap);
                 setRemoteByDay(remoteMap);
+                setConfirmedByDay(confirmedMap);
             } catch (error) {
                 console.error("Failed to fetch data", error);
             }
@@ -70,11 +74,11 @@ export default function ShiftCalendar() {
     }, [year, month]);
 
     const toggleDaySelection = useCallback((day: number) => {
-        if (deadlinePassed) return;
+        if (deadlinePassed || confirmedByDay[day]) return;
         setBulkSelectedDays((prev) =>
             prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
         );
-    }, [deadlinePassed]);
+    }, [deadlinePassed, confirmedByDay]);
 
     const getRangeDays = useCallback((from: number, to: number) => {
         const [min, max] = from <= to ? [from, to] : [to, from];
@@ -84,11 +88,11 @@ export default function ShiftCalendar() {
     }, [daysInMonth]);
 
     const handleDayPointerDown = useCallback((e: React.PointerEvent, day: number) => {
-        if (deadlinePassed) return;
+        if (deadlinePassed || confirmedByDay[day]) return;
         e.preventDefault();
         dragStartDayRef.current = day;
         hasMovedRef.current = false;
-    }, [deadlinePassed]);
+    }, [deadlinePassed, confirmedByDay]);
 
     useEffect(() => {
         if (deadlinePassed) return;
@@ -101,7 +105,8 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             if (dayStr) {
                 const day = parseInt(dayStr, 10);
-                setBulkSelectedDays(getRangeDays(start, day));
+                const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d]);
+                setBulkSelectedDays(range);
             }
         };
         const handlePointerUp = (e: PointerEvent) => {
@@ -124,7 +129,7 @@ export default function ShiftCalendar() {
             document.removeEventListener("pointerup", handlePointerUp);
             document.removeEventListener("pointercancel", handlePointerUp);
         };
-    }, [deadlinePassed, getRangeDays, toggleDaySelection]);
+    }, [deadlinePassed, getRangeDays, toggleDaySelection, confirmedByDay]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -148,23 +153,23 @@ export default function ShiftCalendar() {
     const bulkSelectWeekdays = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return dow >= 1 && dow <= 5;
+            return dow >= 1 && dow <= 5 && !confirmedByDay[d];
         });
         setBulkSelectedDays(days);
     };
     const bulkSelectWeekends = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return dow === 0 || dow === 6;
+            return (dow === 0 || dow === 6) && !confirmedByDay[d];
         });
         setBulkSelectedDays(days);
     };
-    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1));
+    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d]));
     const bulkClearSelection = () => setBulkSelectedDays([]);
 
     const applyBulkShift = () => {
         if (deadlinePassed) return;
-        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth);
+        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d]);
         if (targetDays.length === 0) {
             alert("適用する日を1日以上選択してください。");
             return;
@@ -195,7 +200,9 @@ export default function ShiftCalendar() {
         if (!user || deadlinePassed) return;
         setLoading(true);
         try {
-            const promises = Object.entries(shifts).map(async ([dayStr, label]) => {
+            const promises = Object.entries(shifts)
+                .filter(([dayStr]) => !confirmedByDay[parseInt(dayStr, 10)])
+                .map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
                 const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 let start = "",
@@ -385,22 +392,25 @@ export default function ShiftCalendar() {
                         const isWeekend = dow === 0 || dow === 6;
                         const isHoliday = isJapaneseHoliday(date);
                         const isRed = isWeekend || isHoliday;
+                        const isConfirmed = confirmedByDay[day];
                         const isBulkSelected = bulkSelectedDays.includes(day);
                         const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
+                        const isEditable = !deadlinePassed && !isConfirmed;
                         return (
                             <div
                                 key={day}
                                 role="button"
-                                tabIndex={0}
+                                tabIndex={isEditable ? 0 : undefined}
                                 data-day={day}
+                                title={isConfirmed ? "確定済みのため編集できません" : deadlinePassed ? "締切済みのため編集できません" : undefined}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
-                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleDaySelection(day); } }}
+                                onKeyDown={(e) => { if (isEditable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleDaySelection(day); } }}
                                 style={{
                                     backgroundColor: cellBg,
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
-                                    cursor: deadlinePassed ? "default" : "pointer",
+                                    cursor: isEditable ? "pointer" : (isConfirmed ? "not-allowed" : "default"),
                                     position: "relative",
                                     transition: "background-color 0.15s",
                                     border: cellBorder,
@@ -412,8 +422,8 @@ export default function ShiftCalendar() {
                                 {shifts[day] && (
                                     <div
                                         style={{
-                                            backgroundColor: shifts[day] === "OFF" ? "#F3F4F6" : "#EEF2FF",
-                                            color: shifts[day] === "OFF" ? "#4B5563" : "#4F46E5",
+                                            backgroundColor: isConfirmed ? "#D1FAE5" : (shifts[day] === "OFF" ? "#F3F4F6" : "#EEF2FF"),
+                                            color: isConfirmed ? "#065F46" : (shifts[day] === "OFF" ? "#4B5563" : "#4F46E5"),
                                             padding: "0.15rem 0.2rem",
                                             borderRadius: "4px",
                                             fontSize: "0.65rem",
@@ -425,7 +435,7 @@ export default function ShiftCalendar() {
                                             whiteSpace: "nowrap",
                                         }}
                                     >
-                                        {formatShiftLabel(shifts[day])}{remoteByDay[day] ? " 在宅" : ""}
+                                        {formatShiftLabel(shifts[day])}{remoteByDay[day] ? " 在宅" : ""}{isConfirmed ? " 確定" : ""}
                                     </div>
                                 )}
                             </div>
