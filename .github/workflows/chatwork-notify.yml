@@ -1,0 +1,18 @@
+name: Chatwork 翌日出勤通知
+on:
+  schedule:
+    - cron: "0 12 * * *"  # 21:00 JST = 12:00 UTC
+  workflow_dispatch:
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run chatwork-notify
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
