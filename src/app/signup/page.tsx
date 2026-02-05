@@ -51,6 +51,8 @@ export default function SignupPage() {
     const [submitError, setSubmitError] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
     useEffect(() => {
         const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < 768);
@@ -210,43 +212,79 @@ export default function SignupPage() {
                         <label htmlFor="password" style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-main)" }}>
                             パスワード（6文字以上）
                         </label>
-                        <input
-                            id="password"
-                            type="password"
-                            autoComplete="new-password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="••••••••"
-                            style={{
-                                width: "100%",
-                                padding: "0.5rem 0.75rem",
-                                borderRadius: "var(--radius-md)",
-                                border: "1px solid var(--border)",
-                                fontSize: "1rem",
-                                boxSizing: "border-box",
-                            }}
-                        />
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <input
+                                id="password"
+                                type={showPassword ? "text" : "password"}
+                                autoComplete="new-password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                placeholder="••••••••"
+                                style={{
+                                    width: "100%",
+                                    padding: "0.5rem 2.5rem 0.5rem 0.75rem",
+                                    borderRadius: "var(--radius-md)",
+                                    border: "1px solid var(--border)",
+                                    fontSize: "1rem",
+                                    boxSizing: "border-box",
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
+                                style={{
+                                    position: "absolute",
+                                    right: "0.5rem",
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "0.25rem",
+                                    color: "var(--text-muted)",
+                                }}
+                            >
+                                <i className={`fa-solid fa-${showPassword ? "eye-slash" : "eye"}`} style={{ fontSize: "1rem" }} />
+                            </button>
+                        </div>
                     </div>
                     <div>
                         <label htmlFor="passwordConfirm" style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-main)" }}>
                             パスワード（確認）
                         </label>
-                        <input
-                            id="passwordConfirm"
-                            type="password"
-                            autoComplete="new-password"
-                            value={passwordConfirm}
-                            onChange={(e) => setPasswordConfirm(e.target.value)}
-                            placeholder="••••••••"
-                            style={{
-                                width: "100%",
-                                padding: "0.5rem 0.75rem",
-                                borderRadius: "var(--radius-md)",
-                                border: "1px solid var(--border)",
-                                fontSize: "1rem",
-                                boxSizing: "border-box",
-                            }}
-                        />
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                            <input
+                                id="passwordConfirm"
+                                type={showPasswordConfirm ? "text" : "password"}
+                                autoComplete="new-password"
+                                value={passwordConfirm}
+                                onChange={(e) => setPasswordConfirm(e.target.value)}
+                                placeholder="••••••••"
+                                style={{
+                                    width: "100%",
+                                    padding: "0.5rem 2.5rem 0.5rem 0.75rem",
+                                    borderRadius: "var(--radius-md)",
+                                    border: "1px solid var(--border)",
+                                    fontSize: "1rem",
+                                    boxSizing: "border-box",
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                                aria-label={showPasswordConfirm ? "パスワードを隠す" : "パスワードを表示"}
+                                style={{
+                                    position: "absolute",
+                                    right: "0.5rem",
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    padding: "0.25rem",
+                                    color: "var(--text-muted)",
+                                }}
+                            >
+                                <i className={`fa-solid fa-${showPasswordConfirm ? "eye-slash" : "eye"}`} style={{ fontSize: "1rem" }} />
+                            </button>
+                        </div>
                     </div>
                     {submitError && (
                         <p style={{ color: "var(--destructive)", fontSize: "0.875rem", margin: 0 }}>{submitError}</p>
