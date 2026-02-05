@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
+import { getChatworkConfig, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, deleteUserDocument, UserProfile } from "@/services/userService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
@@ -22,6 +23,10 @@ export default function AdminSettingsPage() {
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [chatworkToken, setChatworkToken] = useState("");
+  const [chatworkRoomId, setChatworkRoomId] = useState("");
+  const [chatworkSaving, setChatworkSaving] = useState(false);
+  const [chatworkSending, setChatworkSending] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
@@ -33,6 +38,12 @@ export default function AdminSettingsPage() {
       setDeadlineDay(s.shiftSubmitDeadlineDay);
       setLoading(false);
     }).catch(() => setLoading(false));
+    getChatworkConfig().then((c) => {
+      if (c) {
+        setChatworkToken(c.apiToken);
+        setChatworkRoomId(c.roomId);
+      }
+    }).catch(() => {});
 
     setUsersLoading(true);
     const timeout = setTimeout(() => setUsersLoading(false), 15000);
@@ -213,6 +224,73 @@ export default function AdminSettingsPage() {
             {saved && <span style={{ color: "var(--secondary)", fontSize: "0.875rem" }}>保存しました</span>}
           </div>
         </form>
+      </div>
+
+      <div className="card" style={{ maxWidth: "400px" }}>
+        <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>Chatwork 通知</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>API トークン</label>
+            <input
+              type="password"
+              value={chatworkToken}
+              onChange={(e) => setChatworkToken(e.target.value)}
+              placeholder="Chatwork の API トークン"
+              style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+            />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>ルーム ID</label>
+            <input
+              type="text"
+              value={chatworkRoomId}
+              onChange={(e) => setChatworkRoomId(e.target.value)}
+              placeholder="421966365"
+              style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={chatworkSaving || !chatworkToken.trim() || !chatworkRoomId.trim()}
+              onClick={async () => {
+                setChatworkSaving(true);
+                try {
+                  await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim() });
+                  alert("保存しました");
+                } catch (e) {
+                  console.error(e);
+                  alert("保存に失敗しました");
+                } finally {
+                  setChatworkSaving(false);
+                }
+              }}
+            >
+              {chatworkSaving ? "保存中..." : "保存"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={chatworkSending || !chatworkToken.trim() || !chatworkRoomId.trim()}
+              onClick={async () => {
+                setChatworkSending(true);
+                try {
+                  const r = await sendNextDayAttendanceToChatwork();
+                  if (r.ok) alert(`送信しました（${r.count}件）`);
+                  else alert(r.error || "送信に失敗しました");
+                } catch (e) {
+                  console.error(e);
+                  alert("送信に失敗しました");
+                } finally {
+                  setChatworkSending(false);
+                }
+              }}
+            >
+              {chatworkSending ? "送信中..." : "翌日出勤を通知"}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="card" style={{ maxWidth: "600px" }}>

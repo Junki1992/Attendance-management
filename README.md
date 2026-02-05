@@ -68,6 +68,8 @@ Next.js と Firebase を使用したアルバイト・パート向けシフト�
    NEXT_PUBLIC_ENABLE_MOCK_LOGIN=1
    ```
    この変数を設定すると、ログインページに「開発・検証用：パスワードなしでログイン」セクションが表示されます。**本番環境では設定しないでください**（セキュリティ上の理由）。
+   
+   **Chatwork 通知連携**（翌日出勤通知）: 管理画面の「設定」→「Chatwork 通知」で API トークンとルーム ID を保存。毎日 21:00 に GitHub Actions が自動送信（課金なし）。手動は「翌日出勤を通知」ボタン。
 
 4. **Firebase コンソールの設定**（メール登録・ログインを使う場合）
    - **Authentication** → ログイン方法 → **メール/パスワード** を有効にする。
@@ -136,3 +138,9 @@ Vercel へのデプロイを推奨しています。
    - Vercel の「設定」→「環境変数」で `NEXT_PUBLIC_FIREBASE_*` を設定
    - **最初の管理者アカウントを作成する場合**：`NEXT_PUBLIC_FIRST_ADMIN_EMAIL=admin@example.com` を設定（一度作成したら削除可能）
    - `NEXT_PUBLIC_ENABLE_MOCK_LOGIN` は**設定しない**（本番では無効化）
+
+4. **Chatwork 自動通知（GitHub Actions）**
+   - 管理画面で Chatwork の API トークンとルーム ID を保存しておく
+   - Firebase コンソール → プロジェクトの設定 → サービスアカウント → 新しい秘密鍵の生成
+   - GitHub リポジトリ → Settings → Secrets → `GOOGLE_APPLICATION_CREDENTIALS_JSON` を追加（秘密鍵の JSON をそのまま貼り付け）
+   - 毎日 21:00 JST に自動実行。手動実行は Actions タブから「Chatwork 翌日出勤通知」→ Run workflow

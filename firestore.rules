@@ -111,13 +111,12 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
     
-    // settings コレクション（管理者のみ）
+    // settings コレクション
     match /settings/{settingId} {
-      allow read: if request.auth != null;
-      // 管理者のみ書き込み可（users/{uid}.role == "admin" を確認）
-      allow create, update, delete: if request.auth != null 
-                                     && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-                                     && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      // app は全員読める（締切日など）。chatwork は管理者のみ（API トークン含む）
+      allow read: if request.auth != null 
+                  && (settingId != "chatwork" || isAdmin());
+      allow create, update, delete: if request.auth != null && isAdmin();
     }
     
     // shiftChangeRequests コレクション
