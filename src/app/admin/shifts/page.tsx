@@ -410,8 +410,8 @@ export default function AdminShiftGrid() {
             )}
             {alert36.weekly.length > 0 && (
               <div>
-                <strong>週40時間超過（月合計）:</strong>{" "}
-                {alert36.weekly.map((x) => `${x.name} ${x.total}h`).join("、")}
+                <strong>週40時間超過:</strong>{" "}
+                {alert36.weekly.map((x) => `${x.name} ${x.weekLabel} ${x.total}h`).join("、")}
               </div>
             )}
           </div>
