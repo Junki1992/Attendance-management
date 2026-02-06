@@ -3,10 +3,29 @@
  * 実行: node scripts/chatwork-notify.js
  * 環境変数: GOOGLE_APPLICATION_CREDENTIALS_JSON (Firebase サービスアカウントの JSON 文字列)
  *          CHATWORK_API_TOKEN, CHATWORK_ROOM_ID（未設定時は Firestore settings/chatwork から取得）
+ *          CHATWORK_ERROR_NOTIFY_ACCOUNT_ID（エラー時のメンション先、未設定時は 1ntirss67epgk）
  */
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
+
+const ERROR_NOTIFY_ACCOUNT_ID = process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID || "1ntirss67epgk";
+
+async function sendErrorToChatwork(token, roomId, errorMessage) {
+  try {
+    const body = `[To:${ERROR_NOTIFY_ACCOUNT_ID}] 【エラー】翌日出勤通知に失敗しました\n${errorMessage}`;
+    const res = await fetch(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
+      method: "POST",
+      headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ body }).toString(),
+    });
+    if (!res.ok) {
+      console.error("Failed to send error notification:", res.status, await res.text());
+    }
+  } catch (e) {
+    console.error("Failed to send error notification:", e);
+  }
+}
 
 async function main() {
   let cred;
@@ -91,13 +110,38 @@ async function main() {
   });
 
   if (!res.ok) {
-    console.error("Chatwork API error:", res.status, await res.text());
+    const errText = await res.text();
+    console.error("Chatwork API error:", res.status, errText);
+    await sendErrorToChatwork(token, roomId, `Chatwork API エラー ${res.status}: ${errText}`);
     process.exit(1);
   }
   console.log("Sent:", dateStr, entries.length);
 }
 
-main().catch((e) => {
+main().catch(async (e) => {
   console.error(e);
+  try {
+    let token = process.env.CHATWORK_API_TOKEN;
+    let roomId = process.env.CHATWORK_ROOM_ID;
+    if (!token || !roomId) {
+      const credJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+      const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      if (credJson || (credPath && fs.existsSync(path.resolve(credPath)))) {
+        const cred = credJson ? JSON.parse(credJson) : JSON.parse(fs.readFileSync(path.resolve(credPath), "utf8"));
+        if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(cred) });
+        const cfgSnap = await admin.firestore().doc("settings/chatwork").get();
+        if (cfgSnap.exists) {
+          const d = cfgSnap.data();
+          token = token || d?.apiToken?.trim();
+          roomId = roomId || d?.roomId?.trim();
+        }
+      }
+    }
+    if (token && roomId) {
+      await sendErrorToChatwork(token, roomId, String(e?.message || e));
+    }
+  } catch (notifyErr) {
+    console.error("Error notify failed:", notifyErr);
+  }
   process.exit(1);
 });
