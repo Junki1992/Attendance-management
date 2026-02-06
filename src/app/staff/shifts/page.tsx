@@ -273,6 +273,11 @@ export default function ShiftCalendar() {
         }
     };
 
+    const hasShiftsToSave = Object.keys(shifts).some((dayStr) => {
+        const d = parseInt(dayStr, 10);
+        return !confirmedByDay[d] && !isPastDate(year, month, d);
+    });
+
     const calculateSalary = () => {
         let totalHours = 0;
         Object.values(shifts).forEach((label) => {
@@ -469,7 +474,7 @@ export default function ShiftCalendar() {
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed}>
+                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave}>
                         {loading ? "保存中..." : monthIsConfirmed ? "確定済" : deadlinePassed ? "締切済" : "提出内容を保存"}
                     </button>
                 </div>
