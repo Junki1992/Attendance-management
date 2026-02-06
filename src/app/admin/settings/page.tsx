@@ -32,6 +32,7 @@ export default function AdminSettingsPage() {
   const [chatworkSaving, setChatworkSaving] = useState(false);
   const [chatworkSending, setChatworkSending] = useState(false);
   const [chatworkNotifyModalOpen, setChatworkNotifyModalOpen] = useState(false);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ uid: string; name: string; role: "admin" | "staff" } | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
   const [savingWage, setSavingWage] = useState(false);
@@ -83,7 +84,7 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const handleDeleteUser = async (uid: string, name: string, role: "admin" | "staff") => {
+  const openDeleteConfirm = (uid: string, name: string, role: "admin" | "staff") => {
     if (role === "admin") {
       const adminCount = users.filter((u) => u.role === "admin").length;
       if (adminCount <= 1) {
@@ -91,10 +92,14 @@ export default function AdminSettingsPage() {
         return;
       }
     }
-    if (!confirm(`${name} をユーザー一覧から削除しますか？\n\n※シフト・通知・チャット・時給履歴など、DB 上の全関連データが削除されます。\n※Firebase Authentication の削除は Firebase コンソールで別途行ってください。`)) {
-      return;
-    }
+    setDeleteConfirmTarget({ uid, name, role });
+  };
+
+  const executeDeleteUser = async () => {
+    if (!deleteConfirmTarget) return;
+    const { uid } = deleteConfirmTarget;
     setDeletingUserId(uid);
+    setDeleteConfirmTarget(null);
     try {
       await deleteAllUserData(uid);
       setSelectedUser(null);
@@ -340,6 +345,54 @@ export default function AdminSettingsPage() {
           </div>
         )}
       </div>
+
+      {deleteConfirmTarget && (
+        <div
+          role="dialog"
+          aria-label="ユーザー削除の確認"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 300,
+            padding: "1rem",
+          }}
+          onClick={() => !deletingUserId && setDeleteConfirmTarget(null)}
+        >
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, padding: "1.25rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.1rem", color: "var(--destructive)" }}>ユーザーを削除</h3>
+            <p style={{ margin: "0 0 1rem 0", color: "var(--text-main)", fontSize: "0.95rem" }}>
+              <strong>{deleteConfirmTarget.name}</strong> をユーザー一覧から削除しますか？
+            </p>
+            <p style={{ margin: "0 0 1rem 0", color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5 }}>
+              シフト・通知・チャット・時給履歴など、DB 上の全関連データが削除されます。<br />
+              Firebase Authentication の削除は Firebase コンソールで別途行ってください。
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setDeleteConfirmTarget(null)}
+                disabled={!!deletingUserId}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}
+                onClick={executeDeleteUser}
+                disabled={!!deletingUserId}
+              >
+                {deletingUserId ? "削除中..." : "削除する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {chatworkNotifyModalOpen && (
         <div
@@ -681,7 +734,7 @@ export default function AdminSettingsPage() {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleDeleteUser(selectedUser!.uid, selectedUser!.name, selectedUser!.role);
+                  openDeleteConfirm(selectedUser!.uid, selectedUser!.name, selectedUser!.role);
                 }}
                 disabled={deletingUserId === selectedUser!.uid}
               >
