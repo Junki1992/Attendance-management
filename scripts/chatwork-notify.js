@@ -78,6 +78,7 @@ async function main() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
 
+  console.log("[chatwork-notify] Sending for date:", dateStr, "roomId:", roomId);
   const shiftsSnap = await db.collection("shifts").where("date", "==", dateStr).where("status", "==", "confirmed").get();
   const entries = [];
   for (const d of shiftsSnap.docs) {
@@ -88,7 +89,8 @@ async function main() {
     const userSnap = await db.doc(`users/${data.userId}`).get();
     const userData = userSnap.exists ? userSnap.data() : null;
     const name = userData?.name || data.userId;
-    const chatworkAccountId = (userData?.chatworkAccountId || "").trim() || undefined;
+    const raw = userData?.chatworkAccountId;
+    const chatworkAccountId = (raw != null ? String(raw).trim() : "") || undefined;
     entries.push({ name, start, end, chatworkAccountId });
   }
 
@@ -101,6 +103,7 @@ async function main() {
         })
       : ["（出勤なし）"];
   const body = `【翌日出勤】${dateLabel}\n${lines.join("\n")}`;
+  console.log("[chatwork-notify] Entries:", entries.length, "Body:", body);
 
   const res = await fetch(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
     method: "POST",
@@ -110,11 +113,11 @@ async function main() {
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Chatwork API error:", res.status, errText);
+    console.error("[chatwork-notify] Chatwork API error:", res.status, errText);
     await sendErrorToChatwork(token, roomId, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, `Chatwork API エラー ${res.status}: ${errText}`);
     process.exit(1);
   }
-  console.log("Sent:", dateStr, entries.length);
+  console.log("[chatwork-notify] Sent OK:", dateStr, "entries:", entries.length);
 }
 
 main().catch(async (e) => {
