@@ -49,6 +49,7 @@ export default function ShiftCalendar() {
     const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
     const dragStartDayRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
+    const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -106,22 +107,32 @@ export default function ShiftCalendar() {
         e.preventDefault();
         dragStartDayRef.current = day;
         hasMovedRef.current = false;
+        pointerStartRef.current = { x: e.clientX, y: e.clientY };
     }, []);
 
     useEffect(() => {
-        if (deadlinePassed || monthIsConfirmed) return;
+        const DRAG_THRESHOLD = 5;
         const handlePointerMove = (e: PointerEvent) => {
-            const start = dragStartDayRef.current;
-            if (start === null) return;
             if (deadlinePassed || monthIsConfirmed) return;
-            hasMovedRef.current = true;
+            const start = dragStartDayRef.current;
+            const pos = pointerStartRef.current;
+            if (start === null || pos === null) return;
+            const dx = e.clientX - pos.x;
+            const dy = e.clientY - pos.y;
+            if (dx * dx + dy * dy > DRAG_THRESHOLD * DRAG_THRESHOLD) hasMovedRef.current = true;
             const target = document.elementFromPoint(e.clientX, e.clientY);
             const dayEl = target?.closest("[data-day]");
             const dayStr = dayEl?.getAttribute("data-day");
             if (dayStr) {
                 const day = parseInt(dayStr, 10);
                 const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d));
-                setBulkSelectedDays(range);
+                if (range.length > 1) {
+                    setBulkSelectedDays(range);
+                } else if (range.length === 1) {
+                    setBulkSelectedDays((prev) =>
+                        prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+                    );
+                }
             }
         };
         const handlePointerUp = (e: PointerEvent) => {
@@ -132,9 +143,16 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             const day = dayStr ? parseInt(dayStr, 10) : null;
             if (!hasMovedRef.current && day !== null) {
-                setDetailModalDay(day);
+                if (confirmedByDay[day]) {
+                    setDetailModalDay(day);
+                } else if (!deadlinePassed && !monthIsConfirmed && !isPastDate(year, month, day)) {
+                    setBulkSelectedDays((prev) =>
+                        prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+                    );
+                }
             }
             dragStartDayRef.current = null;
+            pointerStartRef.current = null;
         };
         document.addEventListener("pointermove", handlePointerMove);
         document.addEventListener("pointerup", handlePointerUp);
@@ -324,7 +342,7 @@ export default function ShiftCalendar() {
                     >
                         <h3 style={{ marginBottom: "1rem" }}>
                             {month + 1}月{detailModalDay}日
-                            {dayOfWeek[new Date(year, month, detailModalDay - 1).getDay()]}のシフト
+                            {dayOfWeek[new Date(year, month, detailModalDay).getDay()]}のシフト
                         </h3>
                         {(() => {
                             const label = shifts[detailModalDay];
@@ -385,7 +403,7 @@ export default function ShiftCalendar() {
                 >
                     <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.5rem" }}>一括設定</div>
                     <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                        日付をドラッグで選択 → 勤務時間を指定して「一括適用」。クリックで詳細表示
+                        日付をドラッグで範囲選択、またはクリックで個別に選択・解除 → 勤務時間を指定して「一括適用」
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 0.75rem", marginBottom: "0.5rem" }}>
                         <button type="button" className="btn btn-outline" onClick={bulkSelectWeekdays} style={{ fontSize: "0.75rem" }}>
@@ -506,15 +524,15 @@ export default function ShiftCalendar() {
                                 role="button"
                                 tabIndex={0}
                                 data-day={day}
-                                title={isPast ? "過去の日付は編集できません" : "クリックで詳細表示"}
+                                title={isPast ? "過去の日付は編集できません" : isConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : undefined}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
-                                onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null) { e.preventDefault(); setDetailModalDay(day); } }}
+                                onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null && confirmedByDay[day]) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{
                                     backgroundColor: isPast ? "var(--surface-hover)" : cellBg,
                                     opacity: isPast ? 0.7 : 1,
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
-                                    cursor: isEditable ? "pointer" : (isPast ? "default" : (isConfirmed || monthIsConfirmed ? "not-allowed" : "default")),
+                                    cursor: isEditable || isConfirmed ? "pointer" : (isPast ? "default" : (monthIsConfirmed ? "not-allowed" : "default")),
                                     position: "relative",
                                     transition: "background-color 0.15s",
                                     border: cellBorder,
