@@ -167,6 +167,12 @@ export default function AdminShiftGrid() {
     [shifts]
   );
 
+  /** 確定対象が1人以上いるか（シフトがあり、まだ確定していない人） */
+  const hasShiftsToConfirm = useMemo(
+    () => staffList.some((s) => hasShiftsInMonth(s.id) && !isFullyConfirmed(s.id)),
+    [staffList, hasShiftsInMonth, isFullyConfirmed]
+  );
+
   const toggleSelected = (userId: string) => {
     setSelectedUserIds((prev) => {
       const next = new Set(prev);
@@ -502,7 +508,8 @@ export default function AdminShiftGrid() {
             <button
               className="btn btn-primary"
               onClick={handleConfirm}
-              disabled={loading || confirming}
+              disabled={loading || confirming || !hasShiftsToConfirm}
+              title={!hasShiftsToConfirm ? "全員のシフトがすでに確定済みです" : undefined}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {confirming ? "処理中..." : "確定して通知"}
