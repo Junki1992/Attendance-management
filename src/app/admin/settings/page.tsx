@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
-import { getChatworkConfig, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
+import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
 import { deleteAllUserData } from "@/services/userDeletionService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
@@ -38,6 +38,7 @@ export default function AdminSettingsPage() {
   const [savingWage, setSavingWage] = useState(false);
   const [hourlyWageLocked, setHourlyWageLocked] = useState(true);
   const [wageChangeLog, setWageChangeLog] = useState<WageChangeLogEntry[]>([]);
+  const [chatworkRaw, setChatworkRaw] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     getSettings().then((s) => {
@@ -53,6 +54,9 @@ export default function AdminSettingsPage() {
         chatworkNotifyHourRef.current = hour;
       }
     }).catch(() => {});
+    if (process.env.NODE_ENV !== "production") {
+      getChatworkConfigRaw().then(setChatworkRaw).catch(() => setChatworkRaw(null));
+    }
 
     setUsersLoading(true);
     const timeout = setTimeout(() => setUsersLoading(false), 15000);
@@ -292,6 +296,9 @@ export default function AdminSettingsPage() {
                   try {
                     await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim(), notifyHour: chatworkNotifyHourRef.current });
                     setChatworkEditing(false);
+                    if (process.env.NODE_ENV !== "production") {
+                      getChatworkConfigRaw().then(setChatworkRaw).catch(() => {});
+                    }
                     alert("保存しました");
                   } catch (e) {
                     console.error(e);
@@ -329,6 +336,15 @@ export default function AdminSettingsPage() {
               <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>自動通知時刻: </span>
               <span>{String(chatworkNotifyHour).padStart(2, "0")}:00（日本時間）</span>
             </div>
+            {process.env.NODE_ENV !== "production" && chatworkRaw != null && (
+              <div style={{ fontSize: "0.75rem", padding: "0.5rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-md)", fontFamily: "monospace" }}>
+                <div style={{ fontWeight: 600, marginBottom: "0.25rem", color: "var(--text-muted)" }}>Firestore 生データ（chatwork-notify.js が参照する settings/chatwork）</div>
+                <div>notifyHour: {JSON.stringify(chatworkRaw.notifyHour)} (型: {typeof chatworkRaw.notifyHour})</div>
+                <div style={{ marginTop: "0.25rem", color: "var(--text-muted)" }}>
+                  → GitHub Actions は日本時間 {String(Number(chatworkRaw.notifyHour) >= 0 && Number(chatworkRaw.notifyHour) <= 23 ? Number(chatworkRaw.notifyHour) : 21).toString().padStart(2, "0")}:00 に通知送信
+                </div>
+              </div>
+            )}
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button type="button" className="btn btn-outline" onClick={() => setChatworkEditing(true)}>
                 編集

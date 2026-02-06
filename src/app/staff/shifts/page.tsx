@@ -39,6 +39,7 @@ export default function ShiftCalendar() {
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
     const [remoteByDay, setRemoteByDay] = useState<{ [key: number]: boolean }>({});
     const [confirmedByDay, setConfirmedByDay] = useState<{ [key: number]: boolean }>({});
+    const [submittedByDay, setSubmittedByDay] = useState<{ [key: number]: boolean }>({});
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
     const [deadlinePassed, setDeadlinePassed] = useState(false);
@@ -73,6 +74,7 @@ export default function ShiftCalendar() {
                 const shiftMap: { [key: number]: string } = {};
                 const remoteMap: { [key: number]: boolean } = {};
                 const confirmedMap: { [key: number]: boolean } = {};
+                const submittedMap: { [key: number]: boolean } = {};
                 data.forEach((s) => {
                     const day = parseInt(s.date.split("-")[2], 10);
                     if (s.startTime === "00:00" && s.endTime === "00:00") {
@@ -82,10 +84,12 @@ export default function ShiftCalendar() {
                     }
                     if (s.isRemote) remoteMap[day] = true;
                     if (s.status === "confirmed") confirmedMap[day] = true;
+                    if (s.status === "submitted" || (s.status !== "draft" && s.status !== "confirmed")) submittedMap[day] = true;
                 });
                 setShifts(shiftMap);
                 setRemoteByDay(remoteMap);
                 setConfirmedByDay(confirmedMap);
+                setSubmittedByDay(submittedMap);
                 setLastSavedShifts(shiftMap);
                 setLastSavedRemoteByDay(remoteMap);
             } catch (error) {
@@ -231,19 +235,17 @@ export default function ShiftCalendar() {
             targetDays.forEach((d) => (next[d] = bulkIsOff ? false : bulkIsRemote));
             return next;
         });
-        alert(`${targetDays.length}日分を一括で設定しました。内容を確認して「提出内容を保存」で送信してください。`);
+        alert(`${targetDays.length}日分を一括で設定しました。内容を確認して「保存」または「提出」してください。`);
     };
 
-    const handleSave = async () => {
+    const saveShiftsToFirestore = async (status: "draft" | "submitted") => {
         if (!user || deadlinePassed || monthIsConfirmed) return;
-        setLoading(true);
-        try {
-            const promises = Object.entries(shifts)
-                .filter(([dayStr]) => {
-                    const d = parseInt(dayStr, 10);
-                    return !confirmedByDay[d] && !isPastDate(year, month, d);
-                })
-                .map(async ([dayStr, label]) => {
+        const promises = Object.entries(shifts)
+            .filter(([dayStr]) => {
+                const d = parseInt(dayStr, 10);
+                return !confirmedByDay[d] && !isPastDate(year, month, d);
+            })
+            .map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
                 const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 let start = "",
@@ -263,14 +265,45 @@ export default function ShiftCalendar() {
                     date: dateStr,
                     startTime: start,
                     endTime: end,
-                    status: "submitted",
+                    status,
                     isRemote: remoteByDay[day] ?? false,
                 };
                 return saveShift(shiftData);
             });
-            await Promise.all(promises);
-            setLastSavedShifts({ ...shifts });
-            setLastSavedRemoteByDay({ ...remoteByDay });
+        await Promise.all(promises);
+        setLastSavedShifts({ ...shifts });
+        setLastSavedRemoteByDay({ ...remoteByDay });
+        if (status === "submitted") {
+            setSubmittedByDay((prev) => {
+                const next = { ...prev };
+                Object.keys(shifts).forEach((dayStr) => {
+                    const d = parseInt(dayStr, 10);
+                    if (!confirmedByDay[d] && !isPastDate(year, month, d)) next[d] = true;
+                });
+                return next;
+            });
+        }
+    };
+
+    const handleSave = async () => {
+        if (!user || deadlinePassed || monthIsConfirmed) return;
+        setLoading(true);
+        try {
+            await saveShiftsToFirestore("draft");
+            alert("下書きを保存しました");
+        } catch (error) {
+            console.error("Error saving:", error);
+            alert("保存に失敗しました");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSubmit = async () => {
+        if (!user || deadlinePassed || monthIsConfirmed) return;
+        setLoading(true);
+        try {
+            await saveShiftsToFirestore("submitted");
             try {
                 const adminIds = await getAdminIds();
                 const message = `${user.name}さんが${month + 1}月のシフトを提出しました`;
@@ -278,10 +311,10 @@ export default function ShiftCalendar() {
             } catch (notifErr) {
                 console.warn("[staff/shifts] 管理者への通知作成に失敗", notifErr);
             }
-            alert("シフトを保存しました！");
+            alert("シフトを提出しました！");
         } catch (error) {
-            console.error("Error saving:", error);
-            alert("保存に失敗しました");
+            console.error("Error submitting:", error);
+            alert("提出に失敗しました");
         } finally {
             setLoading(false);
         }
@@ -391,7 +424,7 @@ export default function ShiftCalendar() {
                                 <>
                                     <div style={{ marginBottom: "1rem" }}>
                                         <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-                                            {isConfirmed ? "確定シフト" : "提出シフト"}
+                                            {isConfirmed ? "確定シフト" : submittedByDay[detailModalDay] ? "提出シフト" : "下書き"}
                                         </div>
                                         <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                                             {isOff ? "OFF" : label.replace(" - ", " ～ ")}
@@ -500,9 +533,14 @@ export default function ShiftCalendar() {
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
-                        {loading ? "保存中..." : monthIsConfirmed ? "確定済" : deadlinePassed ? "締切済" : "提出内容を保存"}
-                    </button>
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <button className="btn btn-outline" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
+                            {loading ? "処理中..." : "保存"}
+                        </button>
+                        <button className="btn btn-primary" onClick={handleSubmit} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
+                            {loading ? "処理中..." : monthIsConfirmed ? "確定済" : deadlinePassed ? "締切済" : "提出"}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -591,7 +629,7 @@ export default function ShiftCalendar() {
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {formatShiftLabel(displayLabel)}{remoteByDay[day] ? " 在宅" : ""}{isConfirmed ? " 確定" : ""}
+                                            {formatShiftLabel(displayLabel)}{remoteByDay[day] ? " 在宅" : ""}{isConfirmed ? " 確定" : submittedByDay[day] ? " 提出" : " 下書き"}
                                         </div>
                                     );
                                 })()}

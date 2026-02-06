@@ -12,6 +12,14 @@ export interface ChatworkConfig {
 const CHATWORK_CONFIG_DOC = "chatwork";
 const DEFAULT_NOTIFY_HOUR = 21;
 
+/** Firestore の生データを取得（chatwork-notify.js が読むのと同じドキュメント） */
+export const getChatworkConfigRaw = async (): Promise<Record<string, unknown> | null> => {
+  const ref = doc(db, "settings", CHATWORK_CONFIG_DOC);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  return snap.data() as Record<string, unknown>;
+};
+
 export const getChatworkConfig = async (): Promise<ChatworkConfig | null> => {
   const ref = doc(db, "settings", CHATWORK_CONFIG_DOC);
   const snap = await getDoc(ref);

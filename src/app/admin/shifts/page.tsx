@@ -133,7 +133,7 @@ export default function AdminShiftGrid() {
     const unsub = subscribeAllShifts(year, month, (s) => {
       setShifts(s);
       const map: { [key: string]: number } = {};
-      s.forEach((sh) => {
+      s.filter((sh) => sh.status !== "draft").forEach((sh) => {
         const h = calcHours(sh);
         if (h === "OFF") return;
         const day = parseInt(sh.date.split("-")[2], 10);
@@ -151,16 +151,16 @@ export default function AdminShiftGrid() {
     [shiftData]
   );
 
-  /** このユーザーに当月シフトが1件以上あるか */
+  /** このユーザーに当月シフトが1件以上あるか（提出済み・確定済みのみ。下書きは除く） */
   const hasShiftsInMonth = useCallback(
-    (userId: string) => shifts.some((s) => s.userId === userId),
+    (userId: string) => shifts.some((s) => s.userId === userId && s.status !== "draft"),
     [shifts]
   );
 
   /** このユーザーの当月シフトがすべて確定済みで、確定後に編集されていなければ true（シフトなしは false） */
   const isFullyConfirmed = useCallback(
     (userId: string) => {
-      const userShifts = shifts.filter((s) => s.userId === userId);
+      const userShifts = shifts.filter((s) => s.userId === userId && s.status !== "draft");
       if (userShifts.length === 0) return false;
       return userShifts.every((s) => s.status === "confirmed" && !s.editedAfterConfirmed);
     },
