@@ -16,4 +16,6 @@ jobs:
       - run: node scripts/chatwork-notify.js
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          # エラー時のメンション先。GitHub Secrets に CHATWORK_ERROR_NOTIFY_ACCOUNT_ID を追加
+          CHATWORK_ERROR_NOTIFY_ACCOUNT_ID: ${{ secrets.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID }}
           CHATWORK_NOTIFY_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}

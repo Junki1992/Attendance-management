@@ -3,17 +3,16 @@
  * 実行: node scripts/chatwork-notify.js
  * 環境変数: GOOGLE_APPLICATION_CREDENTIALS_JSON (Firebase サービスアカウントの JSON 文字列)
  *          CHATWORK_API_TOKEN, CHATWORK_ROOM_ID（未設定時は Firestore settings/chatwork から取得）
- *          CHATWORK_ERROR_NOTIFY_ACCOUNT_ID（エラー時のメンション先、未設定時は 1ntirss67epgk）
+ *          CHATWORK_ERROR_NOTIFY_ACCOUNT_ID（エラー時のメンション先、GitHub Secrets で設定）
  */
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 
-const ERROR_NOTIFY_ACCOUNT_ID = process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID || "1ntirss67epgk";
-
-async function sendErrorToChatwork(token, roomId, errorMessage) {
+async function sendErrorToChatwork(token, roomId, accountId, errorMessage) {
+  if (!accountId?.trim()) return;
   try {
-    const body = `[To:${ERROR_NOTIFY_ACCOUNT_ID}] 【エラー】翌日出勤通知に失敗しました\n${errorMessage}`;
+    const body = `[To:${accountId.trim()}] 【エラー】翌日出勤通知に失敗しました\n${errorMessage}`;
     const res = await fetch(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
       method: "POST",
       headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
@@ -112,7 +111,7 @@ async function main() {
   if (!res.ok) {
     const errText = await res.text();
     console.error("Chatwork API error:", res.status, errText);
-    await sendErrorToChatwork(token, roomId, `Chatwork API エラー ${res.status}: ${errText}`);
+    await sendErrorToChatwork(token, roomId, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, `Chatwork API エラー ${res.status}: ${errText}`);
     process.exit(1);
   }
   console.log("Sent:", dateStr, entries.length);
@@ -138,7 +137,7 @@ main().catch(async (e) => {
       }
     }
     if (token && roomId) {
-      await sendErrorToChatwork(token, roomId, String(e?.message || e));
+      await sendErrorToChatwork(token, roomId, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, String(e?.message || e));
     }
   } catch (notifyErr) {
     console.error("Error notify failed:", notifyErr);
