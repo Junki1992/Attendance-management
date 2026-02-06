@@ -80,11 +80,11 @@ export default function SignupPage() {
             return;
         }
         if (!chatworkAccountId.trim()) {
-            setSubmitError("Chatwork IDを入力してください");
+            setSubmitError("Chatwork アカウントIDを入力してください");
             return;
         }
-        if (!/^[a-zA-Z0-9]+$/.test(chatworkAccountId.trim())) {
-            setSubmitError("Chatwork IDは英数字で入力してください");
+        if (!/^\d+$/.test(chatworkAccountId.trim())) {
+            setSubmitError("Chatwork アカウントIDは数字のみです（プロフィール→アカウントで確認）");
             return;
         }
         if (password.length < 6) {
@@ -186,7 +186,7 @@ export default function SignupPage() {
                     </div>
                     <div>
                         <label htmlFor="chatworkAccountId" style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-main)" }}>
-                            Chatwork ID
+                            Chatwork アカウントID（数字）
                         </label>
                         <input
                             id="chatworkAccountId"
@@ -194,7 +194,9 @@ export default function SignupPage() {
                             autoComplete="off"
                             value={chatworkAccountId}
                             onChange={(e) => setChatworkAccountId(e.target.value)}
-                            placeholder="例: abc123xyz"
+                            placeholder="例: 12345678"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             style={{
                                 width: "100%",
                                 padding: "0.5rem 0.75rem",
@@ -205,7 +207,7 @@ export default function SignupPage() {
                             }}
                         />
                         <p style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                            Chatwork のプロフィール画面に表示される「Chatwork ID」です。通知時に To: メンションでお知らせします。
+                            数字のアカウントID（マイチャットでメッセージを引用すると aid= の後に表示）。通知時に To: メンションで届きます。
                         </p>
                     </div>
                     <div>

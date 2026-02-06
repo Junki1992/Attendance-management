@@ -10,7 +10,7 @@ export interface UserProfile {
     email: string;
     hourlyWage: number; // Required now, default 1000
     photoURL?: string;
-    chatworkAccountId?: string; // Chatwork の個人アカウントID（通知の To: メンション用）
+    chatworkAccountId?: string; // Chatwork のアカウントID（数字。通知の [To:xxx] メンション用）
 }
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {

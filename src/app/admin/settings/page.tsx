@@ -584,8 +584,9 @@ export default function AdminSettingsPage() {
             </span>
           </div>
           <div style={{ marginBottom: "0.75rem" }}>
-            <strong>Chatwork ID:</strong>{" "}
+            <strong>Chatwork アカウントID:</strong>{" "}
             <span style={{ color: "var(--text-muted)" }}>{selectedUser!.chatworkAccountId || "未設定"}</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: "0.25rem" }}>（数字。通知の To: 用）</span>
           </div>
           {selectedUser!.role === "staff" && (
             <div style={{ marginBottom: "0.75rem" }}>
