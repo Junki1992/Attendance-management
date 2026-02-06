@@ -56,6 +56,11 @@ export default function NotificationList({ onClose }: { onClose: () => void }) {
             } else if (user.role === 'admin') {
                 router.push('/admin/chat');
             }
+        } else if (n.type === 'shift_submitted') {
+            // シフト提出通知 → 管理者はシフト表ページへ
+            if (user.role === 'admin') {
+                router.push('/admin/shifts');
+            }
         } else if (n.type === 'shift_change_request') {
             // 変更申請通知 → 管理者は変更申請ページへ
             if (user.role === 'admin') {
@@ -119,7 +124,7 @@ export default function NotificationList({ onClose }: { onClose: () => void }) {
                                     color: n.read ? 'var(--text-muted)' : 'var(--primary)',
                                     fontSize: '0.75rem' 
                                 }}>
-                                    {n.type === 'shift_confirmed' ? 'シフト確定' : n.type === 'message' ? 'メッセージ' : n.type === 'shift_change_request' ? '変更申請' : n.type === 'shift_change_approved' ? '変更承認' : n.type === 'shift_change_rejected' ? '変更却下' : n.type === 'hourly_wage_changed' ? '時給変更' : 'お知らせ'}
+                                    {n.type === 'shift_confirmed' ? 'シフト確定' : n.type === 'shift_submitted' ? 'シフト提出' : n.type === 'message' ? 'メッセージ' : n.type === 'shift_change_request' ? '変更申請' : n.type === 'shift_change_approved' ? '変更承認' : n.type === 'shift_change_rejected' ? '変更却下' : n.type === 'hourly_wage_changed' ? '時給変更' : 'お知らせ'}
                                 </span>
                                 {!n.read && <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--primary)' }}></span>}
                             </div>

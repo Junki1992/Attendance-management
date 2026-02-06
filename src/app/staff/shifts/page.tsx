@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
-import { getUserProfile } from "@/services/userService";
+import { getUserProfile, getAdminIds } from "@/services/userService";
+import { createNotification } from "@/services/notificationService";
 import { isPastSubmitDeadline } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
@@ -47,6 +48,8 @@ export default function ShiftCalendar() {
     const [bulkIsRemote, setBulkIsRemote] = useState(false);
     const [bulkSelectedDays, setBulkSelectedDays] = useState<number[]>([]);
     const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
+    const [lastSavedShifts, setLastSavedShifts] = useState<{ [key: number]: string }>({});
+    const [lastSavedRemoteByDay, setLastSavedRemoteByDay] = useState<{ [key: number]: boolean }>({});
     const dragStartDayRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
     const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -83,6 +86,8 @@ export default function ShiftCalendar() {
                 setShifts(shiftMap);
                 setRemoteByDay(remoteMap);
                 setConfirmedByDay(confirmedMap);
+                setLastSavedShifts(shiftMap);
+                setLastSavedRemoteByDay(remoteMap);
             } catch (error) {
                 console.error("Failed to fetch data", error);
             }
@@ -264,6 +269,15 @@ export default function ShiftCalendar() {
                 return saveShift(shiftData);
             });
             await Promise.all(promises);
+            setLastSavedShifts({ ...shifts });
+            setLastSavedRemoteByDay({ ...remoteByDay });
+            try {
+                const adminIds = await getAdminIds();
+                const message = `${user.name}さんが${month + 1}月のシフトを提出しました`;
+                await Promise.all(adminIds.map((adminId) => createNotification(adminId, "shift_submitted", message)));
+            } catch (notifErr) {
+                console.warn("[staff/shifts] 管理者への通知作成に失敗", notifErr);
+            }
             alert("シフトを保存しました！");
         } catch (error) {
             console.error("Error saving:", error);
@@ -277,6 +291,18 @@ export default function ShiftCalendar() {
         const d = parseInt(dayStr, 10);
         return !confirmedByDay[d] && !isPastDate(year, month, d);
     });
+
+    const hasChanges = (() => {
+        for (let d = 1; d <= daysInMonth; d++) {
+            if (confirmedByDay[d] || isPastDate(year, month, d)) continue;
+            const cur = shifts[d];
+            const last = lastSavedShifts[d];
+            const curRemote = remoteByDay[d] ?? false;
+            const lastRemote = lastSavedRemoteByDay[d] ?? false;
+            if (cur !== last || curRemote !== lastRemote) return true;
+        }
+        return false;
+    })();
 
     const calculateSalary = () => {
         let totalHours = 0;
@@ -474,7 +500,7 @@ export default function ShiftCalendar() {
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
-                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave}>
+                    <button className="btn btn-primary" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
                         {loading ? "保存中..." : monthIsConfirmed ? "確定済" : deadlinePassed ? "締切済" : "提出内容を保存"}
                     </button>
                 </div>
