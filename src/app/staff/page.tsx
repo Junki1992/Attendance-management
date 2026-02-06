@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
 import { subscribeSettings } from "@/services/settingsService";
+import { getUserShifts } from "@/services/shiftService";
 
 export default function StaffDashboard() {
+    const { user } = useAuth();
     const [deadlineLabel, setDeadlineLabel] = useState<string | null>(null);
+    const [monthIsConfirmed, setMonthIsConfirmed] = useState(false);
 
     useEffect(() => {
         const unsub = subscribeSettings((s) => {
@@ -19,6 +23,18 @@ export default function StaffDashboard() {
         return () => unsub();
     }, []);
 
+    useEffect(() => {
+        if (!user) return;
+        const load = async () => {
+            const now = new Date();
+            const data = await getUserShifts(user.uid, now.getFullYear(), now.getMonth());
+            const nonDraft = data.filter((s) => s.status !== "draft");
+            const allConfirmed = nonDraft.length > 0 && nonDraft.every((s) => s.status === "confirmed");
+            setMonthIsConfirmed(allConfirmed);
+        };
+        load();
+    }, [user]);
+
     return (
         <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>ダッシュボード</h2>
@@ -27,17 +43,29 @@ export default function StaffDashboard() {
                 <div className="card">
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>今月のシフト提出</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        来月の希望シフトを提出してください。
-                        {deadlineLabel && (
+                        {monthIsConfirmed ? (
+                            <strong>確定済み</strong>
+                        ) : (
                             <>
-                                <br />
-                                <strong>締切: {deadlineLabel}</strong>
+                                来月の希望シフトを提出してください。
+                                {deadlineLabel && (
+                                    <>
+                                        <br />
+                                        <strong>締切: {deadlineLabel}</strong>
+                                    </>
+                                )}
                             </>
                         )}
                     </p>
-                    <Link href="/staff/shifts" className="btn btn-primary">
-                        シフトを提出する
-                    </Link>
+                    {monthIsConfirmed ? (
+                        <Link href="/staff/confirmed-shifts" className="btn btn-primary">
+                            確定シフトを確認
+                        </Link>
+                    ) : (
+                        <Link href="/staff/shifts" className="btn btn-primary">
+                            シフトを提出する
+                        </Link>
+                    )}
                 </div>
 
                 <div className="card">
