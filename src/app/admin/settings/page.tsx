@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
 import { getChatworkConfig, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, deleteUserDocument, UserProfile } from "@/services/userService";
@@ -26,6 +26,7 @@ export default function AdminSettingsPage() {
   const [chatworkToken, setChatworkToken] = useState("");
   const [chatworkRoomId, setChatworkRoomId] = useState("");
   const [chatworkNotifyHour, setChatworkNotifyHour] = useState(21);
+  const chatworkNotifyHourRef = useRef(21);
   const [chatworkEditing, setChatworkEditing] = useState(false);
   const [chatworkSaving, setChatworkSaving] = useState(false);
   const [chatworkSending, setChatworkSending] = useState(false);
@@ -43,9 +44,11 @@ export default function AdminSettingsPage() {
     }).catch(() => setLoading(false));
     getChatworkConfig().then((c) => {
       if (c) {
+        const hour = c.notifyHour ?? 21;
         setChatworkToken(c.apiToken);
         setChatworkRoomId(c.roomId);
-        setChatworkNotifyHour(c.notifyHour ?? 21);
+        setChatworkNotifyHour(hour);
+        chatworkNotifyHourRef.current = hour;
       }
     }).catch(() => {});
 
@@ -261,7 +264,11 @@ export default function AdminSettingsPage() {
               </p>
               <select
                 value={chatworkNotifyHour}
-                onChange={(e) => setChatworkNotifyHour(Number(e.target.value))}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setChatworkNotifyHour(v);
+                  chatworkNotifyHourRef.current = v;
+                }}
                 style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1rem" }}
               >
                 {Array.from({ length: 24 }, (_, i) => (
@@ -277,7 +284,7 @@ export default function AdminSettingsPage() {
                 onClick={async () => {
                   setChatworkSaving(true);
                   try {
-                    await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim(), notifyHour: chatworkNotifyHour });
+                    await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim(), notifyHour: chatworkNotifyHourRef.current });
                     setChatworkEditing(false);
                     alert("保存しました");
                   } catch (e) {

@@ -52,7 +52,7 @@ export const sendNextDayAttendanceToChatwork = async (): Promise<{ ok: boolean; 
   );
   const shiftsSnap = await getDocs(q);
 
-  const entries: { name: string; start: string; end: string }[] = [];
+  const entries: { name: string; start: string; end: string; chatworkAccountId?: string }[] = [];
   for (const d of shiftsSnap.docs) {
     const data = d.data();
     const start = (data.startTime || "").trim();
@@ -60,13 +60,21 @@ export const sendNextDayAttendanceToChatwork = async (): Promise<{ ok: boolean; 
     if (!start || !end || (start === "00:00" && end === "00:00")) continue;
     const userRef = doc(db, "users", data.userId);
     const userSnap = await getDoc(userRef);
-    const name = userSnap.exists() ? (userSnap.data()?.name || data.userId) : data.userId;
-    entries.push({ name, start, end });
+    const userData = userSnap.exists() ? userSnap.data() : null;
+    const name = userData?.name || data.userId;
+    const chatworkAccountId = (userData?.chatworkAccountId || "").trim() || undefined;
+    entries.push({ name, start, end, chatworkAccountId });
   }
 
   const dateLabel = `${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`;
-  const lines = entries.length > 0 ? entries.map((e) => `${e.name} ${e.start}-${e.end}`) : ["（出勤なし）"];
-  const body = `[toall]\n【翌日出勤】${dateLabel}\n${lines.join("\n")}`;
+  const lines =
+    entries.length > 0
+      ? entries.map((e) => {
+          const mention = e.chatworkAccountId ? `[To:${e.chatworkAccountId}] ` : "";
+          return `${mention}${e.name} ${e.start}-${e.end}`;
+        })
+      : ["（出勤なし）"];
+  const body = `【翌日出勤】${dateLabel}\n${lines.join("\n")}`;
 
   const res = await fetch(`https://api.chatwork.com/v2/rooms/${config.roomId}/messages`, {
     method: "POST",

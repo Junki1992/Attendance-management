@@ -40,10 +40,15 @@ async function main() {
 
   const forceSend = process.env.CHATWORK_NOTIFY_FORCE === "1";
   if (!forceSend) {
-    const notifyHour = (typeof cfgData?.notifyHour === "number" && cfgData.notifyHour >= 0 && cfgData.notifyHour <= 23)
-      ? cfgData.notifyHour
-      : 21;
+    const raw = cfgData?.notifyHour;
+    const notifyHour =
+      typeof raw === "number" && raw >= 0 && raw <= 23
+        ? Math.floor(raw)
+        : typeof raw === "string" && /^\d+$/.test(raw)
+          ? Math.min(23, Math.max(0, parseInt(raw, 10)))
+          : 21;
     const now = new Date();
+    // JST = UTC+9。toLocaleString は環境依存で誤差が出るため、UTC ベースで計算する
     const jstHour = (now.getUTCHours() + 9) % 24;
     if (jstHour !== notifyHour) {
       console.log("Skip: current JST hour", jstHour, "!= configured", notifyHour);
@@ -63,13 +68,21 @@ async function main() {
     const end = (data.endTime || "").trim();
     if (!start || !end || (start === "00:00" && end === "00:00")) continue;
     const userSnap = await db.doc(`users/${data.userId}`).get();
-    const name = userSnap.exists ? (userSnap.data()?.name || data.userId) : data.userId;
-    entries.push({ name, start, end });
+    const userData = userSnap.exists ? userSnap.data() : null;
+    const name = userData?.name || data.userId;
+    const chatworkAccountId = (userData?.chatworkAccountId || "").trim() || undefined;
+    entries.push({ name, start, end, chatworkAccountId });
   }
 
   const dateLabel = `${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`;
-  const lines = entries.length > 0 ? entries.map((e) => `${e.name} ${e.start}-${e.end}`) : ["（出勤なし）"];
-  const body = `[toall]\n【翌日出勤】${dateLabel}\n${lines.join("\n")}`;
+  const lines =
+    entries.length > 0
+      ? entries.map((e) => {
+          const mention = e.chatworkAccountId ? `[To:${e.chatworkAccountId}] ` : "";
+          return `${mention}${e.name} ${e.start}-${e.end}`;
+        })
+      : ["（出勤なし）"];
+  const body = `【翌日出勤】${dateLabel}\n${lines.join("\n")}`;
 
   const res = await fetch(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
     method: "POST",
