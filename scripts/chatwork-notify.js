@@ -66,10 +66,9 @@ async function main() {
           ? Math.min(23, Math.max(0, parseInt(raw, 10)))
           : 21;
     const now = new Date();
-    // JST = UTC+9。toLocaleString は環境依存で誤差が出るため、UTC ベースで計算する
     const jstHour = (now.getUTCHours() + 9) % 24;
     if (jstHour !== notifyHour) {
-      console.log("Skip: current JST hour", jstHour, "!= configured", notifyHour);
+      console.log("[chatwork-notify] Skip: JST", jstHour, "!= configured", notifyHour, "(UTC", now.getUTCHours() + ":00)");
       process.exit(0);
     }
   }
