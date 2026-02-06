@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDoc } from "@/lib/firebase/firestoreHelpers";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, onSnapshot } from "firebase/firestore";
 
 export interface AppSettings {
   /** シフト提出締切日（1〜28。当月の何日までに提出か） */
@@ -20,6 +20,15 @@ export const getSettings = async (): Promise<AppSettings> => {
     return { ...DEFAULTS, ...snap.data() } as AppSettings;
   }
   return { ...DEFAULTS };
+};
+
+/** 設定の変更をリアルタイム購読（締切変更が即時反映される） */
+export const subscribeSettings = (callback: (s: AppSettings) => void): (() => void) => {
+  const ref = doc(db, "settings", SETTINGS_DOC_ID);
+  return onSnapshot(ref, (snap) => {
+    const s = snap.exists() ? ({ ...DEFAULTS, ...snap.data() } as AppSettings) : { ...DEFAULTS };
+    callback(s);
+  });
 };
 
 export const saveSettings = async (s: Partial<AppSettings>) => {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
+import { getAllStaff } from "@/services/userService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
 import { deleteAllUserData } from "@/services/userDeletionService";
@@ -77,9 +78,19 @@ export default function AdminSettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
+      const current = await getSettings();
+      const prevDay = current.shiftSubmitDeadlineDay;
       await saveSettings({ shiftSubmitDeadlineDay: v });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+
+      if (prevDay !== v) {
+        const staff = await getAllStaff();
+        const message = `シフト提出締切日が${prevDay}日から${v}日に変更されました。`;
+        await Promise.all(
+          staff.map((s) => createNotification(s.id, "deadline_changed", message))
+        );
+      }
     } catch (err) {
       console.error(err);
       alert("保存に失敗しました");

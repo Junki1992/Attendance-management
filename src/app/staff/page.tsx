@@ -1,8 +1,24 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { subscribeSettings } from "@/services/settingsService";
 
 export default function StaffDashboard() {
+    const [deadlineLabel, setDeadlineLabel] = useState<string | null>(null);
+
+    useEffect(() => {
+        const unsub = subscribeSettings((s) => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const d = Math.min(s.shiftSubmitDeadlineDay, lastDay);
+            setDeadlineLabel(`${month + 1}月${d}日`);
+        });
+        return () => unsub();
+    }, []);
+
     return (
         <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>ダッシュボード</h2>
@@ -12,8 +28,12 @@ export default function StaffDashboard() {
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>今月のシフト提出</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
                         来月の希望シフトを提出してください。
-                        <br />
-                        <strong>締切: 1月25日</strong>
+                        {deadlineLabel && (
+                            <>
+                                <br />
+                                <strong>締切: {deadlineLabel}</strong>
+                            </>
+                        )}
                     </p>
                     <Link href="/staff/shifts" className="btn btn-primary">
                         シフトを提出する
