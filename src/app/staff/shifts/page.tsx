@@ -448,7 +448,7 @@ export default function ShiftCalendar() {
                                 />
                             </>
                         )}
-                        <button type="button" className="btn btn-outline" onClick={applyBulkShift} style={{ fontSize: "0.875rem" }}>
+                        <button type="button" className="btn btn-outline" onClick={applyBulkShift} disabled={bulkSelectedDays.length === 0} style={{ fontSize: "0.875rem" }}>
                             一括適用
                         </button>
                     </div>
