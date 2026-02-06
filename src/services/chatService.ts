@@ -1,6 +1,6 @@
 
 import { db, auth } from "@/lib/firebase/firebase";
-import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timestamp, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, query, where, orderBy, getDocs, onSnapshot, Timestamp, doc, setDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 
 const MAX_IN_QUERY = 30; // Firestore "in" の上限
 import { createNotification } from "@/services/notificationService";
@@ -442,6 +442,40 @@ export const setRoomLastRead = async (roomId: string, uid: string) => {
     const ref = doc(db, "chatRooms", roomId);
     // Use setDoc with merge to create the doc if missing and set nested field
     await setDoc(ref, { lastReadBy: { [uid]: serverTimestamp() } }, { merge: true });
+};
+
+/** 指定ユーザーが送受信した全メッセージと関連チャットルームを削除（ユーザー削除時に呼ぶ） */
+export const deleteMessagesAndChatRoomsByUserId = async (userId: string): Promise<{ messages: number; rooms: number }> => {
+    const [senderSnap, receiverSnap] = await Promise.all([
+        getDocs(query(collection(db, "messages"), where("senderId", "==", userId))),
+        getDocs(query(collection(db, "messages"), where("receiverId", "==", userId))),
+    ]);
+    const roomIds = new Set<string>();
+    const docMap = new Map<string, (typeof senderSnap.docs)[0]>();
+    [...senderSnap.docs, ...receiverSnap.docs].forEach((d) => {
+        docMap.set(d.id, d);
+        const rid = d.data().roomId;
+        if (rid) roomIds.add(rid);
+    });
+    const allDocs = Array.from(docMap.values());
+    const BATCH_SIZE = 500;
+    let messagesDeleted = 0;
+    for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = allDocs.slice(i, i + BATCH_SIZE);
+        chunk.forEach((d) => {
+            batch.delete(d.ref);
+            messagesDeleted++;
+        });
+        await batch.commit();
+    }
+    const roomRefs = Array.from(roomIds).map((roomId) => doc(db, "chatRooms", roomId));
+    for (let i = 0; i < roomRefs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        roomRefs.slice(i, i + BATCH_SIZE).forEach((ref) => batch.delete(ref));
+        await batch.commit();
+    }
+    return { messages: messagesDeleted, rooms: roomRefs.length };
 };
 
 export const subscribeRoomMeta = (roomId: string, callback: (lastReadBy: Record<string, any>) => void) => {

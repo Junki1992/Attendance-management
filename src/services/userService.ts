@@ -1,7 +1,7 @@
 import { db, auth, storage } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, getDocFromCache, getDocsFromServer, onSnapshot } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export interface UserProfile {
     uid: string;
@@ -280,6 +280,20 @@ export const uploadProfileImage = async (uid: string, file: File): Promise<strin
 export const updateUserRole = async (uid: string, role: "admin" | "staff"): Promise<void> => {
     const docRef = doc(db, "users", uid);
     await setDoc(docRef, { role }, { merge: true });
+};
+
+/** プロフィール画像を Storage から削除（ユーザー削除時に呼ぶ） */
+export const deleteProfileImageFromStorage = async (uid: string): Promise<void> => {
+    try {
+        const path = `profileImages/${uid}/avatar`;
+        const storageRef = ref(storage, path);
+        await deleteObject(storageRef);
+    } catch (e) {
+        const code = (e as { code?: string })?.code ?? "";
+        if (code !== "storage/object-not-found") {
+            console.warn("[userService] deleteProfileImageFromStorage:", e);
+        }
+    }
 };
 
 /** ユーザーを Firestore から削除（管理者用）。一覧から消える。Firebase Auth の削除は別途コンソールで行うこと */

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "chatwork-notify": "node scripts/chatwork-notify.js"
+    "chatwork-notify": "node scripts/chatwork-notify.js",
+    "delete-user-shifts": "node scripts/delete-user-shifts.js"
   },
   "dependencies": {
     "firebase": "^12.8.0",

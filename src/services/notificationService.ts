@@ -1,6 +1,6 @@
 import { db, auth } from "@/lib/firebase/firebase";
 import { getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
 
 export interface Notification {
     id?: string;
@@ -204,6 +204,26 @@ export const markMessageNotificationsAsRead = async (userId: string, roomId: str
         }
         console.error("[notificationService] markMessageNotificationsAsRead: error", error);
     }
+};
+
+/** 指定ユーザーの全通知を削除（ユーザー削除時に呼ぶ） */
+export const deleteNotificationsByUserId = async (userId: string): Promise<number> => {
+    const q = query(collection(db, "notifications"), where("userId", "==", userId));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return 0;
+    const BATCH_SIZE = 500;
+    let deleted = 0;
+    const docs = snapshot.docs;
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = docs.slice(i, i + BATCH_SIZE);
+        chunk.forEach((d) => {
+            batch.delete(d.ref);
+            deleted++;
+        });
+        await batch.commit();
+    }
+    return deleted;
 };
 
 /** 管理者用: シフト確定通知の一覧（既読状況の確認）。Firestore に (type, createdAt) の複合インデックスが必要 */

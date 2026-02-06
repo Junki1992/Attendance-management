@@ -7,7 +7,10 @@ service firebase.storage {
   match /b/{bucket}/o {
     match /profileImages/{userId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+        && (request.auth.uid == userId
+            || (exists(/databases/(default)/documents/users/$(request.auth.uid))
+                && get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin"));
     }
   }
 }

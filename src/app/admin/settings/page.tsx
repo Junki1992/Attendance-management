@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings, saveSettings } from "@/services/settingsService";
 import { getChatworkConfig, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
-import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, deleteUserDocument, UserProfile } from "@/services/userService";
+import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
+import { deleteAllUserData } from "@/services/userDeletionService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
@@ -90,12 +91,12 @@ export default function AdminSettingsPage() {
         return;
       }
     }
-    if (!confirm(`${name} をユーザー一覧から削除しますか？\n\n※Firebase Authentication の削除は Firebase コンソールで別途行ってください。`)) {
+    if (!confirm(`${name} をユーザー一覧から削除しますか？\n\n※シフト・通知・チャット・時給履歴など、DB 上の全関連データが削除されます。\n※Firebase Authentication の削除は Firebase コンソールで別途行ってください。`)) {
       return;
     }
     setDeletingUserId(uid);
     try {
-      await deleteUserDocument(uid);
+      await deleteAllUserData(uid);
       setSelectedUser(null);
       alert("削除しました");
     } catch (err) {

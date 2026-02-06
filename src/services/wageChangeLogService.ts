@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, addDoc, query, orderBy, limit, Timestamp } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, limit, Timestamp, writeBatch } from "firebase/firestore";
 
 export interface WageChangeLogEntry {
   id: string;
@@ -27,6 +27,26 @@ export const recordWageChange = async (
     changedByUid,
     changedByName,
   });
+};
+
+/** 指定ユーザーの時給変更履歴を全削除（ユーザー削除時に呼ぶ） */
+export const deleteWageHistoryByUserId = async (userId: string): Promise<number> => {
+  const col = collection(db, "users", userId, "wageHistory");
+  const snap = await getDocs(col);
+  if (snap.empty) return 0;
+  const BATCH_SIZE = 500;
+  let deleted = 0;
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = docs.slice(i, i + BATCH_SIZE);
+    chunk.forEach((d) => {
+      batch.delete(d.ref);
+      deleted++;
+    });
+    await batch.commit();
+  }
+  return deleted;
 };
 
 /** 指定ユーザーの時給変更ログを取得（新しい順、最大50件） */

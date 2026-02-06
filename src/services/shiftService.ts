@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot } from "firebase/firestore";
+import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
 import { isPastSubmitDeadline } from "@/services/settingsService";
 
@@ -142,6 +142,25 @@ export const deleteShift = async (userId: string, date: string) => {
         console.error("Error deleting shift:", error);
         throw error;
     }
+};
+
+/** 指定ユーザーの全シフトを削除（ユーザー削除時に呼ぶ。在籍していない＝シフトも不要） */
+export const deleteShiftsByUserId = async (userId: string): Promise<number> => {
+    const q = query(collection(db, "shifts"), where("userId", "==", userId));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return 0;
+    const BATCH_SIZE = 500;
+    let deleted = 0;
+    for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+        chunk.forEach((d) => {
+            batch.delete(d.ref);
+            deleted++;
+        });
+        await batch.commit();
+    }
+    return deleted;
 };
 
 export const confirmShifts = async (year: number, month: number) => {
