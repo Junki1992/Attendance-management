@@ -164,9 +164,9 @@ export const deleteShiftsByUserId = async (userId: string): Promise<number> => {
 };
 
 export const confirmShifts = async (year: number, month: number) => {
-    // 1. Get all shifts for the month（提出済みのみ確定。下書きは対象外）
+    // 1. Get all shifts for the month（提出済み・下書きをすべて確定扱いに）
     const shifts = await getAllShifts(year, month);
-    const toConfirm = shifts.filter((s) => s.status !== "confirmed" && s.status !== "draft");
+    const toConfirm = shifts.filter((s) => s.status !== "confirmed");
     const affectedUserIds = new Set<string>(toConfirm.map((s) => s.userId));
 
     // 2. 確定時に時給スナップショットを保存（月途中の時給変更に備える）
@@ -196,7 +196,7 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     const profile = await getUserProfile(userId);
     const wage = profile?.hourlyWage ?? 1000;
 
-    const toUpdate = userShifts.filter((s) => s.status !== "confirmed" && s.status !== "draft");
+    const toUpdate = userShifts.filter((s) => s.status !== "confirmed");
     await Promise.all(
         toUpdate.map((shift) => {
             const docId = `${shift.userId}_${shift.date}`;
