@@ -50,9 +50,25 @@ async function main() {
   }
   const cfgData = cfgSnap.data();
   let token = process.env.CHATWORK_API_TOKEN || cfgData?.apiToken?.trim();
-  let roomId = process.env.CHATWORK_ROOM_ID || cfgData?.roomId?.trim();
-  if (!token || !roomId) {
-    console.error("Chatwork API トークンとルーム ID を設定してください");
+  if (!token) {
+    console.error("Chatwork API トークンを設定してください");
+    process.exit(1);
+  }
+  let destinations = [];
+  const rawDests = cfgData?.notificationDestinations;
+  if (Array.isArray(rawDests) && rawDests.length > 0) {
+    destinations = rawDests
+      .filter((x) => x && (x.type === "room" || x.type === "personal") && x.id && String(x.id).trim())
+      .map((x) => ({ type: x.type, id: String(x.id).trim() }));
+  }
+  if (destinations.length === 0) {
+    const roomId = process.env.CHATWORK_ROOM_ID || cfgData?.roomId?.trim();
+    const personalAccountId = process.env.CHATWORK_PERSONAL_ACCOUNT_ID || cfgData?.personalAccountId?.trim();
+    if (roomId) destinations.push({ type: "room", id: roomId });
+    if (personalAccountId) destinations.push({ type: "personal", id: personalAccountId });
+  }
+  if (destinations.length === 0) {
+    console.error("通知先を1件以上設定してください（管理画面の「通知先」でルームまたは個人を追加）");
     process.exit(1);
   }
 
@@ -77,7 +93,7 @@ async function main() {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
 
-  console.log("[chatwork-notify] Sending for date:", dateStr, "roomId:", roomId);
+  console.log("[chatwork-notify] Sending for date:", dateStr, "destinations:", destinations.length);
   const shiftsSnap = await db.collection("shifts").where("date", "==", dateStr).where("status", "==", "confirmed").get();
   const entries = [];
   for (const d of shiftsSnap.docs) {
@@ -102,20 +118,55 @@ async function main() {
         })
       : ["（出勤なし）"];
   const body = `【翌日出勤】${dateLabel}\n${lines.join("\n")}`;
-  console.log("[chatwork-notify] Entries:", entries.length, "Body:", body);
+  console.log("[chatwork-notify] Entries:", entries.length, "destinations:", destinations.length);
 
-  const res = await fetch(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
-    method: "POST",
-    headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ body }).toString(),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error("[chatwork-notify] Chatwork API error:", res.status, errText);
-    await sendErrorToChatwork(token, roomId, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, `Chatwork API エラー ${res.status}: ${errText}`);
-    process.exit(1);
+  let firstRoomIdForError = null;
+  let lastError = null;
+  for (const dest of destinations) {
+    if (dest.type === "personal" && entries.length === 0) {
+      continue;
+    }
+    let targetRoomId;
+    if (dest.type === "personal") {
+      try {
+        const createRes = await fetch("https://api.chatwork.com/v2/rooms", {
+          method: "POST",
+          headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ name: "翌日出勤通知", member_admin_ids: dest.id }).toString(),
+        });
+        if (!createRes.ok) {
+          const t = await createRes.text();
+          throw new Error(`ルーム作成失敗 ${createRes.status}: ${t}`);
+        }
+        const json = await createRes.json();
+        if (typeof json?.room_id !== "number") throw new Error("ルーム作成の応答に room_id がありません");
+        targetRoomId = String(json.room_id);
+        if (!firstRoomIdForError) firstRoomIdForError = targetRoomId;
+        console.log("[chatwork-notify] Created 1-on-1 room:", targetRoomId);
+      } catch (e) {
+        console.error("[chatwork-notify] Create room error for", dest.id, e);
+        lastError = e?.message || String(e);
+        continue;
+      }
+    } else {
+      targetRoomId = dest.id;
+      if (!firstRoomIdForError) firstRoomIdForError = targetRoomId;
+    }
+    const res = await fetch(`https://api.chatwork.com/v2/rooms/${targetRoomId}/messages`, {
+      method: "POST",
+      headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ body }).toString(),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      lastError = `Chatwork API ${res.status}: ${errText}`;
+      console.error("[chatwork-notify] Send error to", targetRoomId, res.status, errText);
+    }
   }
+  if (lastError && firstRoomIdForError) {
+    await sendErrorToChatwork(token, firstRoomIdForError, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, lastError);
+  }
+  if (lastError) process.exit(1);
   console.log("[chatwork-notify] Sent OK:", dateStr, "entries:", entries.length);
 }
 
@@ -135,6 +186,10 @@ main().catch(async (e) => {
           const d = cfgSnap.data();
           token = token || d?.apiToken?.trim();
           roomId = roomId || d?.roomId?.trim();
+          if (!roomId && Array.isArray(d?.notificationDestinations) && d.notificationDestinations.length > 0) {
+            const first = d.notificationDestinations.find((x) => x?.type === "room" && x?.id);
+            if (first) roomId = first.id;
+          }
         }
       }
     }

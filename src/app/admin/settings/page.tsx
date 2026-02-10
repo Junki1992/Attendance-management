@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getSettings } from "@/services/settingsService";
-import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
+import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
 import { deleteAllUserData } from "@/services/userDeletionService";
 import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
@@ -22,7 +22,7 @@ export default function AdminSettingsPage() {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [chatworkToken, setChatworkToken] = useState("");
-  const [chatworkRoomId, setChatworkRoomId] = useState("");
+  const [chatworkDestinations, setChatworkDestinations] = useState<NotificationDestination[]>([]);
   const [chatworkNotifyHour, setChatworkNotifyHour] = useState(21);
   const chatworkNotifyHourRef = useRef(21);
   const [chatworkEditing, setChatworkEditing] = useState(false);
@@ -43,7 +43,7 @@ export default function AdminSettingsPage() {
       if (c) {
         const hour = c.notifyHour ?? 21;
         setChatworkToken(c.apiToken);
-        setChatworkRoomId(c.roomId);
+        setChatworkDestinations(c.notificationDestinations?.length ? [...c.notificationDestinations] : []);
         setChatworkNotifyHour(hour);
         chatworkNotifyHourRef.current = hour;
       }
@@ -182,25 +182,8 @@ export default function AdminSettingsPage() {
         </div>
       )}
       <div className="card" style={{ maxWidth: "400px" }}>
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>設定</h2>
-
-        <div style={{ marginBottom: "1rem" }}>
-          <div style={{ fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
-            シフト提出ルール
-          </div>
-          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
-            シフトは15日ごとに提出です。締切を過ぎた日はアルバイトは編集できません。
-            <br />
-            <strong>1～15日分</strong>: 前月25日までに提出
-            <br />
-            <strong>16日～月末分</strong>: 当月10日までに提出
-          </p>
-        </div>
-      </div>
-
-      <div className="card" style={{ maxWidth: "400px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>Chatwork 通知</h2>
-        {chatworkEditing || (!chatworkToken.trim() && !chatworkRoomId.trim()) ? (
+        {chatworkEditing || (!chatworkToken.trim() && chatworkDestinations.length === 0) ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>API トークン</label>
@@ -213,14 +196,53 @@ export default function AdminSettingsPage() {
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>ルーム ID</label>
-              <input
-                type="text"
-                value={chatworkRoomId}
-                onChange={(e) => setChatworkRoomId(e.target.value)}
-                placeholder="421966365"
-                style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
-              />
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>通知先（複数可）</label>
+              <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                ルーム（グループ）または個人アカウントを追加。翌日出勤通知がそれぞれに送られます
+              </p>
+              {chatworkDestinations.map((dest, i) => (
+                <div key={i} style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <select
+                    value={dest.type}
+                    onChange={(e) => {
+                      const next = [...chatworkDestinations];
+                      next[i] = { ...next[i], type: e.target.value as "room" | "personal" };
+                      setChatworkDestinations(next);
+                    }}
+                    style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem", minWidth: "100px" }}
+                  >
+                    <option value="room">ルーム</option>
+                    <option value="personal">個人</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={dest.id}
+                    onChange={(e) => {
+                      const next = [...chatworkDestinations];
+                      next[i] = { ...next[i], id: e.target.value };
+                      setChatworkDestinations(next);
+                    }}
+                    placeholder={dest.type === "room" ? "ルーム ID" : "アカウント ID"}
+                    style={{ flex: 1, padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: "0.5rem", color: "var(--text-muted)" }}
+                    onClick={() => setChatworkDestinations(chatworkDestinations.filter((_, j) => j !== i))}
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: "0.875rem" }}
+                onClick={() => setChatworkDestinations([...chatworkDestinations, { type: "room", id: "" }])}
+              >
+                + 通知先を追加
+              </button>
             </div>
             <div>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>自動通知時刻（日本時間）</label>
@@ -245,12 +267,17 @@ export default function AdminSettingsPage() {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={chatworkSaving || !chatworkToken.trim() || !chatworkRoomId.trim()}
+                disabled={chatworkSaving || !chatworkToken.trim() || !chatworkDestinations.some((d) => d.id.trim())}
                 onClick={async () => {
                   setChatworkSaving(true);
                   try {
-                    await saveChatworkConfig({ apiToken: chatworkToken.trim(), roomId: chatworkRoomId.trim(), notifyHour: chatworkNotifyHourRef.current });
+                    await saveChatworkConfig({
+                      apiToken: chatworkToken.trim(),
+                      notificationDestinations: chatworkDestinations.filter((d) => d.id.trim()),
+                      notifyHour: chatworkNotifyHourRef.current,
+                    });
                     setChatworkEditing(false);
+                    setChatworkDestinations(chatworkDestinations.filter((d) => d.id.trim()));
                     if (process.env.NODE_ENV !== "production") {
                       getChatworkConfigRaw().then(setChatworkRaw).catch(() => {});
                     }
@@ -265,7 +292,7 @@ export default function AdminSettingsPage() {
               >
                 {chatworkSaving ? "保存中..." : "保存"}
               </button>
-              {chatworkToken.trim() && chatworkRoomId.trim() && (
+              {chatworkToken.trim() && chatworkDestinations.some((d) => d.id.trim()) && (
                 <button
                   type="button"
                   className="btn btn-ghost"
@@ -284,8 +311,16 @@ export default function AdminSettingsPage() {
               <span>••••••••</span>
             </div>
             <div>
-              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>ルーム ID: </span>
-              <span>{chatworkRoomId}</span>
+              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>通知先: </span>
+              {chatworkDestinations.length === 0 ? (
+                <span>—</span>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem" }}>
+                  {chatworkDestinations.map((d, i) => (
+                    <li key={i}>{d.type === "room" ? "ルーム" : "個人"} ID: {d.id}</li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div>
               <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>自動通知時刻: </span>
@@ -294,6 +329,7 @@ export default function AdminSettingsPage() {
             {process.env.NODE_ENV !== "production" && chatworkRaw != null && (
               <div style={{ fontSize: "0.75rem", padding: "0.5rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-md)", fontFamily: "monospace" }}>
                 <div style={{ fontWeight: 600, marginBottom: "0.25rem", color: "var(--text-muted)" }}>Firestore 生データ（chatwork-notify.js が参照する settings/chatwork）</div>
+                <div>notificationDestinations: {JSON.stringify(chatworkRaw.notificationDestinations)}</div>
                 <div>notifyHour: {JSON.stringify(chatworkRaw.notifyHour)} (型: {typeof chatworkRaw.notifyHour})</div>
                 <div style={{ marginTop: "0.25rem", color: "var(--text-muted)" }}>
                   → GitHub Actions は日本時間 {String(Number(chatworkRaw.notifyHour) >= 0 && Number(chatworkRaw.notifyHour) <= 23 ? Number(chatworkRaw.notifyHour) : 21).toString().padStart(2, "0")}:00 に通知送信
