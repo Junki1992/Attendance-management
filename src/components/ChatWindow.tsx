@@ -398,8 +398,18 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 position: 'relative',
             }}>
                 {displayMessages.length === 0 && (
-                    <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '2rem' }}>
-                        メッセージはまだありません
+                    <div style={{ 
+                        flex: 1, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        minHeight: '8rem',
+                        paddingTop: '2rem',
+                        paddingBottom: '2rem',
+                    }}>
+                        <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                            メッセージはまだありません
+                        </div>
                     </div>
                 )}
                 

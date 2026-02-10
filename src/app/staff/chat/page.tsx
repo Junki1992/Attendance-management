@@ -175,9 +175,8 @@ export default function StaffChatPage() {
                 minHeight: 0,
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
                 boxSizing: 'border-box',
+                height: '100%',
             }}
         >
             <div 

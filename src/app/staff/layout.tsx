@@ -443,7 +443,7 @@ export default function StaffLayout({
                 style={{
                     flex: isChatPage ? '1 1 0' : 1,
                     padding: isChatPage ? '0 1rem' : '2rem max(1rem, env(safe-area-inset-left)) 2rem max(1rem, env(safe-area-inset-right))',
-                    paddingTop: isChatPage ? undefined : 'calc(3.5rem + 2rem)',
+                    paddingTop: isChatPage ? '3.5rem' : 'calc(3.5rem + 2rem)',
                     maxWidth: isWide ? '1600px' : undefined,
                     marginLeft: isWide ? 'auto' : undefined,
                     marginRight: isWide ? 'auto' : undefined,
