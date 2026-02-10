@@ -34,6 +34,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
     const [inputText, setInputText] = useState("");
     const bottomRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     /** onMessages で既読を1回書き込んだか（スナップショットごとの重複書き込みを防ぐ） */
     const lastReadWrittenForRoomRef = useRef<string | null>(null);
     /** メッセージ変更 effect で即時既読を1回書き込んだか */
@@ -157,15 +158,13 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     };
 
-    /** アルバイトが「全管理者」に送ったとき、管理者ごとに1通ずつ作成されるため同一送信が複数表示される。自分送信分だけ同一内容・同一時刻でまとめて1件表示する */
+    /** アルバイトが「全管理者」に送ったとき、管理者ごとに1通ずつ作成されるため同一送信が複数表示される。自分送信分は同一内容を1件だけ表示する */
     const displayMessages = useMemo(() => {
         if (!subscribeAllForMe || !user) return messages;
         const seen = new Set<string>();
         return messages.filter((m) => {
             if (m.senderId !== user.uid) return true;
-            const t = toMillis(m.createdAt);
-            const bucket = Math.floor(t / 2000);
-            const key = `${m.text || ""}|${m.fileURL || ""}|${bucket}`;
+            const key = `${m.text ?? ""}|${m.fileURL ?? ""}`;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
@@ -383,7 +382,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 flex: '1 1 0',
                 overflowY: 'auto', 
                 overflowX: 'hidden', 
-                paddingTop: '1rem',
+                paddingTop: '2rem',
                 paddingRight: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
                 paddingBottom: isFullWidthMode && isMobile ? '4.5rem' : '1rem',
                 paddingLeft: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
@@ -472,7 +471,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                                             )}
                                         </>
                                     ) : (
-                                        msg.text
+                                        <span style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</span>
                                     )}
                                 </div>
                                 <div style={{ 
@@ -512,7 +511,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
 
             {/* Input Area - Fixed Footer */}
             <form 
-                onSubmit={handleSend} 
+                onSubmit={handleSend}
                 style={{ 
                     paddingTop: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
                     paddingRight: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
@@ -571,24 +570,48 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>アップロード {uploadProgress}%</div>
                     </div>
                 )}
-                <input
-                    type="text"
+                <textarea
+                    ref={textareaRef}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
-                    placeholder="メッセージを入力..."
+                    onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        // IME確定中は何もしない（確定用Enterと改行用Enterの衝突を防ぐ）
+                        if (e.nativeEvent.isComposing) return;
+                        if (e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                            return;
+                        }
+                        // Enter単体 → 改行のみ（送信しない）
+                        e.preventDefault();
+                        const target = e.currentTarget;
+                        const start = target.selectionStart;
+                        const end = target.selectionEnd;
+                        const next = inputText.slice(0, start) + "\n" + inputText.slice(end);
+                        setInputText(next);
+                        requestAnimationFrame(() => {
+                            textareaRef.current?.setSelectionRange(start + 1, start + 1);
+                        });
+                    }}
+                    placeholder="メッセージを入力... (Enter: 改行 / Shift+Enter: 送信)"
+                    rows={3}
                     style={{ 
                         flex: 1, 
                         minWidth: 0,
+                        minHeight: '4.5rem',
+                        maxHeight: '10rem',
                         padding: '0.75rem 1rem', 
                         borderRadius: isFullWidthMode && isMobile ? '0' : '0.5rem', 
                         border: isFullWidthMode && isMobile ? 'none' : '1px solid var(--border)',
                         outline: 'none',
-                        fontSize: '16px', // iOS Safari の自動ズームを防ぐため16px以上
+                        fontSize: '16px',
                         backgroundColor: 'var(--surface)',
                         maxWidth: '100%',
                         boxSizing: 'border-box',
                         opacity: uploading ? 0.6 : 1,
                         pointerEvents: uploading ? 'none' : undefined,
+                        resize: 'none',
                     }}
                 />
                 <button 
