@@ -60,9 +60,11 @@ export default function AdminLayout({
                 backgroundColor: '#1e1b4b', /* Indigo 950 */
                 color: 'white',
                 padding: '0.75rem 1rem',
-                position: 'sticky',
+                position: 'fixed',
                 top: 0,
-                zIndex: 100
+                left: 0,
+                right: 0,
+                zIndex: 100,
             }}>
                 {/* モバイル用ヘッダー */}
                 {isMobile && (
@@ -409,6 +411,7 @@ export default function AdminLayout({
                     padding: '2rem 1rem',
                     margin: '0 auto',
                     width: '100%',
+                    paddingTop: 'calc(3.5rem + 2rem)',
                 }}
             >
                 {children}
