@@ -3,24 +3,21 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { subscribeSettings } from "@/services/settingsService";
+import { getDeadlineLabelsForMonth } from "@/services/settingsService";
 import { getUserShifts } from "@/services/shiftService";
 
 export default function StaffDashboard() {
     const { user } = useAuth();
-    const [deadlineLabel, setDeadlineLabel] = useState<string | null>(null);
+    const [deadlineLabels, setDeadlineLabels] = useState<{ firstBlock: string; secondBlock: string } | null>(null);
     const [monthIsConfirmed, setMonthIsConfirmed] = useState(false);
 
     useEffect(() => {
-        const unsub = subscribeSettings((s) => {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const lastDay = new Date(year, month + 1, 0).getDate();
-            const d = Math.min(s.shiftSubmitDeadlineDay, lastDay);
-            setDeadlineLabel(`${month + 1}月${d}日`);
-        });
-        return () => unsub();
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const nextMonth = month === 11 ? 0 : month + 1;
+        const nextYear = month === 11 ? year + 1 : year;
+        setDeadlineLabels(getDeadlineLabelsForMonth(nextYear, nextMonth));
     }, []);
 
     useEffect(() => {
@@ -47,11 +44,13 @@ export default function StaffDashboard() {
                             <strong>確定済み</strong>
                         ) : (
                             <>
-                                来月の希望シフトを提出してください。
-                                {deadlineLabel && (
+                                希望シフトを提出してください。
+                                {deadlineLabels && (
                                     <>
                                         <br />
-                                        <strong>締切: {deadlineLabel}</strong>
+                                        <strong>1～15日分: {deadlineLabels.firstBlock}まで</strong>
+                                        <br />
+                                        <strong>16日～月末: {deadlineLabels.secondBlock}まで</strong>
                                     </>
                                 )}
                             </>

@@ -2,7 +2,7 @@ import { db } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
-import { isPastSubmitDeadline } from "@/services/settingsService";
+import { isPastSubmitDeadlineForDate } from "@/services/settingsService";
 
 export interface Shift {
     id?: string;
@@ -39,9 +39,7 @@ export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promi
         }
     }
     if (options?.byAdmin) {
-        const [y, m] = shift.date.split("-").map(Number);
-        const past = await isPastSubmitDeadline(y, m - 1); // m は 1-12 → 0-indexed
-        editedAfterDeadline = past;
+        editedAfterDeadline = isPastSubmitDeadlineForDate(shift.date);
     }
 
     const { hourlyWage: _skip, ...shiftRest } = shift;

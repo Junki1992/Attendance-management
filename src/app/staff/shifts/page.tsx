@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 import { getUserProfile, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
-import { isPastSubmitDeadline } from "@/services/settingsService";
+import { isPastSubmitDeadlineForDate } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
 function getDaysInMonth(year: number, month: number) {
@@ -42,7 +42,6 @@ export default function ShiftCalendar() {
     const [submittedByDay, setSubmittedByDay] = useState<{ [key: number]: boolean }>({});
     const [loading, setLoading] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(1000);
-    const [deadlinePassed, setDeadlinePassed] = useState(false);
     const [bulkStart, setBulkStart] = useState("09:00");
     const [bulkEnd, setBulkEnd] = useState("18:00");
     const [bulkIsOff, setBulkIsOff] = useState(false);
@@ -60,17 +59,24 @@ export default function ShiftCalendar() {
     const leadingBlanks = Array.from({ length: firstDayOfWeek }, () => null);
     const daysArray: (number | null)[] = [...leadingBlanks, ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
 
+    /** 指定日が提出締切を過ぎているか（15日区切り: 1–15→前月25日、16〜→当月10日） */
+    const isDayPastDeadline = useCallback(
+        (day: number) =>
+            isPastSubmitDeadlineForDate(
+                `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+            ),
+        [year, month]
+    );
+
     useEffect(() => {
         if (!user) return;
         const init = async () => {
             try {
-                const [profile, data, past] = await Promise.all([
+                const [profile, data] = await Promise.all([
                     getUserProfile(user.uid),
                     getUserShifts(user.uid, year, month),
-                    isPastSubmitDeadline(year, month),
                 ]);
                 if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
-                setDeadlinePassed(past);
                 const shiftMap: { [key: number]: string } = {};
                 const remoteMap: { [key: number]: boolean } = {};
                 const confirmedMap: { [key: number]: boolean } = {};
@@ -122,7 +128,7 @@ export default function ShiftCalendar() {
     useEffect(() => {
         const DRAG_THRESHOLD = 5;
         const handlePointerMove = (e: PointerEvent) => {
-            if (deadlinePassed || monthIsConfirmed) return;
+            if (monthIsConfirmed) return;
             const start = dragStartDayRef.current;
             const pos = pointerStartRef.current;
             if (start === null || pos === null) return;
@@ -134,7 +140,7 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             if (dayStr) {
                 const day = parseInt(dayStr, 10);
-                const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d));
+                const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d));
                 if (range.length > 1) {
                     setBulkSelectedDays(range);
                 } else if (range.length === 1) {
@@ -154,7 +160,7 @@ export default function ShiftCalendar() {
             if (!hasMovedRef.current && day !== null) {
                 if (confirmedByDay[day]) {
                     setDetailModalDay(day);
-                } else if (!deadlinePassed && !monthIsConfirmed && !isPastDate(year, month, day)) {
+                } else if (!monthIsConfirmed && !isDayPastDeadline(day) && !isPastDate(year, month, day)) {
                     setBulkSelectedDays((prev) =>
                         prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
                     );
@@ -171,7 +177,7 @@ export default function ShiftCalendar() {
             document.removeEventListener("pointerup", handlePointerUp);
             document.removeEventListener("pointercancel", handlePointerUp);
         };
-    }, [deadlinePassed, monthIsConfirmed, getRangeDays, confirmedByDay, year, month]);
+    }, [monthIsConfirmed, getRangeDays, confirmedByDay, year, month, isDayPastDeadline]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -195,23 +201,23 @@ export default function ShiftCalendar() {
     const bulkSelectWeekdays = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return dow >= 1 && dow <= 5 && !confirmedByDay[d] && !isPastDate(year, month, d);
+            return dow >= 1 && dow <= 5 && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
         });
         setBulkSelectedDays(days);
     };
     const bulkSelectWeekends = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return (dow === 0 || dow === 6) && !confirmedByDay[d] && !isPastDate(year, month, d);
+            return (dow === 0 || dow === 6) && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
         });
         setBulkSelectedDays(days);
     };
-    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d)));
+    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d)));
     const bulkClearSelection = () => setBulkSelectedDays([]);
 
     const applyBulkShift = () => {
-        if (deadlinePassed || monthIsConfirmed) return;
-        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d] && !isPastDate(year, month, d));
+        if (monthIsConfirmed) return;
+        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d));
         if (targetDays.length === 0) {
             alert("適用する日を1日以上選択してください。");
             return;
@@ -239,11 +245,12 @@ export default function ShiftCalendar() {
     };
 
     const saveShiftsToFirestore = async (status: "draft" | "submitted") => {
-        if (!user || deadlinePassed || monthIsConfirmed) return;
+        if (!user || monthIsConfirmed) return;
         const promises = Object.entries(shifts)
             .filter(([dayStr]) => {
                 const d = parseInt(dayStr, 10);
-                return !confirmedByDay[d] && !isPastDate(year, month, d);
+                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                return !confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDate(dateStr);
             })
             .map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
@@ -278,7 +285,8 @@ export default function ShiftCalendar() {
                 const next = { ...prev };
                 Object.keys(shifts).forEach((dayStr) => {
                     const d = parseInt(dayStr, 10);
-                    if (!confirmedByDay[d] && !isPastDate(year, month, d)) next[d] = true;
+                    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                    if (!confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDate(dateStr)) next[d] = true;
                 });
                 return next;
             });
@@ -286,7 +294,7 @@ export default function ShiftCalendar() {
     };
 
     const handleSave = async () => {
-        if (!user || deadlinePassed || monthIsConfirmed) return;
+        if (!user || monthIsConfirmed) return;
         setLoading(true);
         try {
             await saveShiftsToFirestore("draft");
@@ -300,7 +308,7 @@ export default function ShiftCalendar() {
     };
 
     const handleSubmit = async () => {
-        if (!user || deadlinePassed || monthIsConfirmed) return;
+        if (!user || monthIsConfirmed) return;
         setLoading(true);
         try {
             await saveShiftsToFirestore("submitted");
@@ -320,14 +328,17 @@ export default function ShiftCalendar() {
         }
     };
 
+    /** 編集可能な日（締切前・未確定・未来または今日） */
+    const isEditableDay = (d: number) => !isDayPastDeadline(d) && !confirmedByDay[d] && !isPastDate(year, month, d);
+
     const hasShiftsToSave = Object.keys(shifts).some((dayStr) => {
         const d = parseInt(dayStr, 10);
-        return !confirmedByDay[d] && !isPastDate(year, month, d);
+        return isEditableDay(d);
     });
 
     const hasChanges = (() => {
         for (let d = 1; d <= daysInMonth; d++) {
-            if (confirmedByDay[d] || isPastDate(year, month, d)) continue;
+            if (!isEditableDay(d)) continue;
             const cur = shifts[d];
             const last = lastSavedShifts[d];
             const curRemote = remoteByDay[d] ?? false;
@@ -370,7 +381,7 @@ export default function ShiftCalendar() {
                     この月のシフトは確定しています。
                 </div>
             )}
-            {deadlinePassed && (
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => isDayPastDeadline(d)) && (
                 <div
                     style={{
                         padding: "0.75rem 1rem",
@@ -380,9 +391,10 @@ export default function ShiftCalendar() {
                         borderRadius: "var(--radius-md)",
                         color: "#92400E",
                         fontWeight: 500,
+                        fontSize: "0.9rem",
                     }}
                 >
-                    この月のシフト提出は締め切りを過ぎているため、編集できません。
+                    締切を過ぎた日は編集できません。1～15日分は前月25日、16日～月末分は当月10日までに提出してください。
                 </div>
             )}
 
@@ -455,7 +467,7 @@ export default function ShiftCalendar() {
                 </div>
             )}
 
-            {!deadlinePassed && !monthIsConfirmed && (
+            {!monthIsConfirmed && (
                 <div
                     style={{
                         marginBottom: "1rem",
@@ -534,11 +546,11 @@ export default function ShiftCalendar() {
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <button className="btn btn-outline" onClick={handleSave} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
+                        <button className="btn btn-outline" onClick={handleSave} disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
                             {loading ? "処理中..." : "保存"}
                         </button>
-                        <button className="btn btn-primary" onClick={handleSubmit} disabled={loading || deadlinePassed || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
-                            {loading ? "処理中..." : monthIsConfirmed ? "確定済" : deadlinePassed ? "締切済" : "提出"}
+                        <button className="btn btn-primary" onClick={handleSubmit} disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
+                            {loading ? "処理中..." : monthIsConfirmed ? "確定済" : "提出"}
                         </button>
                     </div>
                 </div>
@@ -563,7 +575,7 @@ export default function ShiftCalendar() {
                         gap: "1px",
                         backgroundColor: "var(--border)",
                         border: "1px solid var(--border)",
-                        opacity: deadlinePassed ? 0.85 : 1,
+                        opacity: 1,
                         minWidth: "280px",
                     }}
                 >
@@ -586,14 +598,14 @@ export default function ShiftCalendar() {
                         const isBulkSelected = bulkSelectedDays.includes(day);
                         const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
-                        const isEditable = !deadlinePassed && !isConfirmed && !monthIsConfirmed && !isPast;
+                        const isEditable = !isDayPastDeadline(day) && !isConfirmed && !monthIsConfirmed && !isPast;
                         return (
                             <div
                                 key={day}
                                 role="button"
                                 tabIndex={0}
                                 data-day={day}
-                                title={isPast ? "過去の日付は編集できません" : isConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : undefined}
+                                title={isPast ? "過去の日付は編集できません" : isConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : isDayPastDeadline(day) ? "締切を過ぎたため編集できません" : undefined}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
                                 onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null && confirmedByDay[day]) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{

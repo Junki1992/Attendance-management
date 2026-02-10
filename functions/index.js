@@ -30,35 +30,39 @@ app.post('/markLastRead', async (req, res) => {
 exports.api = functions.https.onRequest(app);
 
 // Scheduled function: 締切日当日の朝に未提出者へ催促通知を自動送信する
+// ルール: 1～15日分→前月25日まで、16日～月末→当月10日まで
 exports.scheduledRemindSubmit = functions.pubsub
-  .schedule('0 9 * * *') // 毎日 09:00 JST に実行（timezone below）
+  .schedule('0 9 * * *') // 毎日 09:00 JST に実行
   .timeZone('Asia/Tokyo')
   .onRun(async (context) => {
     try {
       const db = admin.firestore();
-
-      // 設定を取得（defaults.shiftSubmitDeadlineDay = 25）
-      const settingsRef = db.doc('settings/app');
-      const settingsSnap = await settingsRef.get();
-      const shiftSubmitDeadlineDay = (settingsSnap.exists && settingsSnap.data().shiftSubmitDeadlineDay) ? settingsSnap.data().shiftSubmitDeadlineDay : 25;
-
       const now = new Date();
+      const today = now.getDate();
       const year = now.getFullYear();
       const month = now.getMonth(); // 0-indexed
-      const lastDay = new Date(year, month + 1, 0).getDate();
-      const deadlineDay = Math.min(shiftSubmitDeadlineDay, lastDay);
 
-      // 本日が締切日でなければ何もしない
-      if (now.getDate() !== deadlineDay) {
-        console.log('[scheduledRemindSubmit] not deadline day, skip', { today: now.getDate(), deadlineDay });
+      let startStr, endStr, message, blockLabel;
+      if (today === 25) {
+        // 25日: 来月1～15日分の締切（本日が締切）
+        const nextMonth = month === 11 ? 0 : month + 1;
+        const nextYear = month === 11 ? year + 1 : year;
+        startStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-01`;
+        endStr = `${nextYear}-${String(nextMonth + 1).padStart(2, '0')}-15`;
+        message = '来月1～15日分のシフト提出は本日が締切です。お早めに提出してください。';
+        blockLabel = 'next_month_1_15';
+      } else if (today === 10) {
+        // 10日: 当月16日～月末分の締切（本日が締切）
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        startStr = `${year}-${String(month + 1).padStart(2, '0')}-16`;
+        endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        message = '当月16日～月末分のシフト提出は本日が締切です。お早めに提出してください。';
+        blockLabel = 'this_month_16_end';
+      } else {
+        console.log('[scheduledRemindSubmit] not deadline day, skip', { today });
         return null;
       }
 
-      // 対象月の範囲を構築
-      const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-      // スタッフ一覧を取得
       const usersSnap = await db.collection('users').where('role', '==', 'staff').get();
       const staff = usersSnap.docs.map((d) => ({ id: d.id, name: (d.data() && d.data().name) ? d.data().name : d.id }));
       if (staff.length === 0) {
@@ -66,7 +70,6 @@ exports.scheduledRemindSubmit = functions.pubsub
         return null;
       }
 
-      // 既に提出済み/確定のユーザーを取得
       const shiftsSnap = await db.collection('shifts')
         .where('date', '>=', startStr)
         .where('date', '<=', endStr)
@@ -80,12 +83,10 @@ exports.scheduledRemindSubmit = functions.pubsub
         }
       });
 
-      // 未提出者へ通知を作成
       let createdCount = 0;
       const promises = [];
       staff.forEach((s) => {
         if (!submitted.has(s.id)) {
-          const message = `${month + 1}月のシフト提出がまだです。お早めに提出してください。`;
           promises.push(
             db.collection('notifications').add({
               userId: s.id,
@@ -99,7 +100,7 @@ exports.scheduledRemindSubmit = functions.pubsub
       });
 
       await Promise.all(promises);
-      console.log('[scheduledRemindSubmit] finished', { year, month: month + 1, deadlineDay, createdCount });
+      console.log('[scheduledRemindSubmit] finished', { blockLabel, startStr, endStr, createdCount });
       return null;
     } catch (err) {
       console.error('[scheduledRemindSubmit] error', err);

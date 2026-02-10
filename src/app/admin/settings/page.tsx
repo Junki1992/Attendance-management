@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { getSettings, saveSettings } from "@/services/settingsService";
-import { getAllStaff } from "@/services/userService";
+import { getSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
 import { deleteAllUserData } from "@/services/userDeletionService";
@@ -17,10 +16,7 @@ const ROLE_CHANGE_ENABLED = false;
 
 export default function AdminSettingsPage() {
   const { user: currentUser, refreshUserProfile } = useAuth();
-  const [deadlineDay, setDeadlineDay] = useState(25);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
@@ -42,10 +38,7 @@ export default function AdminSettingsPage() {
   const [chatworkRaw, setChatworkRaw] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    getSettings().then((s) => {
-      setDeadlineDay(s.shiftSubmitDeadlineDay);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    getSettings().then(() => setLoading(false)).catch(() => setLoading(false));
     getChatworkConfig().then((c) => {
       if (c) {
         const hour = c.notifyHour ?? 21;
@@ -70,34 +63,6 @@ export default function AdminSettingsPage() {
       unsubscribe();
     };
   }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const v = Math.max(1, Math.min(28, Math.floor(Number(deadlineDay))));
-    setDeadlineDay(v);
-    setSaving(true);
-    setSaved(false);
-    try {
-      const current = await getSettings();
-      const prevDay = current.shiftSubmitDeadlineDay;
-      await saveSettings({ shiftSubmitDeadlineDay: v });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-
-      if (prevDay !== v) {
-        const staff = await getAllStaff();
-        const message = `シフト提出締切日が${prevDay}日から${v}日に変更されました。`;
-        await Promise.all(
-          staff.map((s) => createNotification(s.id, "deadline_changed", message))
-        );
-      }
-    } catch (err) {
-      console.error(err);
-      alert("保存に失敗しました");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const openDeleteConfirm = (uid: string, name: string, role: "admin" | "staff") => {
     if (role === "admin") {
@@ -219,39 +184,18 @@ export default function AdminSettingsPage() {
       <div className="card" style={{ maxWidth: "400px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>設定</h2>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: "1rem" }}>
-            <label htmlFor="deadline" style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
-              シフト提出締切日
-            </label>
-            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-              各月の「何日」までにアルバイトがシフトを提出できるか。1〜28で指定。締切を過ぎるとアルバイトは編集できません。
-            </p>
-            <input
-              id="deadline"
-              type="number"
-              min={1}
-              max={28}
-              value={deadlineDay}
-              onChange={(e) => setDeadlineDay(Number(e.target.value) || 25)}
-              style={{
-                padding: "0.5rem",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-md)",
-                width: "80px",
-                fontSize: "1rem",
-              }}
-            />
-            <span style={{ marginLeft: "0.5rem", color: "var(--text-muted)" }}>日</span>
+        <div style={{ marginBottom: "1rem" }}>
+          <div style={{ fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.25rem" }}>
+            シフト提出ルール
           </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? "保存中..." : "保存する"}
-            </button>
-            {saved && <span style={{ color: "var(--secondary)", fontSize: "0.875rem" }}>保存しました</span>}
-          </div>
-        </form>
+          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.6 }}>
+            シフトは15日ごとに提出です。締切を過ぎた日はアルバイトは編集できません。
+            <br />
+            <strong>1～15日分</strong>: 前月25日までに提出
+            <br />
+            <strong>16日～月末分</strong>: 当月10日までに提出
+          </p>
+        </div>
       </div>
 
       <div className="card" style={{ maxWidth: "400px" }}>
