@@ -320,13 +320,14 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
         overflowX: "hidden",
     };
     
-    // Send button style adjusts for mobile to be smaller
+    // 送信ボタン: ピル型でチャットワーク風
     const sendButtonStyle: React.CSSProperties = {
-        borderRadius: isFullWidthMode && isMobile ? '0' : undefined,
+        borderRadius: '2rem',
         flexShrink: 0,
-        padding: isMobile ? '0.45rem 0.9rem' : '0.75rem 1.5rem',
-        fontSize: isMobile ? '0.95rem' : undefined,
+        padding: isMobile ? '0.5rem 1.25rem' : '0.6rem 1.5rem',
+        fontSize: isMobile ? '0.9rem' : '0.95rem',
         whiteSpace: 'nowrap',
+        fontWeight: 600,
     };
     
     return (
@@ -509,7 +510,7 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                 <div ref={bottomRef} />
             </div>
 
-            {/* Input Area - Fixed Footer */}
+            {/* Input Area - Fixed Footer（チャットワーク風: ツールバー上・テキストエリア下） */}
             <form 
                 onSubmit={handleSend}
                 style={{ 
@@ -519,14 +520,15 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     paddingLeft: isFullWidthMode ? (isMobile ? '0.75rem' : '1rem') : '1rem',
                     borderTop: '1px solid var(--border)', 
                     display: 'flex', 
-                    gap: '0.75rem',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
                     flexShrink: 0,
                     flexGrow: 0,
                     backgroundColor: 'var(--surface)',
                     width: '100%',
                     maxWidth: '100%',
                     boxSizing: 'border-box',
-                        position: isFullWidthMode && isMobile ? 'fixed' : 'relative',
+                    position: isFullWidthMode && isMobile ? 'fixed' : 'relative',
                     bottom: isFullWidthMode && isMobile ? 0 : undefined,
                     left: isFullWidthMode && isMobile ? 0 : undefined,
                     right: isFullWidthMode && isMobile ? 0 : undefined,
@@ -541,35 +543,46 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     onChange={handleFileChange}
                     style={{ display: 'none' }}
                 />
-                <button
-                    type="button"
-                    onClick={openFilePicker}
-                    aria-label="ファイルを添付"
-                    title="ファイルを添付"
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: '0.45rem',
-                        borderRadius: '0.5rem',
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        cursor: 'pointer',
-                        width: '40px',
-                        height: '40px',
-                        boxSizing: 'border-box',
-                        color: 'var(--text-muted)',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--primary)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
-                >
-                    <i className="fa-solid fa-paperclip" aria-hidden style={{ fontSize: 18, color: 'inherit' }} />
-                </button>
-                {uploading && uploadProgress !== null && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '120px' }}>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>アップロード {uploadProgress}%</div>
-                    </div>
-                )}
+                {/* ツールバー: クリップ + 送信（テキストエリアの上） */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', minHeight: '2.25rem' }}>
+                    <button
+                        type="button"
+                        onClick={openFilePicker}
+                        aria-label="ファイルを添付"
+                        title="ファイルを添付"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '0.4rem',
+                            borderRadius: '0.5rem',
+                            border: '1px solid var(--border)',
+                            background: 'var(--surface)',
+                            cursor: 'pointer',
+                            width: '36px',
+                            height: '36px',
+                            boxSizing: 'border-box',
+                            color: 'var(--text-muted)',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--primary)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                    >
+                        <i className="fa-solid fa-paperclip" aria-hidden style={{ fontSize: 16, color: 'inherit' }} />
+                    </button>
+                    {uploading && uploadProgress !== null && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: '100px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            アップロード {uploadProgress}%
+                        </div>
+                    )}
+                    <button 
+                        type="submit" 
+                        className="btn btn-primary"
+                        disabled={!inputText.trim() || uploading}
+                        style={sendButtonStyle}
+                    >
+                        送信
+                    </button>
+                </div>
                 <textarea
                     ref={textareaRef}
                     value={inputText}
@@ -597,9 +610,9 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                     placeholder="メッセージを入力... (Enter: 改行 / Shift+Enter: 送信)"
                     rows={3}
                     style={{ 
-                        flex: 1, 
+                        width: '100%',
                         minWidth: 0,
-                        minHeight: '4.5rem',
+                        minHeight: '4rem',
                         maxHeight: '10rem',
                         padding: '0.75rem 1rem', 
                         borderRadius: isFullWidthMode && isMobile ? '0' : '0.5rem', 
@@ -607,21 +620,12 @@ export default function ChatWindow({ className, partnerName, partnerId, partnerI
                         outline: 'none',
                         fontSize: '16px',
                         backgroundColor: 'var(--surface)',
-                        maxWidth: '100%',
                         boxSizing: 'border-box',
                         opacity: uploading ? 0.6 : 1,
                         pointerEvents: uploading ? 'none' : undefined,
                         resize: 'none',
                     }}
                 />
-                <button 
-                    type="submit" 
-                    className="btn btn-primary"
-                    disabled={!inputText.trim() || uploading}
-                    style={sendButtonStyle}
-                >
-                    送信
-                </button>
             </form>
         </div>
     );
