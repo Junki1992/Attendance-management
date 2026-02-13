@@ -42,6 +42,21 @@ export default function AdminSettingsPage() {
   const [secondBlockDeadlineTime, setSecondBlockDeadlineTime] = useState("23:59");
   const [deadlineOverrides, setDeadlineOverrides] = useState<AppSettings["deadlineOverrides"]>({});
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const overrideYearMonthOptions = (() => {
+    const now = new Date();
+    const options: { value: string; label: string }[] = [];
+    for (let i = -1; i <= 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1;
+      const value = `${y}-${String(m).padStart(2, "0")}`;
+      options.push({ value, label: `${y}年${m}月` });
+    }
+    return options;
+  })();
+  const [newOverrideYearMonth, setNewOverrideYearMonth] = useState(() => overrideYearMonthOptions[0]?.value ?? "");
+  const [newOverrideBlock, setNewOverrideBlock] = useState<"first" | "second">("first");
+  const [newOverrideDatetime, setNewOverrideDatetime] = useState("");
 
   useEffect(() => {
     getSettings()
@@ -368,23 +383,30 @@ export default function AdminSettingsPage() {
         )}
       </div>
 
-      <div className="card" style={{ maxWidth: "520px" }}>
+      <div className="card" style={{ maxWidth: "560px" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>シフト提出締切</h2>
-        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-          1～15日分は「前月の指定日」、16日～月末分は「当月の指定日」までに提出。土日祝でずれる月は「月別上書き」で日時を指定できます。
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1.25rem" }}>
+          通常は「毎月この日・この時刻まで」で締切が決まります。土日祝で締切日をずらしたい月だけ、下の「月別の例外」で日時を指定できます。
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", alignItems: "end" }}>
+
+        <div style={{ marginBottom: "1.5rem" }}>
+          <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-main)" }}>通常の締切</h3>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+            例: 25日 23:59 → 毎月25日の23:59までに提出
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", alignItems: "end" }}>
             <div>
-              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>1～15日分の締切（前月の日）</label>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+                1～15日分 → 前月のいつまで？
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                 <input
                   type="number"
                   min={1}
                   max={31}
                   value={firstBlockDeadlineDay}
                   onChange={(e) => setFirstBlockDeadlineDay(Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                  style={{ width: "4rem", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                  style={{ width: "3.5rem", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
                 />
                 <span style={{ fontSize: "0.875rem" }}>日</span>
                 <input
@@ -396,15 +418,17 @@ export default function AdminSettingsPage() {
               </div>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>16日～月末の締切（当月の日）</label>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+                16日～月末 → 当月のいつまで？
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
                 <input
                   type="number"
                   min={1}
                   max={31}
                   value={secondBlockDeadlineDay}
                   onChange={(e) => setSecondBlockDeadlineDay(Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
-                  style={{ width: "4rem", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                  style={{ width: "3.5rem", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
                 />
                 <span style={{ fontSize: "0.875rem" }}>日</span>
                 <input
@@ -416,20 +440,22 @@ export default function AdminSettingsPage() {
               </div>
             </div>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>月別上書き（土日祝でずらす場合）</label>
-            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-              キー: 対象月 YYYY-MM + _first または _second。値: 締切日時（ISO形式）。例: 2026-01_first → 2026年1月1～15日分の締切日時
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {Object.entries(deadlineOverrides ?? {}).map(([key, value]) => (
-                <div key={key} style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                  <input
-                    type="text"
-                    value={key}
-                    readOnly
-                    style={{ flex: "1 1 120px", minWidth: 0, padding: "0.5rem", fontSize: "0.8rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", backgroundColor: "var(--surface-hover)", boxSizing: "border-box" }}
-                  />
+        </div>
+
+        <div>
+          <h3 style={{ fontSize: "1rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-main)" }}>月別の例外（土日祝でずらすとき）</h3>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+            「○年○月の、1～15日分（または16日～月末）の締切を、この日時にする」を追加します。
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {Object.entries(deadlineOverrides ?? {}).map(([key, value]) => {
+              const m = key.match(/^(\d{4})-(\d{2})_(first|second)$/);
+              const label = m
+                ? `${parseInt(m[1], 10)}年${parseInt(m[2], 10)}月 ${m[3] === "first" ? "1～15日分" : "16日～月末"}`
+                : key;
+              return (
+                <div key={key} style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", padding: "0.5rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-md)" }}>
+                  <span style={{ fontSize: "0.875rem", minWidth: "140px" }}>{label}</span>
                   <input
                     type="datetime-local"
                     value={value.slice(0, 16)}
@@ -452,69 +478,78 @@ export default function AdminSettingsPage() {
                     削除
                   </button>
                 </div>
-              ))}
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                <input
-                  type="text"
-                  id="new-override-key"
-                  placeholder="例: 2026-01_first"
-                  style={{ flex: "1 1 120px", minWidth: 0, padding: "0.5rem", fontSize: "0.875rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
-                />
-                <input
-                  type="datetime-local"
-                  id="new-override-value"
-                  style={{ flex: "1 1 180px", minWidth: 0, padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ fontSize: "0.875rem" }}
-                  onClick={() => {
-                    const keyInput = document.getElementById("new-override-key") as HTMLInputElement | null;
-                    const valueInput = document.getElementById("new-override-value") as HTMLInputElement | null;
-                    const key = keyInput?.value?.trim();
-                    const value = valueInput?.value;
-                    if (!key || !value) return;
-                    if (!/^\d{4}-\d{2}_(first|second)$/.test(key)) {
-                      alert("キーは YYYY-MM_first または YYYY-MM_second の形式で入力してください");
-                      return;
-                    }
-                    setDeadlineOverrides((prev) => ({ ...prev, [key]: `${value}:00` }));
-                    if (keyInput) keyInput.value = "";
-                    if (valueInput) valueInput.value = "";
-                  }}
-                >
-                  上書きを追加
-                </button>
-              </div>
+              );
+            })}
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+              <select
+                value={newOverrideYearMonth}
+                onChange={(e) => setNewOverrideYearMonth(e.target.value)}
+                style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem", minWidth: "100px" }}
+              >
+                {overrideYearMonthOptions.map((ym) => (
+                  <option key={ym.value} value={ym.value}>{ym.label}</option>
+                ))}
+              </select>
+              <select
+                value={newOverrideBlock}
+                onChange={(e) => setNewOverrideBlock(e.target.value as "first" | "second")}
+                style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem", minWidth: "110px" }}
+              >
+                <option value="first">1～15日分</option>
+                <option value="second">16日～月末</option>
+              </select>
+              <input
+                type="datetime-local"
+                value={newOverrideDatetime}
+                onChange={(e) => setNewOverrideDatetime(e.target.value)}
+                style={{ flex: "1 1 180px", minWidth: 0, padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+              />
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: "0.875rem" }}
+                onClick={() => {
+                  if (!newOverrideDatetime) {
+                    alert("締切日時を選択してください");
+                    return;
+                  }
+                  const key = `${newOverrideYearMonth}_${newOverrideBlock}`;
+                  setDeadlineOverrides((prev) => ({ ...prev, [key]: `${newOverrideDatetime}:00` }));
+                  setNewOverrideDatetime("");
+                }}
+              >
+                例外を追加
+              </button>
             </div>
           </div>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={deadlineSaving}
-          onClick={async () => {
-            setDeadlineSaving(true);
-            try {
-              await saveSettings({
-                firstBlockDeadlineDay,
-                firstBlockDeadlineTime,
-                secondBlockDeadlineDay,
-                secondBlockDeadlineTime,
-                deadlineOverrides: deadlineOverrides ?? {},
-              });
-              alert("締切設定を保存しました");
-            } catch (e) {
-              console.error(e);
-              alert("保存に失敗しました");
-            } finally {
-              setDeadlineSaving(false);
-            }
-          }}
-        >
-          {deadlineSaving ? "保存中..." : "締切設定を保存"}
-        </button>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={deadlineSaving}
+            onClick={async () => {
+              setDeadlineSaving(true);
+              try {
+                await saveSettings({
+                  firstBlockDeadlineDay,
+                  firstBlockDeadlineTime,
+                  secondBlockDeadlineDay,
+                  secondBlockDeadlineTime,
+                  deadlineOverrides: deadlineOverrides ?? {},
+                });
+                alert("締切設定を保存しました");
+              } catch (e) {
+                console.error(e);
+                alert("保存に失敗しました");
+              } finally {
+                setDeadlineSaving(false);
+              }
+            }}
+          >
+            {deadlineSaving ? "保存中..." : "締切設定を保存"}
+          </button>
+        </div>
       </div>
 
       {deleteConfirmTarget && (
@@ -635,7 +670,13 @@ export default function AdminSettingsPage() {
           <div style={{ color: "var(--text-muted)" }}>ユーザーが見つかりません</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {users.map((user) => (
+            {[...users]
+              .sort((a, b) => {
+                if (a.name === "総務") return -1;
+                if (b.name === "総務") return 1;
+                return 0;
+              })
+              .map((user) => (
               <div
                 key={user.uid}
                 style={{
@@ -685,15 +726,17 @@ export default function AdminSettingsPage() {
                         : "管理者に昇格"}
                     </button>
                   )}
-                  <button
-                    className="btn btn-ghost"
-                    style={{ fontSize: "0.85rem", padding: "0.25rem 0.5rem", marginLeft: 4 }}
-                    onClick={() => setSelectedUser(user)}
-                    aria-label="ユーザー詳細を表示"
-                  >
-                    詳細
-                  </button>
-                  {user.uid === currentUser?.uid && (
+                  {user.name !== "総務" && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: "0.85rem", padding: "0.25rem 0.5rem", marginLeft: 4 }}
+                      onClick={() => setSelectedUser(user)}
+                      aria-label="ユーザー詳細を表示"
+                    >
+                      詳細
+                    </button>
+                  )}
+                  {user.uid === currentUser?.uid && user.name !== "総務" && (
                     <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", flexShrink: 0 }}>（自分）</span>
                   )}
                 </div>
@@ -702,7 +745,7 @@ export default function AdminSettingsPage() {
           </div>
         )}
       </div>
-    {selectedUser && (
+      {selectedUser && (
       <div
         role="dialog"
         aria-label="ユーザー詳細"
