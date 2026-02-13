@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
 import { getUserProfile, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
-import { isPastSubmitDeadlineForDate } from "@/services/settingsService";
+import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
 function getDaysInMonth(year: number, month: number) {
@@ -50,6 +50,7 @@ export default function ShiftCalendar() {
     const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
     const [lastSavedShifts, setLastSavedShifts] = useState<{ [key: number]: string }>({});
     const [lastSavedRemoteByDay, setLastSavedRemoteByDay] = useState<{ [key: number]: boolean }>({});
+    const [settings, setSettings] = useState<AppSettings | null>(null);
     const dragStartDayRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
     const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -59,13 +60,21 @@ export default function ShiftCalendar() {
     const leadingBlanks = Array.from({ length: firstDayOfWeek }, () => null);
     const daysArray: (number | null)[] = [...leadingBlanks, ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
 
-    /** 指定日が提出締切を過ぎているか（15日区切り: 1–15→前月25日、16〜→当月10日） */
+    useEffect(() => {
+        const unsub = subscribeSettings(setSettings);
+        return unsub;
+    }, []);
+
+    /** 指定日が提出締切を過ぎているか（設定の日付+時刻を参照） */
     const isDayPastDeadline = useCallback(
-        (day: number) =>
-            isPastSubmitDeadlineForDate(
-                `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-            ),
-        [year, month]
+        (day: number) => {
+            if (!settings) return false;
+            return isPastSubmitDeadlineForDateWithSettings(
+                `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+                settings
+            );
+        },
+        [year, month, settings]
     );
 
     useEffect(() => {
@@ -250,7 +259,7 @@ export default function ShiftCalendar() {
             .filter(([dayStr]) => {
                 const d = parseInt(dayStr, 10);
                 const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                return !confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDate(dateStr);
+                return !confirmedByDay[d] && !isPastDate(year, month, d) && (!settings || !isPastSubmitDeadlineForDateWithSettings(dateStr, settings));
             })
             .map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
@@ -286,7 +295,7 @@ export default function ShiftCalendar() {
                 Object.keys(shifts).forEach((dayStr) => {
                     const d = parseInt(dayStr, 10);
                     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    if (!confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDate(dateStr)) next[d] = true;
+                    if (!confirmedByDay[d] && !isPastDate(year, month, d) && (!settings || !isPastSubmitDeadlineForDateWithSettings(dateStr, settings))) next[d] = true;
                 });
                 return next;
             });
@@ -394,7 +403,13 @@ export default function ShiftCalendar() {
                         fontSize: "0.9rem",
                     }}
                 >
-                    締切を過ぎた日は編集できません。1～15日分は前月25日、16日～月末分は当月10日までに提出してください。
+                    締切を過ぎた日は編集できません。
+                    {settings
+                        ? (() => {
+                            const l = getDeadlineLabelsForMonthWithSettings(year, month, settings);
+                            return `1～15日分: ${l.firstBlock}まで、16日～月末: ${l.secondBlock}までに提出してください。`;
+                          })()
+                        : "1～15日分は前月25日、16日～月末分は当月10日までに提出してください。"}
                 </div>
             )}
 

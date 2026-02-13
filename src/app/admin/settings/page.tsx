@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { getSettings } from "@/services/settingsService";
+import { getSettings, saveSettings, type AppSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
 import { deleteAllUserData } from "@/services/userDeletionService";
@@ -36,9 +36,24 @@ export default function AdminSettingsPage() {
   const [hourlyWageLocked, setHourlyWageLocked] = useState(true);
   const [wageChangeLog, setWageChangeLog] = useState<WageChangeLogEntry[]>([]);
   const [chatworkRaw, setChatworkRaw] = useState<Record<string, unknown> | null>(null);
+  const [firstBlockDeadlineDay, setFirstBlockDeadlineDay] = useState(25);
+  const [firstBlockDeadlineTime, setFirstBlockDeadlineTime] = useState("23:59");
+  const [secondBlockDeadlineDay, setSecondBlockDeadlineDay] = useState(10);
+  const [secondBlockDeadlineTime, setSecondBlockDeadlineTime] = useState("23:59");
+  const [deadlineOverrides, setDeadlineOverrides] = useState<AppSettings["deadlineOverrides"]>({});
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
 
   useEffect(() => {
-    getSettings().then(() => setLoading(false)).catch(() => setLoading(false));
+    getSettings()
+      .then((s) => {
+        setFirstBlockDeadlineDay(s.firstBlockDeadlineDay ?? 25);
+        setFirstBlockDeadlineTime(s.firstBlockDeadlineTime ?? "23:59");
+        setSecondBlockDeadlineDay(s.secondBlockDeadlineDay ?? 10);
+        setSecondBlockDeadlineTime(s.secondBlockDeadlineTime ?? "23:59");
+        setDeadlineOverrides(s.deadlineOverrides ?? {});
+      })
+      .finally(() => setLoading(false))
+      .catch(() => setLoading(false));
     getChatworkConfig().then((c) => {
       if (c) {
         const hour = c.notifyHour ?? 21;
@@ -351,6 +366,155 @@ export default function AdminSettingsPage() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ maxWidth: "520px" }}>
+        <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>シフト提出締切</h2>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+          1～15日分は「前月の指定日」、16日～月末分は「当月の指定日」までに提出。土日祝でずれる月は「月別上書き」で日時を指定できます。
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", alignItems: "end" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>1～15日分の締切（前月の日）</label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={firstBlockDeadlineDay}
+                  onChange={(e) => setFirstBlockDeadlineDay(Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                  style={{ width: "4rem", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                />
+                <span style={{ fontSize: "0.875rem" }}>日</span>
+                <input
+                  type="time"
+                  value={firstBlockDeadlineTime}
+                  onChange={(e) => setFirstBlockDeadlineTime(e.target.value || "23:59")}
+                  style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>16日～月末の締切（当月の日）</label>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={secondBlockDeadlineDay}
+                  onChange={(e) => setSecondBlockDeadlineDay(Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                  style={{ width: "4rem", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                />
+                <span style={{ fontSize: "0.875rem" }}>日</span>
+                <input
+                  type="time"
+                  value={secondBlockDeadlineTime}
+                  onChange={(e) => setSecondBlockDeadlineTime(e.target.value || "23:59")}
+                  style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>月別上書き（土日祝でずらす場合）</label>
+            <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+              キー: 対象月 YYYY-MM + _first または _second。値: 締切日時（ISO形式）。例: 2026-01_first → 2026年1月1～15日分の締切日時
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {Object.entries(deadlineOverrides ?? {}).map(([key, value]) => (
+                <div key={key} style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <input
+                    type="text"
+                    value={key}
+                    readOnly
+                    style={{ flex: "1 1 120px", minWidth: 0, padding: "0.5rem", fontSize: "0.8rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", backgroundColor: "var(--surface-hover)", boxSizing: "border-box" }}
+                  />
+                  <input
+                    type="datetime-local"
+                    value={value.slice(0, 16)}
+                    onChange={(e) => {
+                      const v = e.target.value ? `${e.target.value}:00` : value;
+                      setDeadlineOverrides((prev) => ({ ...prev, [key]: v }));
+                    }}
+                    style={{ flex: "1 1 180px", minWidth: 0, padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: "0.5rem", color: "var(--destructive)" }}
+                    onClick={() => setDeadlineOverrides((prev) => {
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
+                    })}
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  type="text"
+                  id="new-override-key"
+                  placeholder="例: 2026-01_first"
+                  style={{ flex: "1 1 120px", minWidth: 0, padding: "0.5rem", fontSize: "0.875rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                />
+                <input
+                  type="datetime-local"
+                  id="new-override-value"
+                  style={{ flex: "1 1 180px", minWidth: 0, padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ fontSize: "0.875rem" }}
+                  onClick={() => {
+                    const keyInput = document.getElementById("new-override-key") as HTMLInputElement | null;
+                    const valueInput = document.getElementById("new-override-value") as HTMLInputElement | null;
+                    const key = keyInput?.value?.trim();
+                    const value = valueInput?.value;
+                    if (!key || !value) return;
+                    if (!/^\d{4}-\d{2}_(first|second)$/.test(key)) {
+                      alert("キーは YYYY-MM_first または YYYY-MM_second の形式で入力してください");
+                      return;
+                    }
+                    setDeadlineOverrides((prev) => ({ ...prev, [key]: `${value}:00` }));
+                    if (keyInput) keyInput.value = "";
+                    if (valueInput) valueInput.value = "";
+                  }}
+                >
+                  上書きを追加
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={deadlineSaving}
+          onClick={async () => {
+            setDeadlineSaving(true);
+            try {
+              await saveSettings({
+                firstBlockDeadlineDay,
+                firstBlockDeadlineTime,
+                secondBlockDeadlineDay,
+                secondBlockDeadlineTime,
+                deadlineOverrides: deadlineOverrides ?? {},
+              });
+              alert("締切設定を保存しました");
+            } catch (e) {
+              console.error(e);
+              alert("保存に失敗しました");
+            } finally {
+              setDeadlineSaving(false);
+            }
+          }}
+        >
+          {deadlineSaving ? "保存中..." : "締切設定を保存"}
+        </button>
       </div>
 
       {deleteConfirmTarget && (

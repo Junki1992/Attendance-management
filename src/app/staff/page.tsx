@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { getDeadlineLabelsForMonth } from "@/services/settingsService";
+import { getSettings, getDeadlineLabelsForMonthWithSettings } from "@/services/settingsService";
 import { getUserShifts } from "@/services/shiftService";
 
 export default function StaffDashboard() {
@@ -12,12 +12,16 @@ export default function StaffDashboard() {
     const [monthIsConfirmed, setMonthIsConfirmed] = useState(false);
 
     useEffect(() => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth();
-        const nextMonth = month === 11 ? 0 : month + 1;
-        const nextYear = month === 11 ? year + 1 : year;
-        setDeadlineLabels(getDeadlineLabelsForMonth(nextYear, nextMonth));
+        const load = async () => {
+            const s = await getSettings();
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth();
+            const nextMonth = month === 11 ? 0 : month + 1;
+            const nextYear = month === 11 ? year + 1 : year;
+            setDeadlineLabels(getDeadlineLabelsForMonthWithSettings(nextYear, nextMonth, s));
+        };
+        load();
     }, []);
 
     useEffect(() => {
