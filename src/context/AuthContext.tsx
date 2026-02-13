@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/firebase";
 import { getUserProfile, createUser } from "@/services/userService";
 
@@ -54,6 +54,8 @@ export interface User {
     name: string;
     role: UserRole;
     photoURL?: string;
+    /** Chatwork アカウントID（数字）。通知のメンション用。Googleログイン時は未設定になり、設定画面で登録可能 */
+    chatworkAccountId?: string;
 }
 
 interface AuthContextType {
@@ -68,6 +70,8 @@ interface AuthContextType {
     logout: () => Promise<void>;
     /** プロフィールを再取得して user を更新（画像変更後に呼ぶ） */
     refreshUserProfile: () => Promise<void>;
+    /** Googleでログイン（初回は Firestore にプロフィール自動作成） */
+    loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -78,6 +82,7 @@ const AuthContext = createContext<AuthContextType>({
     loginMock: async () => {},
     logout: async () => {},
     refreshUserProfile: async () => {},
+    loginWithGoogle: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -154,6 +159,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         });
                         clearJustRegisteredUid();
                     }
+                    // Google 初回ログイン: プロフィールが無ければ自動作成
+                    if (!profile && firebaseUser.providerData?.some((p) => p?.providerId === "google.com")) {
+                        const firstAdminEmail = process.env.NEXT_PUBLIC_FIRST_ADMIN_EMAIL?.trim().toLowerCase();
+                        const email = firebaseUser.email?.trim().toLowerCase() ?? "";
+                        const isFirstAdmin = !!firstAdminEmail && email === firstAdminEmail;
+                        const role: "admin" | "staff" = isFirstAdmin ? "admin" : "staff";
+                        try {
+                            await createUser({
+                                uid: firebaseUser.uid,
+                                email: firebaseUser.email ?? "",
+                                name: firebaseUser.displayName ?? firebaseUser.email ?? "User",
+                                role,
+                                hourlyWage: 1000,
+                                photoURL: firebaseUser.photoURL ?? undefined,
+                            });
+                            profile = await getUserProfileDeduped(firebaseUser.uid);
+                            devInfo("[Auth] onAuthStateChanged: created profile for Google user", { uid: firebaseUser.uid, role });
+                        } catch (err) {
+                            devError("[Auth] onAuthStateChanged: createUser for Google failed", err);
+                        }
+                    }
                     if (profile && (profile.role === "admin" || profile.role === "staff")) {
                         const u: User = {
                             uid: firebaseUser.uid,
@@ -161,6 +187,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                             name: profile.name,
                             role: profile.role,
                             photoURL: profile.photoURL,
+                            chatworkAccountId: profile.chatworkAccountId,
                         };
                         userRef.current = u;
                         setUser(u);
@@ -207,9 +234,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
             } catch (e) {
                 // Firestore permission-denied などでここに来ると、loading が落ちず無限 Loading になり得るため必ず回復させる
-                const msg = (e as { message?: string })?.message ?? "";
-                const code = (e as { code?: string })?.code ?? "";
-                devError("[Auth] onAuthStateChanged error (getUserProfile等):", { code, message: msg, full: e });
+                const err = e as { message?: string; code?: string; stack?: string };
+                const msg = err?.message ?? "";
+                const code = err?.code ?? "";
+                // エラーオブジェクトは列挙不可プロパティを持つことがあるため、明示的に取り出してログ
+                devError("[Auth] onAuthStateChanged error (getUserProfile等):", {
+                    code,
+                    message: msg,
+                    name: e instanceof Error ? e.name : undefined,
+                    stack: e instanceof Error ? e.stack : undefined,
+                });
                 try {
                     await signOut(auth);
                 } catch {
@@ -266,6 +300,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     name: profile.name,
                     role: profile.role,
                     photoURL: profile.photoURL,
+                    chatworkAccountId: profile.chatworkAccountId,
                 };
                 userRef.current = u;
                 setUser(u);
@@ -294,6 +329,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         } finally {
             setLoading(false);
             devInfo("[Auth] login: done", { totalMs: Math.round(nowMs() - t0) });
+        }
+    };
+
+    const loginWithGoogle = async () => {
+        setLoading(true);
+        localStorage.removeItem("mock_user");
+        const t0 = nowMs();
+        devInfo("[Auth] loginWithGoogle: start");
+        try {
+            const provider = new GoogleAuthProvider();
+            const { user: firebaseUser } = await signInWithPopup(auth, provider);
+            devInfo("[Auth] loginWithGoogle: signInWithPopup", { uid: firebaseUser.uid, totalMs: Math.round(nowMs() - t0) });
+            // onAuthStateChanged でプロフィール取得 or 自動作成 → setUser される
+        } catch (err: unknown) {
+            const code = (err as { code?: string })?.code ?? "";
+            devError("[Auth] loginWithGoogle failed", { code, err });
+            throw err;
+        } finally {
+            setLoading(false);
+            devInfo("[Auth] loginWithGoogle: done", { totalMs: Math.round(nowMs() - t0) });
         }
     };
 
@@ -385,6 +440,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     name: profile.name,
                     role: profile.role,
                     photoURL: profile.photoURL,
+                    chatworkAccountId: profile.chatworkAccountId,
                 };
                 userRef.current = u;
                 setUser(u);
@@ -395,7 +451,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, loginMock, logout, refreshUserProfile }}>
+        <AuthContext.Provider value={{ user, loading, login, register, loginMock, logout, refreshUserProfile, loginWithGoogle }}>
             {children}
         </AuthContext.Provider>
     );

@@ -51,20 +51,35 @@ export interface CreateUserParams {
     role: "admin" | "staff";
     hourlyWage?: number;
     chatworkAccountId?: string;
+    photoURL?: string;
 }
 
-/** Firestore の users/{uid} を作成。登録直後に呼ぶ。 */
+/** Firestore の users/{uid} を作成。登録直後または Google 初回ログイン時に呼ぶ。 */
 export const createUser = async (params: CreateUserParams): Promise<void> => {
-    const { uid, email, name, role, hourlyWage = 1000, chatworkAccountId } = params;
+    const { uid, email, name, role, hourlyWage = 1000, chatworkAccountId, photoURL } = params;
     const docRef = doc(db, "users", uid);
     const data: Record<string, unknown> = { email, name, role, hourlyWage };
     if (chatworkAccountId?.trim()) data.chatworkAccountId = chatworkAccountId.trim();
+    if (photoURL) data.photoURL = photoURL;
     await setDoc(docRef, data);
 };
 
 export const saveUserProfile = async (user: UserProfile) => {
     const docRef = doc(db, "users", user.uid);
     await setDoc(docRef, user, { merge: true });
+};
+
+/** 自分の名前と Chatwork アカウントIDのみ更新（スタッフ設定・Googleログイン後の登録用） */
+export const updateMyProfileNameAndChatwork = async (
+    uid: string,
+    params: { name?: string; chatworkAccountId?: string }
+): Promise<void> => {
+    const docRef = doc(db, "users", uid);
+    const data: Record<string, string> = {};
+    if (params.name !== undefined) data.name = params.name.trim();
+    if (params.chatworkAccountId !== undefined) data.chatworkAccountId = params.chatworkAccountId.trim();
+    if (Object.keys(data).length === 0) return;
+    await updateDoc(docRef, data);
 };
 
 export interface UpdateWageOptions {
