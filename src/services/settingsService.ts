@@ -71,7 +71,7 @@ export const getDeadlineForMonthWithSettings = async (
 ): Promise<Date> => {
   const s = await getSettings();
   const lastDay = new Date(year, month + 1, 0).getDate();
-  const d = Math.min(s.shiftSubmitDeadlineDay, lastDay);
+  const d = Math.min(s.shiftSubmitDeadlineDay ?? 25, lastDay);
   return new Date(year, month, d, 23, 59, 59, 999);
 };
 
