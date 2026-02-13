@@ -5,7 +5,7 @@ import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Times
 export interface Notification {
     id?: string;
     userId: string;
-    type: 'shift_confirmed' | 'remind_submit' | 'message' | 'shift_change_request' | 'shift_change_approved' | 'shift_change_rejected' | 'hourly_wage_changed' | 'shift_submitted' | 'deadline_changed';
+    type: 'shift_confirmed' | 'remind_submit' | 'message' | 'shift_change_request' | 'shift_change_approved' | 'shift_change_rejected' | 'hourly_wage_changed' | 'shift_submitted' | 'deadline_changed' | 'chatwork_id_required';
     message: string;
     read: boolean;
     createdAt: any; // Timestamp
@@ -64,7 +64,26 @@ export const createNotification = async (
     }
 };
 
-
+/** Googleログイン等で Chatwork ID が未設定のスタッフに、1回だけ通知を作成する */
+export const ensureChatworkIdReminderNotification = async (userId: string): Promise<void> => {
+    try {
+        const q = query(
+            collection(db, "notifications"),
+            where("userId", "==", userId),
+            where("type", "==", "chatwork_id_required"),
+            limit(1)
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) return;
+        await createNotification(
+            userId,
+            "chatwork_id_required",
+            "Chatwork アカウントIDが未設定です。通知でメンションを受け取るには「設定」→「名前・Chatwork」でIDを登録してください。"
+        );
+    } catch (e) {
+        console.warn("[notificationService] ensureChatworkIdReminderNotification failed", e);
+    }
+};
 
 export const getUserNotifications = async (userId: string) => {
     // ... same as before

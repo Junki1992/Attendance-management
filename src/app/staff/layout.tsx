@@ -7,7 +7,7 @@ import Link from "next/link";
 import NotificationList from "@/components/NotificationList";
 import Avatar from "@/components/Avatar";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
-import { subscribeNotifications } from "@/services/notificationService";
+import { subscribeNotifications, ensureChatworkIdReminderNotification } from "@/services/notificationService";
 
 export default function StaffLayout({
     children,
@@ -50,6 +50,12 @@ export default function StaffLayout({
         });
         return () => unsubscribe();
     }, [user]);
+
+    useEffect(() => {
+        if (user?.role === "staff" && String(user?.chatworkAccountId ?? "").trim() === "") {
+            ensureChatworkIdReminderNotification(user.uid).catch(() => {});
+        }
+    }, [user?.uid, user?.role, user?.chatworkAccountId]);
 
     useEffect(() => {
         if (pathname.replace(/\/$/, "") === '/staff/chat') {
@@ -251,6 +257,7 @@ export default function StaffLayout({
                             <Link href="/staff/shifts" style={{ textDecoration: 'none', color: path === '/staff/shifts' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/shifts' ? '2px solid var(--primary)' : '2px solid transparent' }}>シフト提出</Link>
                             <Link href="/staff/confirmed-shifts" style={{ textDecoration: 'none', color: path === '/staff/confirmed-shifts' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/confirmed-shifts' ? '2px solid var(--primary)' : '2px solid transparent' }}>確定シフト</Link>
                             <Link href="/staff/chat" style={{ textDecoration: 'none', color: path === '/staff/chat' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/chat' ? '2px solid var(--primary)' : '2px solid transparent' }}>チャット</Link>
+                            <Link href="/staff/settings" style={{ textDecoration: 'none', color: path === '/staff/settings' ? 'var(--primary)' : 'var(--text-main)', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/staff/settings' ? '2px solid var(--primary)' : '2px solid transparent' }}>設定</Link>
 <button 
                             onClick={handleLogout}
                             style={{ 
@@ -404,6 +411,30 @@ export default function StaffLayout({
                             }}
                         >
                             チャット
+                        </Link>
+                        <Link 
+                            href="/staff/settings" 
+                            onClick={() => setShowMobileMenu(false)}
+                            className="menu-item-enter"
+                            style={{ 
+                                textDecoration: 'none', 
+                                color: 'var(--text-main)', 
+                                padding: '0.75rem 1rem',
+                                borderRadius: '8px',
+                                backgroundColor: path === '/staff/settings' ? 'var(--surface-hover)' : 'transparent',
+                                transition: 'all 0.2s ease',
+                                fontWeight: 600
+                            }}
+                            onMouseEnter={(e) => {
+                                if (path !== '/staff/settings') {
+                                    e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = path === '/staff/settings' ? 'var(--surface-hover)' : 'transparent';
+                            }}
+                        >
+                            設定
                         </Link>
                         <button 
                             onClick={() => {

@@ -8,12 +8,12 @@ import { useState, useEffect } from "react";
 export default function StaffSettingsPage() {
   const { user, refreshUserProfile } = useAuth();
   const [name, setName] = useState(user?.name ?? "");
-  const [chatworkAccountId, setChatworkAccountId] = useState(user?.chatworkAccountId ?? "");
+  const [chatworkAccountId, setChatworkAccountId] = useState(() => String(user?.chatworkAccountId ?? ""));
 
   useEffect(() => {
     if (user) {
       setName(user.name ?? "");
-      setChatworkAccountId(user.chatworkAccountId ?? "");
+      setChatworkAccountId(String(user.chatworkAccountId ?? ""));
     }
   }, [user]);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -32,7 +32,8 @@ export default function StaffSettingsPage() {
       setProfileError("名前を入力してください");
       return;
     }
-    if (chatworkAccountId.trim() && !/^\d+$/.test(chatworkAccountId.trim())) {
+    const idStr = String(chatworkAccountId ?? "").trim();
+    if (idStr && !/^\d+$/.test(idStr)) {
       setProfileError("Chatwork アカウントIDは数字のみです（プロフィール→アカウントで確認）");
       return;
     }
@@ -40,7 +41,7 @@ export default function StaffSettingsPage() {
     try {
       await updateMyProfileNameAndChatwork(user.uid, {
         name: name.trim(),
-        chatworkAccountId: chatworkAccountId.trim() || undefined,
+        chatworkAccountId: idStr || undefined,
       });
       await refreshUserProfile();
       setProfileSuccess(true);
