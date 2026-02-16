@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getUserShifts, Shift } from "@/services/shiftService";
-import { getUserProfile, getAdminIds } from "@/services/userService";
+import { getUserShifts, getShiftWorkType, getShiftWorkTypeLabel, getWageForWorkType, Shift } from "@/services/shiftService";
+import { getUserProfile, getAdminIds, UserProfile } from "@/services/userService";
 import {
   createShiftChangeRequest,
   getMyShiftChangeRequests,
@@ -17,6 +17,7 @@ function getDaysInMonth(year: number, month: number) {
 }
 
 function calcHours(s: Shift): number {
+  if (getShiftWorkType(s) === "absence") return 0;
   if (s.startTime === "00:00" && s.endTime === "00:00") return 0;
   const [sH, sM] = s.startTime.split(":").map(Number);
   const [eH, eM] = s.endTime.split(":").map(Number);
@@ -30,6 +31,7 @@ export default function StaffConfirmedShiftsPage() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [hourlyWage, setHourlyWage] = useState(1000);
   const [loading, setLoading] = useState(true);
   const [myRequests, setMyRequests] = useState<ShiftChangeRequest[]>([]);
@@ -67,6 +69,7 @@ export default function StaffConfirmedShiftsPage() {
           getUserShifts(user.uid, year, month),
           getMyShiftChangeRequests(user.uid),
         ]);
+        setProfile(profile ?? null);
         if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
         setShifts(data.filter((s) => s.status === "confirmed"));
         setMyRequests(reqs);
@@ -101,7 +104,7 @@ export default function StaffConfirmedShiftsPage() {
   shifts.forEach((s) => {
     const h = calcHours(s);
     totalHours += h;
-    const wage = s.hourlyWage ?? hourlyWage;
+    const wage = s.hourlyWage ?? getWageForWorkType(profile, getShiftWorkType(s));
     salaryExact += h * wage;
   });
   const salary = Math.floor(salaryExact);
@@ -282,13 +285,13 @@ export default function StaffConfirmedShiftsPage() {
                       {!(s.startTime === "00:00" && s.endTime === "00:00") && (
                         <>
                           <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                            {s.isRemote ? "在宅勤務" : "出社"}
+                            {getShiftWorkTypeLabel(s)}勤務
                           </div>
                           <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
                             勤務時間: <strong>{calcHours(s).toFixed(1)}h</strong>
                           </div>
                           <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
-                            時給: <strong>¥{(s.hourlyWage ?? hourlyWage).toLocaleString()}</strong>
+                            時給: <strong>¥{(s.hourlyWage ?? getWageForWorkType(profile, getShiftWorkType(s))).toLocaleString()}</strong>
                           </div>
                         </>
                       )}
@@ -486,7 +489,7 @@ export default function StaffConfirmedShiftsPage() {
                 ? "OFF"
                 : s.startTime === "00:00" && s.endTime === "00:00"
                   ? "OFF"
-                  : `${s.startTime} - ${s.endTime}${s.isRemote ? " 在宅" : ""}`;
+                  : `${s.startTime} - ${s.endTime}${getShiftWorkTypeLabel(s) !== "出社" ? ` ${getShiftWorkTypeLabel(s)}` : ""}`;
 
               const pendingReq = pendingRequestByDay[day];
               const isClickable = true;

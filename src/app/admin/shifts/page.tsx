@@ -8,7 +8,10 @@ import {
   subscribeAllShifts,
   getUnsubmittedStaff,
   getMonthlyWorkSummary,
+  getShiftWorkType,
+  getShiftWorkTypeLabel,
   Shift,
+  type ShiftWorkType,
 } from "@/services/shiftService";
 import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
@@ -16,6 +19,7 @@ import { createNotification, getShiftConfirmedNotifications, Notification } from
 const MOBILE_BREAKPOINT = 768;
 
 function calcHours(s: Shift): number | "OFF" {
+  if (getShiftWorkType(s) === "absence") return 0;
   if (s.startTime === "00:00" && s.endTime === "00:00") return "OFF";
   const [sH, sM] = s.startTime.split(":").map(Number);
   const [eH, eM] = s.endTime.split(":").map(Number);
@@ -29,7 +33,7 @@ const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 /** スプレッドシート用のセル表記（例: 10-18\n（出社/休憩1h）、13-18\n(在宅)） */
 function formatShiftForSheet(s: Shift): string {
   if (s.startTime === "00:00" && s.endTime === "00:00") return "";
-  const loc = s.isRemote ? "在宅" : "出社";
+  const loc = getShiftWorkTypeLabel(s);
   const [sH, sM] = s.startTime.split(":").map(Number);
   const [eH, eM] = s.endTime.split(":").map(Number);
   const durationHours = eH + eM / 60 - (sH + sM / 60);
@@ -75,7 +79,7 @@ export default function AdminShiftGrid() {
   const [savingCell, setSavingCell] = useState(false);
   const [cellModalStart, setCellModalStart] = useState("09:00");
   const [cellModalEnd, setCellModalEnd] = useState("18:00");
-  const [cellModalIsRemote, setCellModalIsRemote] = useState(false);
+  const [cellModalWorkType, setCellModalWorkType] = useState<ShiftWorkType>("office");
   const [cellModalOffEditExpanded, setCellModalOffEditExpanded] = useState(false);
   const [cellModalWasOff, setCellModalWasOff] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -97,7 +101,7 @@ export default function AdminShiftGrid() {
     );
     setCellModalStart(shift?.startTime ?? "09:00");
     setCellModalEnd(shift?.endTime ?? "18:00");
-    setCellModalIsRemote(shift?.isRemote ?? false);
+    setCellModalWorkType(shift ? getShiftWorkType(shift) : "office");
     setCellModalOffEditExpanded(false);
     setCellModalWasOff(shift?.startTime === "00:00" && shift?.endTime === "00:00");
     const wage = shift?.hourlyWage ?? workSummary.find((r) => r.userId === editingCell.userId)?.hourlyWage ?? null;
@@ -737,7 +741,7 @@ export default function AdminShiftGrid() {
                           title={cellTitle}
                         >
                           {h === "OFF" ? "OFF" : numHours > 0 ? (
-                            <span>{numHours}{shift?.isRemote ? " 在宅" : ""}</span>
+                            <span>{numHours}{shift && getShiftWorkType(shift) !== "office" ? ` ${getShiftWorkTypeLabel(shift)}` : ""}</span>
                           ) : "—"}
                         </td>
                       );
@@ -906,7 +910,7 @@ export default function AdminShiftGrid() {
                         startTime: cellModalStart,
                         endTime: cellModalEnd,
                         status: "confirmed",
-                        isRemote: cellModalIsRemote,
+                        workType: cellModalWorkType,
                         ...(editedAfterConfirmed && { editedAfterConfirmed: true }),
                       },
                       { byAdmin: true }
@@ -932,7 +936,7 @@ export default function AdminShiftGrid() {
                         startTime: "00:00",
                         endTime: "00:00",
                         status: "confirmed",
-                        isRemote: false,
+                        workType: "office",
                         ...(editedAfterConfirmed && { editedAfterConfirmed: true }),
                       },
                       { byAdmin: true }
@@ -1001,14 +1005,22 @@ export default function AdminShiftGrid() {
                       </div>
                     ) : (
                       <>
-                        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem", cursor: "pointer", fontSize: "0.9rem" }}>
-                          <input
-                            type="checkbox"
-                            checked={cellModalIsRemote}
-                            onChange={(e) => setCellModalIsRemote(e.target.checked)}
-                          />
-                          在宅
-                        </label>
+                        <div style={{ marginBottom: "0.75rem" }}>
+                          <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>勤務形態</div>
+                          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                            {(["office", "remote", "absence"] as const).map((w) => (
+                              <label key={w} style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                                <input
+                                  type="radio"
+                                  name="cellWorkType"
+                                  checked={cellModalWorkType === w}
+                                  onChange={() => setCellModalWorkType(w)}
+                                />
+                                {w === "office" ? "出社" : w === "remote" ? "在宅" : "当欠"}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                           <div style={{ marginBottom: "0.25rem" }}>
                             <div style={{ fontSize: "0.95rem", color: "var(--text-muted)", marginBottom: "0.35rem" }}>時間を設定</div>

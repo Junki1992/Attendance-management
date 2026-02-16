@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getUserShifts, saveShift, deleteShift, Shift } from "@/services/shiftService";
+import { getUserShifts, saveShift, deleteShift, getShiftWorkType, getWorkTypeLabel, Shift, type ShiftWorkType } from "@/services/shiftService";
 import { getUserProfile, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
 import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
@@ -38,6 +38,7 @@ export default function ShiftCalendar() {
     const [month, setMonth] = useState(now.getMonth());
     const [shifts, setShifts] = useState<{ [key: number]: string }>({});
     const [remoteByDay, setRemoteByDay] = useState<{ [key: number]: boolean }>({});
+    const [workTypeByDay, setWorkTypeByDay] = useState<{ [key: number]: ShiftWorkType }>({});
     const [confirmedByDay, setConfirmedByDay] = useState<{ [key: number]: boolean }>({});
     const [submittedByDay, setSubmittedByDay] = useState<{ [key: number]: boolean }>({});
     const [loading, setLoading] = useState(false);
@@ -88,6 +89,7 @@ export default function ShiftCalendar() {
                 if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
                 const shiftMap: { [key: number]: string } = {};
                 const remoteMap: { [key: number]: boolean } = {};
+                const workTypeMap: { [key: number]: ShiftWorkType } = {};
                 const confirmedMap: { [key: number]: boolean } = {};
                 const submittedMap: { [key: number]: boolean } = {};
                 data.forEach((s) => {
@@ -97,12 +99,15 @@ export default function ShiftCalendar() {
                     } else {
                         shiftMap[day] = `${s.startTime} - ${s.endTime}`;
                     }
-                    if (s.isRemote) remoteMap[day] = true;
+                    const wt = getShiftWorkType(s);
+                    workTypeMap[day] = wt;
+                    if (wt === "remote") remoteMap[day] = true;
                     if (s.status === "confirmed") confirmedMap[day] = true;
                     if (s.status === "submitted" || (s.status !== "draft" && s.status !== "confirmed")) submittedMap[day] = true;
                 });
                 setShifts(shiftMap);
                 setRemoteByDay(remoteMap);
+                setWorkTypeByDay(workTypeMap);
                 setConfirmedByDay(confirmedMap);
                 setSubmittedByDay(submittedMap);
                 setLastSavedShifts(shiftMap);
@@ -248,6 +253,12 @@ export default function ShiftCalendar() {
         setRemoteByDay((prev) => {
             const next = { ...prev };
             targetDays.forEach((d) => (next[d] = bulkIsOff ? false : bulkIsRemote));
+            return next;
+        });
+        setWorkTypeByDay((prev) => {
+            const next = { ...prev };
+            const wt: ShiftWorkType = bulkIsOff ? "office" : bulkIsRemote ? "remote" : "office";
+            targetDays.forEach((d) => (next[d] = wt));
             return next;
         });
         alert(`${targetDays.length}日分を一括で設定しました。内容を確認して「保存」または「提出」してください。`);
@@ -459,7 +470,7 @@ export default function ShiftCalendar() {
                                         {!isOff && (
                                             <>
                                                 <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-                                                    {remoteByDay[detailModalDay] ? "在宅勤務" : "出社"}
+                                                    {getWorkTypeLabel(workTypeByDay[detailModalDay] ?? "office")}勤務
                                                 </div>
                                                 <div style={{ fontSize: "0.9rem", marginTop: "0.25rem" }}>
                                                     勤務時間: <strong>{hours.toFixed(1)}h</strong>
@@ -656,7 +667,7 @@ export default function ShiftCalendar() {
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {formatShiftLabel(displayLabel)}{remoteByDay[day] ? " 在宅" : ""}{isConfirmed ? " 確定" : submittedByDay[day] ? " 提出" : " 下書き"}
+                                            {formatShiftLabel(displayLabel)}{(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}{isConfirmed ? " 確定" : submittedByDay[day] ? " 提出" : " 下書き"}
                                         </div>
                                     );
                                 })()}

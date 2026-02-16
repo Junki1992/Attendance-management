@@ -1,6 +1,6 @@
 import { db, auth, storage } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, getDocFromCache, getDocsFromServer, onSnapshot } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, getDocFromCache, getDocsFromServer, onSnapshot, deleteField } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 export interface UserProfile {
@@ -8,7 +8,9 @@ export interface UserProfile {
     name: string;
     role: 'admin' | 'staff';
     email: string;
-    hourlyWage: number; // Required now, default 1000
+    hourlyWage: number; // 出社時給。default 1000
+    /** 在宅時給。未設定の場合は hourlyWage を使用 */
+    hourlyWageRemote?: number;
     photoURL?: string;
     chatworkAccountId?: string; // Chatwork のアカウントID（数字。通知の [To:xxx] メンション用）
 }
@@ -38,6 +40,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
             ...data,
             uid: docRef.id,
             hourlyWage: data?.hourlyWage ?? 1000,
+            hourlyWageRemote: data?.hourlyWageRemote as number | undefined,
         } as UserProfile;
     } else {
         return null;
@@ -109,6 +112,20 @@ export const updateUserHourlyWage = async (
     }
 };
 
+/** 出社・在宅時給をまとめて更新（管理者用）。hourlyWageRemote に null を渡すとフィールドを削除（未設定＝出社と同じ） */
+export const updateUserWages = async (
+    uid: string,
+    wages: { hourlyWage?: number; hourlyWageRemote?: number | null }
+): Promise<void> => {
+    const docRef = doc(db, "users", uid);
+    const data: Record<string, number | ReturnType<typeof deleteField>> = {};
+    if (wages.hourlyWage !== undefined) data.hourlyWage = wages.hourlyWage;
+    if (wages.hourlyWageRemote === null) data.hourlyWageRemote = deleteField();
+    else if (wages.hourlyWageRemote !== undefined) data.hourlyWageRemote = wages.hourlyWageRemote;
+    if (Object.keys(data).length === 0) return;
+    await updateDoc(docRef, data);
+};
+
 export interface StaffItem {
     id: string;
     name: string;
@@ -169,6 +186,7 @@ function mapDocToUserProfile(d: { id: string; data: () => Record<string, unknown
         name: (data.name as string) || "（名前なし）",
         role: data.role === "admin" ? "admin" : "staff",
         hourlyWage: (data.hourlyWage as number) ?? 1000,
+        hourlyWageRemote: data.hourlyWageRemote as number | undefined,
         photoURL: (data.photoURL as string) ?? undefined,
         chatworkAccountId: (data.chatworkAccountId as string) ?? undefined,
     };

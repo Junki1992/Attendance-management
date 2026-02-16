@@ -11,7 +11,8 @@ import {
   Timestamp,
   writeBatch,
 } from "firebase/firestore";
-import { saveShift } from "@/services/shiftService";
+import { saveShift, getWageForWorkType } from "@/services/shiftService";
+import { getUserProfile } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
 
 export interface ShiftChangeRequest {
@@ -107,6 +108,10 @@ export const approveShiftChangeRequest = async (
     throw new Error("申請が見つからないか、すでに処理済みです。");
   }
 
+  const profile = await getUserProfile(data.userId as string);
+  const isRemote = !!data.isRemote;
+  const wage = getWageForWorkType(profile, isRemote ? "remote" : "office");
+
   await saveShift(
     {
       userId: data.userId,
@@ -114,6 +119,7 @@ export const approveShiftChangeRequest = async (
       startTime: data.requestedStartTime,
       endTime: data.requestedEndTime,
       status: "confirmed",
+      hourlyWage: wage,
       ...(data.isRemote !== undefined && { isRemote: data.isRemote }),
     },
     { byAdmin: true }

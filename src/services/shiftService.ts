@@ -4,6 +4,9 @@ import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
 import { isPastSubmitDeadlineForDateAsync } from "@/services/settingsService";
 
+/** 勤務形態（出社・在宅・当欠）。給与計算で参照する想定 */
+export type ShiftWorkType = "office" | "remote" | "absence";
+
 export interface Shift {
     id?: string;
     userId: string;
@@ -16,8 +19,36 @@ export interface Shift {
     editedAfterDeadline?: boolean;
     /** 確定済みのシフトを管理者が編集した場合 true（再通知が必要） */
     editedAfterConfirmed?: boolean;
-    /** 在宅勤務の場合 true */
+    /** 在宅勤務の場合 true（後方互換。workType があれば workType を優先） */
     isRemote?: boolean;
+    /** 勤務形態: 出社 / 在宅 / 当欠。未設定時は isRemote から判定 */
+    workType?: ShiftWorkType;
+}
+
+/** シフトの勤務形態を取得（workType 未設定時は isRemote から判定） */
+export function getShiftWorkType(shift: Shift): ShiftWorkType {
+    if (shift.workType) return shift.workType;
+    return shift.isRemote ? "remote" : "office";
+}
+
+/** 勤務形態の表示ラベル */
+export function getShiftWorkTypeLabel(shift: Shift): string {
+    return getWorkTypeLabel(getShiftWorkType(shift));
+}
+
+/** 勤務形態の表示ラベル（workType のみから） */
+export function getWorkTypeLabel(w: ShiftWorkType): string {
+    return w === "absence" ? "当欠" : w === "remote" ? "在宅" : "出社";
+}
+
+/** プロフィールと勤務形態から時給を返す（集計・フォールバック用） */
+export function getWageForWorkType(
+    profile: { hourlyWage?: number; hourlyWageRemote?: number } | null,
+    workType: ShiftWorkType
+): number {
+    const base = profile?.hourlyWage ?? 1000;
+    if (workType === "remote") return profile?.hourlyWageRemote ?? base;
+    return base;
 }
 
 export type SaveShiftOptions = { byAdmin?: boolean };
@@ -29,22 +60,20 @@ export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promi
     let editedAfterDeadline: boolean | undefined;
     let hourlyWage = shift.hourlyWage;
     if (options?.byAdmin && shift.status === "confirmed" && hourlyWage == null) {
-        const existing = await getDoc(shiftRef);
-        const existingWage = existing.exists() ? (existing.data()?.hourlyWage as number | undefined) : undefined;
-        if (existingWage != null) {
-            hourlyWage = existingWage;
-        } else {
-            const profile = await getUserProfile(shift.userId);
-            hourlyWage = profile?.hourlyWage ?? 1000;
-        }
+        const profile = await getUserProfile(shift.userId);
+        const workType = shift.workType ?? (shift.isRemote ? "remote" : "office");
+        hourlyWage = getWageForWorkType(profile, workType);
     }
     if (options?.byAdmin) {
         editedAfterDeadline = await isPastSubmitDeadlineForDateAsync(shift.date);
     }
 
     const { hourlyWage: _skip, ...shiftRest } = shift;
+    const workType = shift.workType ?? (shift.isRemote ? "remote" : "office");
     const data = {
         ...shiftRest,
+        workType,
+        isRemote: workType === "remote",
         ...(hourlyWage != null && { hourlyWage }),
         updatedAt: Timestamp.now(),
         ...(editedAfterDeadline !== undefined && { editedAfterDeadline }),
@@ -167,17 +196,17 @@ export const confirmShifts = async (year: number, month: number) => {
     const toConfirm = shifts.filter((s) => s.status !== "confirmed");
     const affectedUserIds = new Set<string>(toConfirm.map((s) => s.userId));
 
-    // 2. 確定時に時給スナップショットを保存（月途中の時給変更に備える）
-    const uidToWage = new Map<string, number>();
+    // 2. 確定時に時給スナップショットを保存（出社/在宅で時給が違う場合は勤務形態に応じてセット）
+    const uidToProfile = new Map<string, Awaited<ReturnType<typeof getUserProfile>>>();
     for (const uid of affectedUserIds) {
-        const profile = await getUserProfile(uid);
-        uidToWage.set(uid, profile?.hourlyWage ?? 1000);
+        uidToProfile.set(uid, await getUserProfile(uid));
     }
 
     const promises = toConfirm.map((shift) => {
         const docId = `${shift.userId}_${shift.date}`;
         const shiftRef = doc(db, "shifts", docId);
-        const wage = uidToWage.get(shift.userId) ?? 1000;
+        const profile = uidToProfile.get(shift.userId) ?? null;
+        const wage = getWageForWorkType(profile, getShiftWorkType(shift));
         return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage }, { merge: true });
     });
 
@@ -192,13 +221,13 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     if (userShifts.length === 0) return false;
 
     const profile = await getUserProfile(userId);
-    const wage = profile?.hourlyWage ?? 1000;
 
     const toUpdate = userShifts.filter((s) => s.status !== "confirmed");
     await Promise.all(
         toUpdate.map((shift) => {
             const docId = `${shift.userId}_${shift.date}`;
             const shiftRef = doc(db, "shifts", docId);
+            const wage = getWageForWorkType(profile, getShiftWorkType(shift));
             return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage }, { merge: true });
         })
     );
@@ -214,6 +243,7 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
 };
 
 function calcHoursForShift(s: Shift): number {
+    if (getShiftWorkType(s) === "absence") return 0;
     if (s.startTime === "00:00" && s.endTime === "00:00") return 0;
     const [sH, sM] = s.startTime.split(":").map(Number);
     const [eH, eM] = s.endTime.split(":").map(Number);
@@ -246,7 +276,7 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
         let salaryExact = 0;
         for (const s of userShifts) {
             const hours = calcHoursForShift(s);
-            const wage = s.hourlyWage ?? fallbackWage;
+            const wage = s.hourlyWage ?? getWageForWorkType(profile, getShiftWorkType(s));
             totalHours += hours;
             salaryExact += hours * wage;
         }

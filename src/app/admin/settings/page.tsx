@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { getSettings, saveSettings, type AppSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
-import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, UserProfile } from "@/services/userService";
+import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, updateUserWages, UserProfile } from "@/services/userService";
 import { deleteAllUserData } from "@/services/userDeletionService";
-import { getWageChangeLog, WageChangeLogEntry } from "@/services/wageChangeLogService";
+import { getWageChangeLog, recordWageChange, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
@@ -32,6 +32,7 @@ export default function AdminSettingsPage() {
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ uid: string; name: string; role: "admin" | "staff" } | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
+  const [editingHourlyWageRemote, setEditingHourlyWageRemote] = useState<number | "">("");
   const [savingWage, setSavingWage] = useState(false);
   const [hourlyWageLocked, setHourlyWageLocked] = useState(true);
   const [wageChangeLog, setWageChangeLog] = useState<WageChangeLogEntry[]>([]);
@@ -142,9 +143,11 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (selectedUser) {
       setEditingHourlyWage(selectedUser.hourlyWage ?? 1000);
+      const remote = selectedUser.hourlyWageRemote;
+      setEditingHourlyWageRemote(remote === undefined || remote === null ? "" : remote);
       setHourlyWageLocked(true);
     }
-  }, [selectedUser?.uid, selectedUser?.hourlyWage]);
+  }, [selectedUser?.uid, selectedUser?.hourlyWage, selectedUser?.hourlyWageRemote]);
 
   // スタッフ選択時に時給変更ログを取得
   useEffect(() => {
@@ -167,22 +170,32 @@ export default function AdminSettingsPage() {
   const handleSaveHourlyWage = async () => {
     if (!selectedUser || !currentUser) return;
     const wage = Math.max(0, Math.floor(Number(editingHourlyWage)) || 0);
+    const remoteVal = editingHourlyWageRemote === "" || editingHourlyWageRemote === undefined ? undefined : Math.max(0, Math.floor(Number(editingHourlyWageRemote)) || 0);
     setSavingWage(true);
     try {
-      await updateUserHourlyWage(selectedUser.uid, wage, {
-        changedByUid: currentUser.uid,
-        changedByName: currentUser.name ?? "管理者",
+      await updateUserWages(selectedUser.uid, {
+        hourlyWage: wage,
+        hourlyWageRemote: editingHourlyWageRemote === "" ? null : remoteVal,
       });
+      if (wage !== (selectedUser.hourlyWage ?? 1000)) {
+        const previousWage = selectedUser.hourlyWage ?? 1000;
+        try {
+          await recordWageChange(selectedUser.uid, previousWage, wage, currentUser.uid, currentUser.name ?? "管理者");
+        } catch (e) {
+          console.warn("[handleSaveHourlyWage] 時給変更ログの記録に失敗:", e);
+        }
+        await createNotification(
+          selectedUser.uid,
+          "hourly_wage_changed",
+          `時給が¥${wage.toLocaleString()}に変更されました。確認してください。`
+        );
+      }
       setEditingHourlyWage(wage);
+      setEditingHourlyWageRemote(remoteVal ?? "");
       setHourlyWageLocked(true);
-      setSelectedUser((prev) => (prev ? { ...prev, hourlyWage: wage } : null));
+      setSelectedUser((prev) => (prev ? { ...prev, hourlyWage: wage, hourlyWageRemote: remoteVal } : null));
       const log = await getWageChangeLog(selectedUser.uid);
       setWageChangeLog(log);
-      await createNotification(
-        selectedUser.uid,
-        "hourly_wage_changed",
-        `時給が¥${wage.toLocaleString()}に変更されました。確認してください。`
-      );
       const updated = (await getAllUsers()).find((u) => u.uid === selectedUser.uid) ?? null;
       if (updated) setSelectedUser(updated);
       alert("時給を保存しました");
@@ -793,6 +806,7 @@ export default function AdminSettingsPage() {
               </label>
               {hourlyWageLocked ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>出社:</span>
                   <span
                     style={{
                       padding: "0.5rem 0.75rem",
@@ -807,6 +821,21 @@ export default function AdminSettingsPage() {
                     title="編集できません（錠前をクリックで解除）"
                   >
                     ¥{(selectedUser!.hourlyWage ?? 1000).toLocaleString()}
+                  </span>
+                  <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginLeft: "0.5rem" }}>在宅:</span>
+                  <span
+                    style={{
+                      padding: "0.5rem 0.75rem",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--radius-md)",
+                      backgroundColor: "var(--bg-secondary)",
+                      fontSize: "1rem",
+                      minWidth: "100px",
+                      cursor: "not-allowed",
+                      userSelect: "none",
+                    }}
+                  >
+                    {selectedUser!.hourlyWageRemote != null ? `¥${selectedUser!.hourlyWageRemote.toLocaleString()}` : "未設定（出社と同じ）"}
                   </span>
                   <button
                     type="button"
@@ -825,6 +854,7 @@ export default function AdminSettingsPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.875rem", width: "3rem" }}>出社</span>
                     <input
                       id="admin-hourly-wage"
                       type="number"
@@ -840,6 +870,31 @@ export default function AdminSettingsPage() {
                       }}
                     />
                     <span style={{ color: "var(--text-muted)" }}>円</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.875rem", width: "3rem" }}>在宅</span>
+                    <input
+                      id="admin-hourly-wage-remote"
+                      type="number"
+                      min={0}
+                      value={editingHourlyWageRemote === "" ? "" : editingHourlyWageRemote}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setEditingHourlyWageRemote(v === "" ? "" : Math.max(0, Math.floor(Number(v)) || 0));
+                      }}
+                      placeholder="未設定なら出社と同じ"
+                      style={{
+                        padding: "0.5rem",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-md)",
+                        width: "120px",
+                        fontSize: "1rem",
+                      }}
+                    />
+                    <span style={{ color: "var(--text-muted)" }}>円</span>
+                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>（空欄＝出社と同じ）</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                     <button
                       type="button"
                       className="btn btn-primary"
@@ -854,6 +909,7 @@ export default function AdminSettingsPage() {
                       onClick={() => {
                         setHourlyWageLocked(true);
                         setEditingHourlyWage(selectedUser!.hourlyWage ?? 1000);
+                        setEditingHourlyWageRemote(selectedUser!.hourlyWageRemote ?? "");
                       }}
                       disabled={savingWage}
                       title="ロックして編集不可に戻す"
@@ -869,7 +925,7 @@ export default function AdminSettingsPage() {
                 </div>
               )}
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                給与集計やアルバイトの概算給与に反映されます。編集する場合は錠前アイコンをクリックして解除してください。
+                出社と在宅で時給を分けられます。在宅を未設定にすると出社時給と同じになります。編集する場合は錠前をクリックして解除してください。
               </p>
               <div style={{ marginTop: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
