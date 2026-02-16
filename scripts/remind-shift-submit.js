@@ -37,7 +37,7 @@ async function main() {
   const year = now.getFullYear();
   const month = now.getMonth();
   const settingsSnap = await db.collection("settings").doc("app").get();
-  const settings = settingsSnap.exists() ? { ...DEFAULTS, ...settingsSnap.data() } : DEFAULTS;
+  const settings = settingsSnap.exists ? { ...DEFAULTS, ...settingsSnap.data() } : DEFAULTS;
   const firstDay = settings.firstBlockDeadlineDay ?? 25;
   const secondDay = settings.secondBlockDeadlineDay ?? 10;
   const overrides = settings.deadlineOverrides || {};
