@@ -17,9 +17,7 @@ export default function StaffDashboard() {
             const now = new Date();
             const year = now.getFullYear();
             const month = now.getMonth();
-            const nextMonth = month === 11 ? 0 : month + 1;
-            const nextYear = month === 11 ? year + 1 : year;
-            setDeadlineLabels(getDeadlineLabelsForMonthWithSettings(nextYear, nextMonth, s));
+            setDeadlineLabels(getDeadlineLabelsForMonthWithSettings(year, month, s));
         };
         load();
     }, []);
@@ -40,6 +38,17 @@ export default function StaffDashboard() {
         <div>
             <h2 style={{ fontSize: '1.5rem', marginBottom: '1.5rem' }}>ダッシュボード</h2>
 
+            {deadlineLabels && (
+                <div className="card" style={{ marginBottom: '1.5rem', backgroundColor: 'var(--surface-hover)', borderLeft: '4px solid var(--primary)' }}>
+                    <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--text-muted)' }}>今月のシフト提出期限</h3>
+                    <p style={{ margin: 0, fontSize: '1rem', color: 'var(--text-main)' }}>
+                        <strong>1～15日分</strong>: {deadlineLabels.firstBlock}まで
+                        <br />
+                        <strong>16日～月末</strong>: {deadlineLabels.secondBlock}まで
+                    </p>
+                </div>
+            )}
+
             <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
                 <div className="card">
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>今月のシフト提出</h3>
@@ -47,17 +56,7 @@ export default function StaffDashboard() {
                         {monthIsConfirmed ? (
                             <strong>確定済み</strong>
                         ) : (
-                            <>
-                                希望シフトを提出してください。
-                                {deadlineLabels && (
-                                    <>
-                                        <br />
-                                        <strong>1～15日分: {deadlineLabels.firstBlock}まで</strong>
-                                        <br />
-                                        <strong>16日～月末: {deadlineLabels.secondBlock}まで</strong>
-                                    </>
-                                )}
-                            </>
+                            <>希望シフトを提出してください。上記の期限までに「シフト提出」から送信してください。</>
                         )}
                     </p>
                     {monthIsConfirmed ? (
