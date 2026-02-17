@@ -651,6 +651,33 @@ export default function AdminShiftGrid() {
                           合計 {totalHours}h
                         </span>
                       </div>
+                      {hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && (
+                        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            style={{ fontSize: "0.8rem", padding: "0.35rem 0.6rem" }}
+                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                            onClick={() => handleConfirmOne(user.id)}
+                          >
+                            {confirmingUserId === user.id ? "送信中..." : "確定通知を送る"}
+                          </button>
+                          {hasSubmittedShifts(user.id) && (
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{ fontSize: "0.8rem", padding: "0.35rem 0.6rem", backgroundColor: "var(--destructive)", color: "white", border: "none" }}
+                              disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                              onClick={() => { setRejectingUserId(user.id); setRejectComment(""); }}
+                            >
+                              却下
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {hasShiftsInMonth(user.id) && isFullyConfirmed(user.id) && (
+                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>確定済み</p>
+                      )}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", fontSize: "0.7rem" }}>
                         {dayOfWeek.map((d) => (
                           <div key={d} style={{ textAlign: "center", padding: "0.2rem", backgroundColor: "var(--surface-hover)", borderRadius: "2px", fontWeight: 600 }}>
