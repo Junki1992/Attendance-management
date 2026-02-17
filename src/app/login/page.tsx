@@ -32,7 +32,7 @@ function authErrorToMessage(code: string): string {
         "missing-or-insufficient-permissions": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。",
         "firestore-permission-denied": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。",
         // プロフィールが見つからない
-        "user-profile-not-found": "ユーザープロフィールが見つかりません。Firestore の `users/{uid}` ドキュメントが存在しない可能性があります。以下のいずれかの方法で対処してください：1) Firebase コンソール → Authentication → ユーザー タブから該当ユーザーを削除してから新規登録をやり直す、2) Firebase コンソール → Firestore Database → データ タブで `users/{uid}` ドキュメントを手動で作成する（`email`, `name`, `role` フィールドに \"staff\" または \"admin\"、`hourlyWage` フィールドに `1000` を設定）。",
+        "user-profile-not-found": "プロフィールが見つかりません。再登録するか管理者に連絡してください。",
     };
     const known = m[code];
     if (known) return known;
