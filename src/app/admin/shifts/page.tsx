@@ -31,6 +31,16 @@ function calcHours(s: Shift): number | "OFF" {
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
+/** 表のセル用：勤務時間を「11-19」「11-19 在宅」のように表示（ぱっと見で何時～何時か分かるように） */
+function formatShiftCellLabel(shift: Shift | null | undefined): string {
+  if (!shift || (shift.startTime === "00:00" && shift.endTime === "00:00")) return "OFF";
+  const sH = parseInt(shift.startTime.slice(0, 2), 10);
+  const eH = parseInt(shift.endTime.slice(0, 2), 10);
+  const timeStr = `${sH}-${eH}`;
+  const workLabel = getShiftWorkType(shift) !== "office" ? ` ${getShiftWorkTypeLabel(shift)}` : "";
+  return timeStr + workLabel;
+}
+
 /** スプレッドシート用のセル表記（例: 10-18\n（出社/休憩1h）、13-18\n(在宅)） */
 function formatShiftForSheet(s: Shift): string {
   if (s.startTime === "00:00" && s.endTime === "00:00") return "";
@@ -615,7 +625,7 @@ export default function AdminShiftGrid() {
                                 cursor: hasData ? "pointer" : "default",
                               }}
                             >
-                              {h === "OFF" ? "OFF" : numHours > 0 ? numHours : ""}
+                              {h === "OFF" ? "OFF" : numHours > 0 ? formatShiftCellLabel(shift) : ""}
                             </div>
                           );
                         })}
@@ -762,7 +772,7 @@ export default function AdminShiftGrid() {
                           title={cellTitle}
                         >
                           {h === "OFF" ? "OFF" : numHours > 0 ? (
-                            <span>{numHours}{shift && getShiftWorkType(shift) !== "office" ? ` ${getShiftWorkTypeLabel(shift)}` : ""}</span>
+                            <span>{formatShiftCellLabel(shift)}</span>
                           ) : "—"}
                         </td>
                       );
