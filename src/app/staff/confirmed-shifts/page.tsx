@@ -47,7 +47,9 @@ export default function StaffConfirmedShiftsPage() {
   const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
 
   const lastDay = getDaysInMonth(year, month);
-  const daysArray = Array.from({ length: lastDay }, (_, i) => i + 1);
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const leadingBlanks = Array.from({ length: firstDayOfWeek }, () => null);
+  const daysArray: (number | null)[] = [...leadingBlanks, ...Array.from({ length: lastDay }, (_, i) => i + 1)];
   /** 当月の全日付（YYYY-MM-DD）。変更申請で任意の日を選択可能 */
   const allDatesInMonth = Array.from(
     { length: lastDay },
@@ -478,7 +480,11 @@ export default function StaffConfirmedShiftsPage() {
                 {d}
               </div>
             ))}
-            {daysArray.map((day) => {
+            {daysArray.map((dayOrNull, index) => {
+              if (dayOrNull === null) {
+                return <div key={`empty-${index}`} style={{ minHeight: "80px", padding: "0.4rem", backgroundColor: "var(--surface-hover)", minWidth: 0 }} />;
+              }
+              const day = dayOrNull;
               const date = new Date(year, month, day);
               const dow = date.getDay();
               const isWeekend = dow === 0 || dow === 6;
@@ -492,7 +498,6 @@ export default function StaffConfirmedShiftsPage() {
                   : `${s.startTime} - ${s.endTime}${getShiftWorkTypeLabel(s) !== "出社" ? ` ${getShiftWorkTypeLabel(s)}` : ""}`;
 
               const pendingReq = pendingRequestByDay[day];
-              const isClickable = true;
               return (
                 <div
                   key={day}
