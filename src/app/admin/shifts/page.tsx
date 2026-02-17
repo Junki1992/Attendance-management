@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   confirmShifts,
   confirmShiftsForUser,
+  rejectShiftsForUser,
   saveShift,
   subscribeAllShifts,
   getUnsubmittedStaff,
@@ -79,6 +80,8 @@ export default function AdminShiftGrid() {
   const [confirming, setConfirming] = useState(false);
   const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
   const [confirmingSelected, setConfirmingSelected] = useState(false);
+  const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
+  const [rejectComment, setRejectComment] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [reminding, setReminding] = useState(false);
   const [csvCopied, setCsvCopied] = useState(false);
@@ -205,6 +208,12 @@ export default function AdminShiftGrid() {
     [shifts]
   );
 
+  /** このユーザーに提出済み（未確定）のシフトが1件以上あるか（却下ボタン表示用） */
+  const hasSubmittedShifts = useCallback(
+    (userId: string) => shifts.some((s) => s.userId === userId && s.status === "submitted"),
+    [shifts]
+  );
+
   /** 確定対象が1人以上いるか（シフトがあり、まだ確定していない人） */
   const hasShiftsToConfirm = useMemo(
     () => staffList.some((s) => hasShiftsInMonth(s.id) && !isFullyConfirmed(s.id)),
@@ -291,6 +300,38 @@ export default function AdminShiftGrid() {
     } catch (e) {
       console.error(e);
       alert("確定通知の送信に失敗しました");
+    } finally {
+      setConfirmingUserId(null);
+    }
+  };
+
+  const handleRejectSubmit = async () => {
+    const uid = rejectingUserId;
+    if (!uid || !rejectComment.trim()) {
+      alert("却下理由を入力してください。");
+      return;
+    }
+    setConfirmingUserId(uid);
+    try {
+      const ok = await rejectShiftsForUser(uid, year, month);
+      if (!ok) {
+        alert("このアルバイトに提出済みのシフトがありません。");
+        return;
+      }
+      const message = `${month + 1}月のシフトが却下されました。\n理由: ${rejectComment.trim()}`;
+      await createNotification(uid, "shift_rejected", message);
+      setRejectingUserId(null);
+      setRejectComment("");
+      getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
+      setSelectedUserIds((prev) => {
+        const next = new Set(prev);
+        next.delete(uid);
+        return next;
+      });
+      alert("却下し、通知を送りました。");
+    } catch (e) {
+      console.error(e);
+      alert("却下の送信に失敗しました");
     } finally {
       setConfirmingUserId(null);
     }
@@ -823,16 +864,30 @@ export default function AdminShiftGrid() {
                           確定済み
                         </span>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn btn-outline"
-                          style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                          disabled={!!confirmingUserId || confirming || confirmingSelected}
-                          onClick={() => handleConfirmOne(user.id)}
-                          title={`${user.name}さんに確定通知を送る`}
-                        >
-                          {confirmingUserId === user.id ? "送信中..." : "送る"}
-                        </button>
+                        <span style={{ display: "flex", gap: "0.35rem", justifyContent: "center", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                            onClick={() => handleConfirmOne(user.id)}
+                            title={`${user.name}さんに確定通知を送る`}
+                          >
+                            {confirmingUserId === user.id ? "送信中..." : "送る"}
+                          </button>
+                          {hasSubmittedShifts(user.id) && (
+                            <button
+                              type="button"
+                              className="btn"
+                              style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem", backgroundColor: "var(--destructive)", color: "white", border: "none" }}
+                              disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                              onClick={() => { setRejectingUserId(user.id); setRejectComment(""); }}
+                              title={`${user.name}さんの提出シフトを却下する（理由必須）`}
+                            >
+                              却下
+                            </button>
+                          )}
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -910,6 +965,64 @@ export default function AdminShiftGrid() {
           </div>
         )}
       </div>
+
+      {/* シフト却下モーダル（理由必須） */}
+      {rejectingUserId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => { if (!confirmingUserId) { setRejectingUserId(null); setRejectComment(""); } }}
+        >
+          <div
+            className="card"
+            style={{ minWidth: "320px", maxWidth: "90%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: "1rem", marginBottom: "0.5rem" }}>
+              {month + 1}月のシフトを却下
+            </h3>
+            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+              {staffList.find((s) => s.id === rejectingUserId)?.name ?? rejectingUserId} さん
+            </p>
+            <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+              却下理由（必須）
+            </label>
+            <textarea
+              value={rejectComment}
+              onChange={(e) => setRejectComment(e.target.value)}
+              placeholder="例: 〇〇の日時を修正してください"
+              rows={4}
+              style={{ width: "100%", padding: "0.5rem", marginBottom: "1rem", resize: "vertical", boxSizing: "border-box" }}
+            />
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={!!confirmingUserId}
+                onClick={() => { setRejectingUserId(null); setRejectComment(""); }}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ backgroundColor: "var(--destructive)", color: "white", border: "none" }}
+                disabled={!rejectComment.trim() || !!confirmingUserId}
+                onClick={handleRejectSubmit}
+              >
+                {confirmingUserId === rejectingUserId ? "送信中..." : "却下して通知"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* セル編集モーダル（管理者・締切後編集は赤字で表示） */}
       {editingCell && (

@@ -242,6 +242,22 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     return true;
 };
 
+/** 指定ユーザーのその月の提出済みシフトを却下する（draft に戻す）。提出済みが1件もなければ false */
+export const rejectShiftsForUser = async (userId: string, year: number, month: number): Promise<boolean> => {
+    const shifts = await getAllShifts(year, month);
+    const userShifts = shifts.filter((s) => s.userId === userId && s.status === "submitted");
+    if (userShifts.length === 0) return false;
+
+    const batch = writeBatch(db);
+    for (const shift of userShifts) {
+        const docId = `${shift.userId}_${shift.date}`;
+        const shiftRef = doc(db, "shifts", docId);
+        batch.update(shiftRef, { status: "draft" });
+    }
+    await batch.commit();
+    return true;
+};
+
 function calcHoursForShift(s: Shift): number {
     if (getShiftWorkType(s) === "absence") return 0;
     if (s.startTime === "00:00" && s.endTime === "00:00") return 0;
