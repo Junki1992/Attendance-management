@@ -54,8 +54,10 @@ export interface User {
     name: string;
     role: UserRole;
     photoURL?: string;
-    /** Chatwork アカウントID（数字）。通知のメンション用。Googleログイン時は未設定になり、設定画面で登録可能 */
+    /** Chatwork アカウントID（数字）。通知のメンション用。Googleログイン時は未設定になり、登録必須のゲートを表示 */
     chatworkAccountId?: string;
+    /** Googleログインで入ったか（Chatwork ID 未登録時はゲートでブロック） */
+    isGoogleUser?: boolean;
 }
 
 interface AuthContextType {
@@ -88,8 +90,8 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 const MOCK_USERS: Record<UserRole, User> = {
-    admin: { uid: "admin-123", email: "admin@example.com", name: "管理者 太郎", role: "admin" },
-    staff: { uid: "staff-456", email: "staff@example.com", name: "アルバイト 花子", role: "staff" },
+    admin: { uid: "admin-123", email: "admin@example.com", name: "管理者 太郎", role: "admin", isGoogleUser: false },
+    staff: { uid: "staff-456", email: "staff@example.com", name: "アルバイト 花子", role: "staff", isGoogleUser: false },
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -181,6 +183,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                     }
                     if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                        const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                         const u: User = {
                             uid: firebaseUser.uid,
                             email: firebaseUser.email || profile.email || "",
@@ -188,6 +191,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                             role: profile.role,
                             photoURL: profile.photoURL,
                             chatworkAccountId: profile.chatworkAccountId,
+                            isGoogleUser,
                         };
                         userRef.current = u;
                         setUser(u);
@@ -294,6 +298,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
             devInfo("[Auth] login: getUserProfile", { ms: Math.round(nowMs() - tProfile0), uid: firebaseUser.uid, found: !!profile });
             if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                 const u: User = {
                     uid: firebaseUser.uid,
                     email: firebaseUser.email || profile.email || "",
@@ -301,6 +306,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     role: profile.role,
                     photoURL: profile.photoURL,
                     chatworkAccountId: profile.chatworkAccountId,
+                    isGoogleUser,
                 };
                 userRef.current = u;
                 setUser(u);
@@ -434,6 +440,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const profile = await getUserProfile(firebaseUser.uid);
             if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                 const u: User = {
                     uid: firebaseUser.uid,
                     email: firebaseUser.email || profile.email || "",
@@ -441,6 +448,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     role: profile.role,
                     photoURL: profile.photoURL,
                     chatworkAccountId: profile.chatworkAccountId,
+                    isGoogleUser,
                 };
                 userRef.current = u;
                 setUser(u);

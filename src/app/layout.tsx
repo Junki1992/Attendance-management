@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 }
 
 import { AuthProvider } from "@/context/AuthContext";
+import ChatworkGateWrapper from "@/components/ChatworkGateWrapper";
 
 export default function RootLayout({
   children,
@@ -27,7 +28,9 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning={true}>
         <AuthProvider>
-          {children}
+          <ChatworkGateWrapper>
+            {children}
+          </ChatworkGateWrapper>
         </AuthProvider>
       </body>
     </html>
