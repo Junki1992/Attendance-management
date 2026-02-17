@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, query, where, Timestamp } from "firebase/firestore";
+import { collection, doc, setDoc, query, where, Timestamp, writeBatch } from "firebase/firestore";
 import { getUserProfile } from "@/services/userService";
 
 const COLLECTION = "shiftSubmitComments";
@@ -54,4 +54,23 @@ export async function getShiftSubmitComments(
   }
   items.sort((a, b) => a.name.localeCompare(b.name));
   return items;
+}
+
+/** 指定ユーザーの提出コメントを全削除（ユーザー削除時に呼ぶ） */
+export async function deleteShiftSubmitCommentsByUserId(userId: string): Promise<number> {
+  const q = query(collection(db, COLLECTION), where("userId", "==", userId));
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  const BATCH_SIZE = 500;
+  let deleted = 0;
+  for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = snap.docs.slice(i, i + BATCH_SIZE);
+    chunk.forEach((d) => {
+      batch.delete(d.ref);
+      deleted++;
+    });
+    await batch.commit();
+  }
+  return deleted;
 }

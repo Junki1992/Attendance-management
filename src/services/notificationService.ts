@@ -1,6 +1,6 @@
 import { db, auth } from "@/lib/firebase/firebase";
 import { getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
+import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot, writeBatch, getDocs as getDocsServer } from "firebase/firestore";
 
 export interface Notification {
     id?: string;
@@ -225,10 +225,10 @@ export const markMessageNotificationsAsRead = async (userId: string, roomId: str
     }
 };
 
-/** 指定ユーザーの全通知を削除（ユーザー削除時に呼ぶ） */
+/** 指定ユーザーの全通知を削除（ユーザー削除時に呼ぶ）。キャッシュを介さずサーバーに直接問い合わせて確実に完了させる */
 export const deleteNotificationsByUserId = async (userId: string): Promise<number> => {
     const q = query(collection(db, "notifications"), where("userId", "==", userId));
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocsServer(q);
     if (snapshot.empty) return 0;
     const BATCH_SIZE = 500;
     let deleted = 0;

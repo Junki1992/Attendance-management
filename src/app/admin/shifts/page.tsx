@@ -84,6 +84,7 @@ export default function AdminShiftGrid() {
   const [csvCopied, setCsvCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmedNotifs, setConfirmedNotifs] = useState<Notification[]>([]);
+  const [notifUserIdToName, setNotifUserIdToName] = useState<Record<string, string>>({});
   const [workSummary, setWorkSummary] = useState<{ userId: string; name: string; totalHours: number; hourlyWage: number; salary: number }[]>([]);
   const [editingCell, setEditingCell] = useState<{ userId: string; day: number } | null>(null);
   const [editingCellHourlyWage, setEditingCellHourlyWage] = useState<number | null>(null);
@@ -139,6 +140,23 @@ export default function AdminShiftGrid() {
   useEffect(() => {
     getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
   }, [year, month]);
+
+  useEffect(() => {
+    if (confirmedNotifs.length === 0) {
+      setNotifUserIdToName({});
+      return;
+    }
+    const uids = [...new Set(confirmedNotifs.map((n) => n.userId).filter(Boolean))] as string[];
+    Promise.all(
+      uids.map((uid) =>
+        getUserProfile(uid).then((p) =>
+          [uid, (p ? (p.name || uid) : "削除済みのユーザー") as string] as const
+        )
+      )
+    )
+      .then((entries) => setNotifUserIdToName(Object.fromEntries(entries)))
+      .catch(() => {});
+  }, [confirmedNotifs]);
 
   useEffect(() => {
     getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => setWorkSummary([]));
@@ -844,7 +862,7 @@ export default function AdminShiftGrid() {
               {confirmedNotifs.map((n) => (
                 <tr key={n.id}>
                   <td style={{ padding: "0.5rem", border: "1px solid var(--border)" }}>
-                    {staffList.find((s) => s.id === n.userId)?.name || n.userId}
+                    {notifUserIdToName[n.userId] || staffList.find((s) => s.id === n.userId)?.name || n.userId}
                   </td>
                   <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>
                     <span style={{ color: n.read ? "var(--secondary)" : "var(--destructive)", fontWeight: 500 }}>

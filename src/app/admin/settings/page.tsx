@@ -113,14 +113,17 @@ export default function AdminSettingsPage() {
     setDeleteConfirmTarget(null);
     try {
       await deleteAllUserData(uid);
-      setSelectedUser(null);
-      alert("削除しました");
     } catch (err) {
       console.error(err);
-      alert("削除に失敗しました");
-    } finally {
+      setSelectedUser(null);
       setDeletingUserId(null);
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`削除に失敗しました\n${msg}`);
+      return;
     }
+    setDeletingUserId(null);
+    setSelectedUser(null);
+    alert("削除しました");
   };
 
   const handleRoleChange = async (uid: string, newRole: "admin" | "staff") => {
