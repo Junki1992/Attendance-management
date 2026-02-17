@@ -15,6 +15,7 @@ import {
 } from "@/services/shiftService";
 import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
+import { getShiftSubmitComments, type ShiftSubmitCommentItem } from "@/services/shiftSubmitCommentService";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -83,6 +84,7 @@ export default function AdminShiftGrid() {
   const [cellModalOffEditExpanded, setCellModalOffEditExpanded] = useState(false);
   const [cellModalWasOff, setCellModalWasOff] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [submitComments, setSubmitComments] = useState<ShiftSubmitCommentItem[]>([]);
 
   useEffect(() => {
     const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
@@ -130,6 +132,10 @@ export default function AdminShiftGrid() {
 
   useEffect(() => {
     getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => setWorkSummary([]));
+  }, [year, month]);
+
+  useEffect(() => {
+    getShiftSubmitComments(year, month + 1).then(setSubmitComments).catch(() => setSubmitComments([]));
   }, [year, month]);
 
   useEffect(() => {
@@ -533,6 +539,21 @@ export default function AdminShiftGrid() {
           >
             エラー: {error}
           </div>
+        )}
+
+        {!loading && submitComments.length > 0 && (
+          <details style={{ marginBottom: "1rem" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: "0.95rem" }}>
+              提出コメント（{submitComments.length}件）
+            </summary>
+            <ul style={{ marginTop: "0.5rem", paddingLeft: "1.25rem", fontSize: "0.9rem", color: "var(--text-main)" }}>
+              {submitComments.map((c) => (
+                <li key={c.userId} style={{ marginBottom: "0.35rem" }}>
+                  <strong>{c.name}:</strong> {c.comment}
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
 
         {loading ? (

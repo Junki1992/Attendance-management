@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, getShiftWorkType, getWorkTypeLabel, Shift, type ShiftWorkType } from "@/services/shiftService";
 import { getUserProfile, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
+import { saveShiftSubmitComment } from "@/services/shiftSubmitCommentService";
 import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
@@ -51,6 +52,7 @@ export default function ShiftCalendar() {
     const [detailModalDay, setDetailModalDay] = useState<number | null>(null);
     const [lastSavedShifts, setLastSavedShifts] = useState<{ [key: number]: string }>({});
     const [lastSavedRemoteByDay, setLastSavedRemoteByDay] = useState<{ [key: number]: boolean }>({});
+    const [submitComment, setSubmitComment] = useState("");
     const [settings, setSettings] = useState<AppSettings | null>(null);
     const dragStartDayRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
@@ -332,6 +334,9 @@ export default function ShiftCalendar() {
         setLoading(true);
         try {
             await saveShiftsToFirestore("submitted");
+            if (submitComment.trim()) {
+                await saveShiftSubmitComment(user.uid, year, month + 1, submitComment.trim());
+            }
             try {
                 const adminIds = await getAdminIds();
                 const message = `${user.name}さんが${month + 1}月のシフトを提出しました`;
@@ -339,6 +344,7 @@ export default function ShiftCalendar() {
             } catch (notifErr) {
                 console.warn("[staff/shifts] 管理者への通知作成に失敗", notifErr);
             }
+            setSubmitComment("");
             alert("シフトを提出しました！");
         } catch (error) {
             console.error("Error submitting:", error);
@@ -568,6 +574,19 @@ export default function ShiftCalendar() {
                     </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+                    <div style={{ alignSelf: "stretch", maxWidth: "400px" }}>
+                        <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-muted)" }}>
+                            申請時のコメント（任意）・管理者に伝えたいことがあれば記入
+                        </label>
+                        <textarea
+                            value={submitComment}
+                            onChange={(e) => setSubmitComment(e.target.value)}
+                            placeholder="例: 〇日は午前中のみ可能です"
+                            rows={2}
+                            disabled={monthIsConfirmed}
+                            style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", resize: "vertical", fontSize: "0.9rem" }}
+                        />
+                    </div>
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
