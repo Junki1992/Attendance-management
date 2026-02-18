@@ -524,14 +524,14 @@ export default function ShiftCalendar() {
                 </div>
             )}
 
-            {!monthIsConfirmed && (
+            {!monthIsConfirmed && !monthIsPastDeadline && (
                 <div
                     style={{
                         marginBottom: "1rem",
                         padding: "0.75rem 1rem",
-                        backgroundColor: "var(--surface-hover)",
+                        backgroundColor: "#EDE9FE",
                         borderRadius: "var(--radius-md)",
-                        border: "1px solid var(--border)",
+                        border: "1px solid rgba(139, 92, 246, 0.25)",
                     }}
                 >
                     <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: "0.5rem" }}>一括設定</div>
@@ -649,8 +649,18 @@ export default function ShiftCalendar() {
                         minWidth: "280px",
                     }}
                 >
-                    {dayOfWeek.map((d) => (
-                        <div key={d} style={{ backgroundColor: "var(--surface-hover)", padding: "0.4rem 0.25rem", textAlign: "center", fontSize: "0.8rem", fontWeight: 600, minWidth: 0 }}>
+                    {dayOfWeek.map((d, colIndex) => (
+                        <div
+                            key={d}
+                            style={{
+                                backgroundColor: !monthIsPastDeadline && (colIndex === 0 || colIndex === 6) ? "rgba(254, 226, 226, 0.6)" : "var(--surface-hover)",
+                                padding: "0.4rem 0.25rem",
+                                textAlign: "center",
+                                fontSize: "0.8rem",
+                                fontWeight: 600,
+                                minWidth: 0,
+                            }}
+                        >
                             {d}
                         </div>
                     ))}
@@ -670,6 +680,18 @@ export default function ShiftCalendar() {
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
                         const isEditable = !isDayPastDeadline(day) && !isConfirmed && !monthIsConfirmed && !isPast;
                         const grayedOut = monthIsPastDeadline;
+                        const isToday = (() => {
+                            const t = new Date();
+                            return year === t.getFullYear() && month === t.getMonth() && day === t.getDate();
+                        })();
+                        const inPeriodBaseBg = !grayedOut && !isPast && !isBulkSelected
+                            ? (isWeekend ? "rgba(254, 242, 242, 0.8)" : "rgba(248, 250, 252, 0.95)")
+                            : null;
+                        const effectiveBg = grayedOut
+                            ? "var(--surface-hover)"
+                            : isPast
+                                ? "var(--surface-hover)"
+                                : inPeriodBaseBg ?? cellBg;
                         return (
                             <div
                                 key={day}
@@ -680,7 +702,7 @@ export default function ShiftCalendar() {
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
                                 onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null && confirmedByDay[day]) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{
-                                    backgroundColor: grayedOut ? "var(--surface-hover)" : (isPast ? "var(--surface-hover)" : cellBg),
+                                    backgroundColor: effectiveBg,
                                     opacity: grayedOut ? 0.5 : (isPast ? 0.7 : 1),
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
@@ -690,6 +712,7 @@ export default function ShiftCalendar() {
                                     border: cellBorder,
                                     boxSizing: "border-box",
                                     minWidth: 0,
+                                    ...(isToday && !grayedOut && { boxShadow: "inset 0 0 0 2px rgba(79, 70, 229, 0.35)" }),
                                 }}
                             >
                                 <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: grayedOut ? "var(--text-muted)" : (isRed ? "#DC2626" : "var(--text-main)") }}>{day}</div>
