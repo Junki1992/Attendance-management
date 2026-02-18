@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { getUserShifts, saveShift, deleteShift, getShiftWorkType, getWorkTypeLabel, Shift, type ShiftWorkType } from "@/services/shiftService";
 import { getUserProfile, getAdminIds } from "@/services/userService";
@@ -79,6 +79,16 @@ export default function ShiftCalendar() {
         },
         [year, month, settings]
     );
+
+    /** 表示中の月が提出期限を過ぎているか（月末日分の締切が過ぎていれば月全体をグレーアウト） */
+    const monthIsPastDeadline = useMemo(() => {
+        if (!settings) return false;
+        const lastDay = getDaysInMonth(year, month);
+        return isPastSubmitDeadlineForDateWithSettings(
+            `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
+            settings
+        );
+    }, [year, month, settings]);
 
     useEffect(() => {
         if (!user) return;
@@ -407,7 +417,22 @@ export default function ShiftCalendar() {
                     この月のシフトは確定しています。
                 </div>
             )}
-            {Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => isDayPastDeadline(d)) && (
+            {monthIsPastDeadline && (
+                <div
+                    style={{
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                        backgroundColor: "#F3F4F6",
+                        border: "1px solid #9CA3AF",
+                        borderRadius: "var(--radius-md)",
+                        color: "#4B5563",
+                        fontWeight: 500,
+                    }}
+                >
+                    この月の提出期限は過ぎています。カレンダーは参照のみ表示です。
+                </div>
+            )}
+            {!monthIsPastDeadline && Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => isDayPastDeadline(d)) && (
                 <div
                     style={{
                         padding: "0.75rem 1rem",
@@ -644,21 +669,22 @@ export default function ShiftCalendar() {
                         const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
                         const isEditable = !isDayPastDeadline(day) && !isConfirmed && !monthIsConfirmed && !isPast;
+                        const grayedOut = monthIsPastDeadline;
                         return (
                             <div
                                 key={day}
                                 role="button"
                                 tabIndex={0}
                                 data-day={day}
-                                title={isPast ? "過去の日付は編集できません" : isConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : isDayPastDeadline(day) ? "締切を過ぎたため編集できません" : undefined}
+                                title={grayedOut ? "この月の提出期限は過ぎています" : isPast ? "過去の日付は編集できません" : isConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : isDayPastDeadline(day) ? "締切を過ぎたため編集できません" : undefined}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
                                 onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null && confirmedByDay[day]) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{
-                                    backgroundColor: isPast ? "var(--surface-hover)" : cellBg,
-                                    opacity: isPast ? 0.7 : 1,
+                                    backgroundColor: grayedOut ? "var(--surface-hover)" : (isPast ? "var(--surface-hover)" : cellBg),
+                                    opacity: grayedOut ? 0.5 : (isPast ? 0.7 : 1),
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
-                                    cursor: isEditable || isConfirmed ? "pointer" : (isPast ? "default" : (monthIsConfirmed ? "not-allowed" : "default")),
+                                    cursor: grayedOut ? "default" : (isEditable || isConfirmed ? "pointer" : (isPast ? "default" : (monthIsConfirmed ? "not-allowed" : "default"))),
                                     position: "relative",
                                     transition: "background-color 0.15s",
                                     border: cellBorder,
@@ -666,15 +692,15 @@ export default function ShiftCalendar() {
                                     minWidth: 0,
                                 }}
                             >
-                                <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: isRed ? "#DC2626" : "var(--text-main)" }}>{day}</div>
+                                <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: grayedOut ? "var(--text-muted)" : (isRed ? "#DC2626" : "var(--text-main)") }}>{day}</div>
                                 {(() => {
                                     const displayLabel = shifts[day] ?? (monthIsConfirmed ? "OFF" : null);
                                     if (!displayLabel) return null;
                                     return (
                                         <div
                                             style={{
-                                                backgroundColor: isConfirmed ? "#D1FAE5" : (displayLabel === "OFF" ? "#F3F4F6" : "#EEF2FF"),
-                                                color: isConfirmed ? "#065F46" : (displayLabel === "OFF" ? "#4B5563" : "#4F46E5"),
+                                                backgroundColor: grayedOut ? "#E5E7EB" : (isConfirmed ? "#D1FAE5" : (displayLabel === "OFF" ? "#F3F4F6" : "#EEF2FF")),
+                                                color: grayedOut ? "#9CA3AF" : (isConfirmed ? "#065F46" : (displayLabel === "OFF" ? "#4B5563" : "#4F46E5")),
                                                 padding: "0.15rem 0.2rem",
                                                 borderRadius: "4px",
                                                 fontSize: "0.65rem",
