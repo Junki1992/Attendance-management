@@ -599,6 +599,7 @@ export default function ShiftCalendar() {
                     </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
+                    {!monthIsPastDeadline && (
                     <div style={{ alignSelf: "stretch", maxWidth: "400px" }}>
                         <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-muted)" }}>
                             申請時のコメント（任意）・管理者に伝えたいことがあれば記入
@@ -612,6 +613,7 @@ export default function ShiftCalendar() {
                             style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", resize: "vertical", fontSize: "0.9rem" }}
                         />
                     </div>
+                    )}
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
