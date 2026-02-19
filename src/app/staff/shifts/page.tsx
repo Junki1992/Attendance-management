@@ -429,7 +429,7 @@ export default function ShiftCalendar() {
                         fontWeight: 500,
                     }}
                 >
-                    この月の提出期限は過ぎています。カレンダーは参照のみ表示です。
+                    この月の提出期限は過ぎています。
                 </div>
             )}
             {!monthIsPastDeadline && Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => isDayPastDeadline(d)) && (
