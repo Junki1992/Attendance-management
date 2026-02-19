@@ -2,4 +2,4 @@
  * アプリのニックネーム（表示名）
  * ログイン画面・メールテンプレート等で使用
  */
-export const APP_NAME = "勤怠管理ツール";
+export const APP_NAME = "";

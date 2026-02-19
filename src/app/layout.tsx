@@ -1,9 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { APP_NAME } from '@/lib/app-config'
 
 export const metadata: Metadata = {
-  title: APP_NAME,
+  title: "勤怠管理",
   description: 'Premium Shift Management System',
 }
 

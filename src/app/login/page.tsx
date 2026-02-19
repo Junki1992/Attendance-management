@@ -2,7 +2,6 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/firebase/firebase";
-import { APP_NAME } from "@/lib/app-config";
 import { signOut } from "firebase/auth";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -139,7 +138,7 @@ export default function LoginPage() {
         return (
             <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
                 <div className="card" style={{ width: "100%", maxWidth: "400px", textAlign: "center" }}>
-                    <h1 style={{ marginBottom: "1rem", fontSize: "1.5rem", color: "var(--primary)" }}>{APP_NAME}</h1>
+                    <h1 style={{ marginBottom: "1rem", fontSize: "1.5rem", color: "var(--primary)" }}>ログイン</h1>
                     <p style={{ marginBottom: "1.5rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>
                         開発用モックログイン
                         <br />
@@ -163,7 +162,7 @@ export default function LoginPage() {
         <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
             <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
                 <h1 style={{ marginBottom: "1.5rem", fontSize: "1.5rem", color: "var(--primary)", textAlign: "center" }}>
-                    {APP_NAME}
+                    ログイン
                 </h1>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>

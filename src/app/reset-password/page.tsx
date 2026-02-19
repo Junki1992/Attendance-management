@@ -1,7 +1,6 @@
 "use client";
 
 import { auth } from "@/lib/firebase/firebase";
-import { APP_NAME } from "@/lib/app-config";
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -75,7 +74,7 @@ function ResetPasswordContent() {
     return (
       <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
         <div className="card" style={{ width: "100%", maxWidth: "400px", textAlign: "center" }}>
-          <h1 style={{ marginBottom: "1rem", fontSize: "1.25rem", color: "var(--primary)" }}>{APP_NAME} パスワードの再設定</h1>
+          <h1 style={{ marginBottom: "1rem", fontSize: "1.25rem", color: "var(--primary)" }}>パスワードの再設定</h1>
           <p style={{ marginBottom: "1rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>Firebase が未設定です。</p>
           <Link href="/login" className="btn btn-outline" style={{ display: "inline-block" }}>ログインに戻る</Link>
         </div>
@@ -128,7 +127,7 @@ function ResetPasswordContent() {
     <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
       <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
         <h1 style={{ marginBottom: "0.5rem", fontSize: "1.25rem", color: "var(--primary)", textAlign: "center" }}>
-          {APP_NAME} パスワードの再設定
+          パスワードの再設定
         </h1>
         <p style={{ marginBottom: "1rem", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center" }}>
           メールアドレス: {email}

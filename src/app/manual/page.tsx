@@ -1,8 +1,6 @@
 import React from "react";
-import { APP_NAME } from "@/lib/app-config";
-
 export const metadata = {
-  title: `マニュアル - ${APP_NAME}`,
+  title: "マニュアル",
 };
 
 export default function ManualPage() {
