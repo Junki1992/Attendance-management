@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
     return (
       <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
         <div className="card" style={{ width: "100%", maxWidth: "400px", textAlign: "center" }}>
-          <h1 style={{ marginBottom: "1rem", fontSize: "1.25rem", color: "var(--primary)" }}>パスワードを忘れた場合</h1>
+          <h1 style={{ marginBottom: "1rem", fontSize: "1.25rem", color: "var(--primary)" }}>パスワードリセット</h1>
           <p style={{ marginBottom: "1rem", color: "var(--text-muted)", fontSize: "0.9rem" }}>
             Firebase が未設定です。.env.local を確認してください。
           </p>
@@ -92,7 +92,7 @@ export default function ForgotPasswordPage() {
     <div className="container" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
       <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
         <h1 style={{ marginBottom: "0.5rem", fontSize: "1.25rem", color: "var(--primary)", textAlign: "center" }}>
-          パスワードを忘れた場合
+          パスワードリセット
         </h1>
         <p style={{ marginBottom: "1.5rem", fontSize: "0.875rem", color: "var(--text-muted)", textAlign: "center" }}>
           登録したメールアドレスを入力すると、<br />パスワード再設定用のリンクをお送りします
