@@ -17,6 +17,7 @@ import {
 import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
 import { getShiftSubmitComments, type ShiftSubmitCommentItem } from "@/services/shiftSubmitCommentService";
+import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -704,8 +705,17 @@ export default function AdminShiftGrid() {
                         <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>確定済み</p>
                       )}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", fontSize: "0.7rem" }}>
-                        {dayOfWeek.map((d) => (
-                          <div key={d} style={{ textAlign: "center", padding: "0.2rem", backgroundColor: "var(--surface-hover)", borderRadius: "2px", fontWeight: 600 }}>
+                        {dayOfWeek.map((d, colIndex) => (
+                          <div
+                            key={d}
+                            style={{
+                              textAlign: "center",
+                              padding: "0.2rem",
+                              backgroundColor: colIndex === 0 || colIndex === 6 ? "rgba(147, 197, 253, 0.6)" : "var(--surface-hover)",
+                              borderRadius: "2px",
+                              fontWeight: 600,
+                            }}
+                          >
                             {d}
                           </div>
                         ))}
@@ -713,6 +723,9 @@ export default function AdminShiftGrid() {
                           if (day === null) {
                             return <div key={`empty-${index}`} style={{ minHeight: "32px" }} />;
                           }
+                          const date = new Date(year, month, day);
+                          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                          const isHoliday = isJapaneseHoliday(date);
                           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                           const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr);
                           const h = shift ? calcHours(shift) : 0;
@@ -720,6 +733,7 @@ export default function AdminShiftGrid() {
                           const isOver = isDailyOver(numHours);
                           const hasData = !!shift;
                           const isEditedLate = !!shift?.editedAfterDeadline;
+                          const baseBg = isOver ? "#FEE2E2" : numHours > 0 ? "#EEF2FF" : (isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : "var(--surface-hover)");
                           return (
                             <div
                               key={day}
@@ -731,7 +745,7 @@ export default function AdminShiftGrid() {
                                 justifyContent: "center",
                                 padding: "0.2rem",
                                 borderRadius: "4px",
-                                backgroundColor: isOver ? "#FEE2E2" : numHours > 0 ? "#EEF2FF" : "var(--surface-hover)",
+                                backgroundColor: baseBg,
                                 color: isOver || isEditedLate ? "#B91C1C" : "inherit",
                                 cursor: hasData ? "pointer" : "default",
                               }}
@@ -771,19 +785,29 @@ export default function AdminShiftGrid() {
                 >
                   アルバイト
                 </th>
-                {DAYS.map((d) => (
-                  <th
-                    key={d}
-                    style={{
-                      padding: "0.25rem",
-                      border: "1px solid var(--border)",
-                      minWidth: "30px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {d}
-                  </th>
-                ))}
+                {DAYS.map((d) => {
+                  const date = new Date(year, month, d);
+                  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                  const isHoliday = isJapaneseHoliday(date);
+                  const headerBg = isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : undefined;
+                  const headerColor = isHoliday ? "#EA580C" : isWeekend ? "#2563EB" : undefined;
+                  return (
+                    <th
+                      key={d}
+                      style={{
+                        padding: "0.25rem",
+                        border: "1px solid var(--border)",
+                        minWidth: "30px",
+                        textAlign: "center",
+                        backgroundColor: headerBg,
+                        color: headerColor,
+                        fontWeight: isWeekend || isHoliday ? 600 : undefined,
+                      }}
+                    >
+                      {d}
+                    </th>
+                  );
+                })}
                 <th
                   style={{
                     padding: "0.5rem",
@@ -857,6 +881,9 @@ export default function AdminShiftGrid() {
                       )}
                     </td>
                     {DAYS.map((d) => {
+                      const date = new Date(year, month, d);
+                      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                      const isHoliday = isJapaneseHoliday(date);
                       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
                       const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr);
                       const h = shift ? calcHours(shift) : 0;
@@ -865,6 +892,15 @@ export default function AdminShiftGrid() {
                       const hasData = !!shift;
                       const isEditedLate = !!shift?.editedAfterDeadline;
                       const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : hasData ? "クリックで編集" : "クリックでシフトを追加";
+                      const baseCellBg = isOver
+                        ? "#FEE2E2"
+                        : numHours > 0
+                          ? "#EEF2FF"
+                          : isHoliday
+                            ? "rgba(254, 215, 170, 0.8)"
+                            : isWeekend
+                              ? "rgba(191, 219, 254, 0.8)"
+                              : "var(--surface-hover)";
                       return (
                         <td
                           key={d}
@@ -872,11 +908,7 @@ export default function AdminShiftGrid() {
                           style={{
                             border: "1px solid var(--border)",
                             textAlign: "center",
-                            backgroundColor: isOver
-                              ? "#FEE2E2"
-                              : numHours > 0
-                                ? "#EEF2FF"
-                                : "var(--surface-hover)",
+                            backgroundColor: baseCellBg,
                             color: isOver || isEditedLate ? "#B91C1C" : "inherit",
                             cursor: "pointer",
                           }}
