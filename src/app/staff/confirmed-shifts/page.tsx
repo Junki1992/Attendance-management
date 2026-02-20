@@ -465,11 +465,11 @@ export default function StaffConfirmedShiftsPage() {
             <div style={{ gridColumn: "1 / -1", padding: "0.5rem", backgroundColor: "#EEF2FF", fontSize: "0.85rem", color: "var(--primary)" }}>
               日付をクリックで詳細表示
             </div>
-            {dayOfWeek.map((d) => (
+            {dayOfWeek.map((d, colIndex) => (
               <div
                 key={d}
                 style={{
-                  backgroundColor: "var(--surface-hover)",
+                  backgroundColor: (colIndex === 0 || colIndex === 6) ? "rgba(147, 197, 253, 0.6)" : "var(--surface-hover)",
                   padding: "0.4rem 0.25rem",
                   textAlign: "center",
                   fontSize: "0.8rem",
@@ -489,7 +489,9 @@ export default function StaffConfirmedShiftsPage() {
               const dow = date.getDay();
               const isWeekend = dow === 0 || dow === 6;
               const isHoliday = isJapaneseHoliday(date);
-              const isRed = isWeekend || isHoliday;
+              const isSpecialDay = isWeekend || isHoliday;
+              const cellBg = isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : "var(--surface)";
+              const dayColor = isHoliday ? "#EA580C" : isWeekend ? "#2563EB" : "var(--text-main)";
               const s = shiftByDay[day];
               const label = !s
                 ? "OFF"
@@ -507,7 +509,7 @@ export default function StaffConfirmedShiftsPage() {
                   onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailModalDay(day); } }}
                   title={pendingReq ? `${day}日の変更申請内容を表示` : s ? `${day}日のシフト詳細` : `${day}日（クリックで詳細）`}
                   style={{
-                    backgroundColor: "var(--surface)",
+                    backgroundColor: cellBg,
                     minHeight: "80px",
                     padding: "0.4rem 0.25rem",
                     minWidth: 0,
@@ -516,10 +518,10 @@ export default function StaffConfirmedShiftsPage() {
                 >
                   <div
                     style={{
-                      fontWeight: isRed ? "bold" : 500,
+                      fontWeight: isSpecialDay ? "bold" : 500,
                       fontSize: "0.85rem",
                       marginBottom: "0.25rem",
-                      color: isRed ? "#DC2626" : "var(--text-main)",
+                      color: dayColor,
                     }}
                   >
                     {day}

@@ -655,7 +655,7 @@ export default function ShiftCalendar() {
                         <div
                             key={d}
                             style={{
-                                backgroundColor: !monthIsPastDeadline && (colIndex === 0 || colIndex === 6) ? "rgba(254, 226, 226, 0.6)" : "var(--surface-hover)",
+                                backgroundColor: !monthIsPastDeadline && (colIndex === 0 || colIndex === 6) ? "rgba(147, 197, 253, 0.6)" : "var(--surface-hover)",
                                 padding: "0.4rem 0.25rem",
                                 textAlign: "center",
                                 fontSize: "0.8rem",
@@ -674,7 +674,7 @@ export default function ShiftCalendar() {
                         const dow = date.getDay();
                         const isWeekend = dow === 0 || dow === 6;
                         const isHoliday = isJapaneseHoliday(date);
-                        const isRed = isWeekend || isHoliday;
+                        const isSpecialDay = isWeekend || isHoliday;
                         const isConfirmed = confirmedByDay[day];
                         const isPast = isPastDate(year, month, day);
                         const isBulkSelected = bulkSelectedDays.includes(day);
@@ -687,7 +687,7 @@ export default function ShiftCalendar() {
                             return year === t.getFullYear() && month === t.getMonth() && day === t.getDate();
                         })();
                         const inPeriodBaseBg = !grayedOut && !isPast && !isBulkSelected
-                            ? (isWeekend ? "rgba(254, 242, 242, 0.8)" : "rgba(248, 250, 252, 0.95)")
+                            ? (isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : "rgba(248, 250, 252, 0.95)")
                             : null;
                         const effectiveBg = grayedOut
                             ? "var(--surface-hover)"
@@ -717,7 +717,7 @@ export default function ShiftCalendar() {
                                     ...(isToday && !grayedOut && { boxShadow: "inset 0 0 0 2px rgba(79, 70, 229, 0.35)" }),
                                 }}
                             >
-                                <div style={{ fontWeight: isRed ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: grayedOut ? "var(--text-muted)" : (isRed ? "#DC2626" : "var(--text-main)") }}>{day}</div>
+                                <div style={{ fontWeight: isSpecialDay ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: grayedOut ? "var(--text-muted)" : (isHoliday ? "#EA580C" : isWeekend ? "#2563EB" : "var(--text-main)") }}>{day}</div>
                                 {(() => {
                                     const displayLabel = shifts[day] ?? (monthIsConfirmed ? "OFF" : null);
                                     if (!displayLabel) return null;
