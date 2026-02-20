@@ -226,8 +226,9 @@ export default function ShiftCalendar() {
 
     const bulkSelectWeekdays = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
-            const dow = new Date(year, month, d).getDay();
-            return dow >= 1 && dow <= 5 && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
+            const date = new Date(year, month, d);
+            const dow = date.getDay();
+            return dow >= 1 && dow <= 5 && !isJapaneseHoliday(date) && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
         });
         setBulkSelectedDays(days);
     };
@@ -240,6 +241,66 @@ export default function ShiftCalendar() {
     };
     const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d)));
     const bulkClearSelection = () => setBulkSelectedDays([]);
+
+    const bulkDeleteDrafts = async () => {
+        if (!user || monthIsConfirmed) return;
+        const targetDays = bulkSelectedDays.filter(
+            (d) =>
+                d >= 1 &&
+                d <= daysInMonth &&
+                !confirmedByDay[d] &&
+                !submittedByDay[d] &&
+                !isPastDate(year, month, d) &&
+                !isDayPastDeadline(d) &&
+                shifts[d]
+        );
+        if (targetDays.length === 0) {
+            alert("削除する日を1日以上選択してください（確定・提出済みは削除できません）");
+            return;
+        }
+        if (!confirm(`${targetDays.length}日分の下書きを削除しますか？`)) return;
+        setLoading(true);
+        try {
+            await Promise.all(
+                targetDays.map((d) => {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+                    return deleteShift(user.uid, dateStr);
+                })
+            );
+            setShifts((prev) => {
+                const next = { ...prev };
+                targetDays.forEach((d) => delete next[d]);
+                return next;
+            });
+            setRemoteByDay((prev) => {
+                const next = { ...prev };
+                targetDays.forEach((d) => delete next[d]);
+                return next;
+            });
+            setWorkTypeByDay((prev) => {
+                const next = { ...prev };
+                targetDays.forEach((d) => delete next[d]);
+                return next;
+            });
+            setLastSavedShifts((prev) => {
+                const next = { ...prev };
+                targetDays.forEach((d) => delete next[d]);
+                return next;
+            });
+            setLastSavedRemoteByDay((prev) => {
+                const next = { ...prev };
+                targetDays.forEach((d) => delete next[d]);
+                return next;
+            });
+            setBulkSelectedDays([]);
+            alert(`${targetDays.length}日分の下書きを削除しました`);
+        } catch (e) {
+            console.error(e);
+            alert("削除に失敗しました");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const applyBulkShift = () => {
         if (monthIsConfirmed) return;
@@ -384,6 +445,24 @@ export default function ShiftCalendar() {
         return false;
     })();
 
+    /** 36協定抵触: 1日8時間超 or 週40時間超 */
+    const has36Violation = useMemo(() => {
+        const getHours = (d: number) => calcHours(shifts[d] ?? "");
+        const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+        for (const d of DAYS) {
+            if (getHours(d) > 8) return true;
+        }
+        const weekTotals: Record<number, number> = {};
+        for (const d of DAYS) {
+            const date = new Date(year, month, d);
+            const dow = date.getDay();
+            const weekStart = new Date(year, month, d - dow);
+            const weekId = weekStart.getTime();
+            weekTotals[weekId] = (weekTotals[weekId] ?? 0) + getHours(d);
+        }
+        return Object.values(weekTotals).some((t) => t > 40);
+    }, [shifts, daysInMonth, year, month]);
+
     const calculateSalary = () => {
         let totalHours = 0;
         Object.values(shifts).forEach((label) => {
@@ -430,6 +509,22 @@ export default function ShiftCalendar() {
                     }}
                 >
                     この月の提出期限は過ぎています。
+                </div>
+            )}
+            {!monthIsConfirmed && !monthIsPastDeadline && has36Violation && (
+                <div
+                    style={{
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                        backgroundColor: "#FEF3C7",
+                        border: "1px solid #F59E0B",
+                        borderRadius: "var(--radius-md)",
+                        color: "#92400E",
+                        fontWeight: 500,
+                        fontSize: "0.9rem",
+                    }}
+                >
+                    1日8時間超または週40時間超のため提出できません。シフトを調整してください。
                 </div>
             )}
             {!monthIsPastDeadline && Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => isDayPastDeadline(d)) && (
@@ -551,6 +646,16 @@ export default function ShiftCalendar() {
                         <button type="button" className="btn btn-outline" onClick={bulkClearSelection} disabled={bulkSelectedDays.length === 0} style={{ fontSize: "0.75rem" }}>
                             クリア
                         </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline"
+                            onClick={bulkDeleteDrafts}
+                            disabled={loading || bulkSelectedDays.length === 0 || !bulkSelectedDays.some((d) => shifts[d] && !confirmedByDay[d] && !submittedByDay[d])}
+                            style={{ fontSize: "0.75rem", color: "var(--destructive)", borderColor: "var(--destructive)" }}
+                            title="選択した日の下書きを削除（確定・提出済みは除く）"
+                        >
+                            選択した日を削除
+                        </button>
                         {bulkSelectedDays.length > 0 && (
                             <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{bulkSelectedDays.length}日選択中</span>
                         )}
@@ -560,27 +665,27 @@ export default function ShiftCalendar() {
                             <input type="checkbox" checked={bulkIsOff} onChange={(e) => setBulkIsOff(e.target.checked)} />
                             OFF（休み）
                         </label>
-                        {!bulkIsOff && (
-                            <>
-                                <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", fontSize: "0.875rem" }}>
-                                    <input type="checkbox" checked={bulkIsRemote} onChange={(e) => setBulkIsRemote(e.target.checked)} />
-                                    在宅
-                                </label>
-                                <input
-                                    type="time"
-                                    value={bulkStart}
-                                    onChange={(e) => setBulkStart(e.target.value)}
-                                    style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem" }}
-                                />
-                                <span style={{ fontSize: "0.875rem" }}>～</span>
-                                <input
-                                    type="time"
-                                    value={bulkEnd}
-                                    onChange={(e) => setBulkEnd(e.target.value)}
-                                    style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem" }}
-                                />
-                            </>
-                        )}
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", cursor: "pointer", fontSize: "0.875rem", opacity: bulkIsOff ? 0.5 : 1 }}>
+                            <input type="checkbox" checked={bulkIsRemote} onChange={(e) => setBulkIsRemote(e.target.checked)} disabled={bulkIsOff} />
+                            在宅
+                        </label>
+                        <span style={{ fontSize: "0.875rem", opacity: bulkIsOff ? 0.5 : 1 }}>出勤</span>
+                        <input
+                            type="time"
+                            value={bulkStart}
+                            onChange={(e) => setBulkStart(e.target.value)}
+                            disabled={bulkIsOff}
+                            style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem", opacity: bulkIsOff ? 0.5 : 1 }}
+                        />
+                        <span style={{ fontSize: "0.875rem", opacity: bulkIsOff ? 0.5 : 1 }}>～</span>
+                        <span style={{ fontSize: "0.875rem", opacity: bulkIsOff ? 0.5 : 1 }}>退勤</span>
+                        <input
+                            type="time"
+                            value={bulkEnd}
+                            onChange={(e) => setBulkEnd(e.target.value)}
+                            disabled={bulkIsOff}
+                            style={{ padding: "0.35rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "0.875rem", opacity: bulkIsOff ? 0.5 : 1 }}
+                        />
                         <button type="button" className="btn btn-outline" onClick={applyBulkShift} disabled={bulkSelectedDays.length === 0} style={{ fontSize: "0.875rem" }}>
                             一括適用
                         </button>
@@ -621,7 +726,12 @@ export default function ShiftCalendar() {
                         <button className="btn btn-outline" onClick={handleSave} disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
                             {loading ? "処理中..." : "保存"}
                         </button>
-                        <button className="btn btn-primary" onClick={handleSubmit} disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges}>
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleSubmit}
+                            disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges || has36Violation}
+                            title={has36Violation ? "1日8時間超または週40時間超のため提出できません。シフトを調整してください。" : undefined}
+                        >
                             {loading ? "処理中..." : monthIsConfirmed ? "確定済" : "提出"}
                         </button>
                     </div>
