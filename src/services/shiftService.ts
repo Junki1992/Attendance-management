@@ -2,6 +2,7 @@ import { db } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import { isPastSubmitDeadlineForDateAsync } from "@/services/settingsService";
 
 /** 勤務形態（出社・在宅・当欠）。給与計算で参照する想定 */
@@ -46,7 +47,7 @@ export function getWageForWorkType(
     profile: { hourlyWage?: number; hourlyWageRemote?: number } | null,
     workType: ShiftWorkType
 ): number {
-    const base = profile?.hourlyWage ?? 1000;
+    const base = profile?.hourlyWage ?? DEFAULT_HOURLY_WAGE;
     if (workType === "remote") return profile?.hourlyWageRemote ?? base;
     return base;
 }
@@ -285,7 +286,7 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
     const rows: MonthlyWorkSummaryRow[] = [];
     for (const uid of uids) {
         const profile = await getUserProfile(uid);
-        const fallbackWage = profile?.hourlyWage ?? 1000;
+        const fallbackWage = profile?.hourlyWage ?? DEFAULT_HOURLY_WAGE;
         const userShifts = confirmed.filter((s) => s.userId === uid);
 
         let totalHours = 0;

@@ -8,6 +8,7 @@ import { createNotification } from "@/services/notificationService";
 import { saveShiftSubmitComment } from "@/services/shiftSubmitCommentService";
 import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 
 function getDaysInMonth(year: number, month: number) {
     return new Date(year, month + 1, 0).getDate();
@@ -43,7 +44,7 @@ export default function ShiftCalendar() {
     const [confirmedByDay, setConfirmedByDay] = useState<{ [key: number]: boolean }>({});
     const [submittedByDay, setSubmittedByDay] = useState<{ [key: number]: boolean }>({});
     const [loading, setLoading] = useState(false);
-    const [hourlyWage, setHourlyWage] = useState(1000);
+    const [hourlyWage, setHourlyWage] = useState(DEFAULT_HOURLY_WAGE);
     const [bulkStart, setBulkStart] = useState("09:00");
     const [bulkEnd, setBulkEnd] = useState("18:00");
     const [bulkIsOff, setBulkIsOff] = useState(false);

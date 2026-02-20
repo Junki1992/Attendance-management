@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/firebase";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import { getUserProfile, createUser } from "@/services/userService";
 
 export type UserRole = "admin" | "staff";
@@ -173,7 +174,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                 email: firebaseUser.email ?? "",
                                 name: firebaseUser.displayName ?? firebaseUser.email ?? "User",
                                 role,
-                                hourlyWage: 1000,
+                                hourlyWage: DEFAULT_HOURLY_WAGE,
                                 photoURL: firebaseUser.photoURL ?? undefined,
                             });
                             profile = await getUserProfileDeduped(firebaseUser.uid);
@@ -382,7 +383,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     email: email.trim(),
                     name: name.trim(),
                     role,
-                    hourlyWage: 1000,
+                    hourlyWage: DEFAULT_HOURLY_WAGE,
                     chatworkAccountId: chatworkAccountId?.trim() || undefined,
                 });
                 devInfo("[Auth] register: createUser(users/{uid})", { ms: Math.round(nowMs() - tDb0), uid: firebaseUser.uid, role });

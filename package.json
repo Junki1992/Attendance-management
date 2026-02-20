@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "chatwork-notify": "node scripts/chatwork-notify.js",
-    "delete-user-shifts": "node scripts/delete-user-shifts.js"
+    "delete-user-shifts": "node scripts/delete-user-shifts.js",
+    "migrate-hourly-wage": "node scripts/migrate-hourly-wage-1000-to-1226.js"
   },
   "dependencies": {
     "firebase": "^12.8.0",

@@ -11,6 +11,7 @@ import {
 } from "@/services/shiftChangeRequestService";
 import { createNotification } from "@/services/notificationService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -32,7 +33,7 @@ export default function StaffConfirmedShiftsPage() {
   const [month, setMonth] = useState(new Date().getMonth());
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [hourlyWage, setHourlyWage] = useState(1000);
+  const [hourlyWage, setHourlyWage] = useState(DEFAULT_HOURLY_WAGE);
   const [loading, setLoading] = useState(true);
   const [myRequests, setMyRequests] = useState<ShiftChangeRequest[]>([]);
   const [showModal, setShowModal] = useState(false);

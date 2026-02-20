@@ -18,6 +18,7 @@ import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
 import { getShiftSubmitComments, type ShiftSubmitCommentItem } from "@/services/shiftSubmitCommentService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -126,7 +127,7 @@ export default function AdminShiftGrid() {
       setEditingCellHourlyWage(wage);
     } else {
       setEditingCellHourlyWage(null);
-      getUserProfile(editingCell.userId).then((p) => setEditingCellHourlyWage(p?.hourlyWage ?? 1000));
+      getUserProfile(editingCell.userId).then((p) => setEditingCellHourlyWage(p?.hourlyWage ?? DEFAULT_HOURLY_WAGE));
     }
   }, [editingCell, shifts, workSummary]);
 

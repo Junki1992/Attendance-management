@@ -8,6 +8,7 @@ import { deleteAllUserData } from "@/services/userDeletionService";
 import { getWageChangeLog, recordWageChange, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { useAuth } from "@/context/AuthContext";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import Avatar from "@/components/Avatar";
 
@@ -31,7 +32,7 @@ export default function AdminSettingsPage() {
   const [chatworkNotifyModalOpen, setChatworkNotifyModalOpen] = useState(false);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ uid: string; name: string; role: "admin" | "staff" } | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [editingHourlyWage, setEditingHourlyWage] = useState<number>(1000);
+  const [editingHourlyWage, setEditingHourlyWage] = useState<number>(DEFAULT_HOURLY_WAGE);
   const [editingHourlyWageRemote, setEditingHourlyWageRemote] = useState<number | "">("");
   const [savingWage, setSavingWage] = useState(false);
   const [hourlyWageLocked, setHourlyWageLocked] = useState(true);
@@ -145,7 +146,7 @@ export default function AdminSettingsPage() {
   // 詳細モーダルで選択中のユーザーが変わったら時給の編集値とロックを同期
   useEffect(() => {
     if (selectedUser) {
-      setEditingHourlyWage(selectedUser.hourlyWage ?? 1000);
+      setEditingHourlyWage(selectedUser.hourlyWage ?? DEFAULT_HOURLY_WAGE);
       const remote = selectedUser.hourlyWageRemote;
       setEditingHourlyWageRemote(remote === undefined || remote === null ? "" : remote);
       setHourlyWageLocked(true);
@@ -180,8 +181,8 @@ export default function AdminSettingsPage() {
         hourlyWage: wage,
         hourlyWageRemote: editingHourlyWageRemote === "" ? null : remoteVal,
       });
-      if (wage !== (selectedUser.hourlyWage ?? 1000)) {
-        const previousWage = selectedUser.hourlyWage ?? 1000;
+      if (wage !== (selectedUser.hourlyWage ?? DEFAULT_HOURLY_WAGE)) {
+        const previousWage = selectedUser.hourlyWage ?? DEFAULT_HOURLY_WAGE;
         try {
           await recordWageChange(selectedUser.uid, previousWage, wage, currentUser.uid, currentUser.name ?? "管理者");
         } catch (e) {
@@ -823,7 +824,7 @@ export default function AdminSettingsPage() {
                     }}
                     title="編集できません（錠前をクリックで解除）"
                   >
-                    ¥{(selectedUser!.hourlyWage ?? 1000).toLocaleString()}
+                    ¥{(selectedUser!.hourlyWage ?? DEFAULT_HOURLY_WAGE).toLocaleString()}
                   </span>
                   <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginLeft: "0.5rem" }}>在宅:</span>
                   <span
@@ -911,7 +912,7 @@ export default function AdminSettingsPage() {
                       className="btn btn-ghost"
                       onClick={() => {
                         setHourlyWageLocked(true);
-                        setEditingHourlyWage(selectedUser!.hourlyWage ?? 1000);
+                        setEditingHourlyWage(selectedUser!.hourlyWage ?? DEFAULT_HOURLY_WAGE);
                         setEditingHourlyWageRemote(selectedUser!.hourlyWageRemote ?? "");
                       }}
                       disabled={savingWage}

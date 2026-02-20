@@ -1,4 +1,5 @@
 import { db, auth, storage } from "@/lib/firebase/firebase";
+import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, getDocFromCache, getDocsFromServer, onSnapshot, deleteField } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
@@ -8,7 +9,7 @@ export interface UserProfile {
     name: string;
     role: 'admin' | 'staff';
     email: string;
-    hourlyWage: number; // 出社時給。default 1000
+    hourlyWage: number; // 出社時給。default は app-config の DEFAULT_HOURLY_WAGE
     /** 在宅時給。未設定の場合は hourlyWage を使用 */
     hourlyWageRemote?: number;
     photoURL?: string;
@@ -39,7 +40,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         return {
             ...data,
             uid: docRef.id,
-            hourlyWage: data?.hourlyWage ?? 1000,
+            hourlyWage: data?.hourlyWage ?? DEFAULT_HOURLY_WAGE,
             hourlyWageRemote: data?.hourlyWageRemote as number | undefined,
         } as UserProfile;
     } else {
@@ -59,7 +60,7 @@ export interface CreateUserParams {
 
 /** Firestore の users/{uid} を作成。登録直後または Google 初回ログイン時に呼ぶ。 */
 export const createUser = async (params: CreateUserParams): Promise<void> => {
-    const { uid, email, name, role, hourlyWage = 1000, chatworkAccountId, photoURL } = params;
+    const { uid, email, name, role, hourlyWage = DEFAULT_HOURLY_WAGE, chatworkAccountId, photoURL } = params;
     const docRef = doc(db, "users", uid);
     const data: Record<string, unknown> = { email, name, role, hourlyWage };
     if (chatworkAccountId?.trim()) data.chatworkAccountId = chatworkAccountId.trim();
@@ -98,7 +99,7 @@ export const updateUserHourlyWage = async (
 ): Promise<void> => {
     const docRef = doc(db, "users", uid);
     const snap = await getDoc(docRef);
-    const previousWage = snap.exists() ? (snap.data()?.hourlyWage ?? 1000) : 1000;
+    const previousWage = snap.exists() ? (snap.data()?.hourlyWage ?? DEFAULT_HOURLY_WAGE) : DEFAULT_HOURLY_WAGE;
 
     await updateDoc(docRef, { hourlyWage });
 
@@ -185,7 +186,7 @@ function mapDocToUserProfile(d: { id: string; data: () => Record<string, unknown
         email: (data.email as string) || "",
         name: (data.name as string) || "（名前なし）",
         role: data.role === "admin" ? "admin" : "staff",
-        hourlyWage: (data.hourlyWage as number) ?? 1000,
+        hourlyWage: (data.hourlyWage as number) ?? DEFAULT_HOURLY_WAGE,
         hourlyWageRemote: data.hourlyWageRemote as number | undefined,
         photoURL: (data.photoURL as string) ?? undefined,
         chatworkAccountId: (data.chatworkAccountId as string) ?? undefined,
