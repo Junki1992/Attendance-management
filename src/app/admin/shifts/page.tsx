@@ -176,7 +176,8 @@ export default function AdminShiftGrid() {
     const unsub = subscribeAllShifts(year, month, (s) => {
       setShifts(s);
       const map: { [key: string]: number } = {};
-      s.filter((sh) => sh.status !== "draft").forEach((sh) => {
+      // 合計はセル表示と一致させるため、draft も含める（セルに表示されているデータの合計を表示）
+      s.forEach((sh) => {
         const h = calcHours(sh);
         if (h === "OFF") return;
         const day = parseInt(sh.date.split("-")[2], 10);
