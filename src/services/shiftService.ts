@@ -314,7 +314,7 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
     return rows;
 };
 
-/** 対象月にシフトが1件もないアルバイトを返す（draft 含め何かあれば未提出者から除外） */
+/** 対象月に submitted/confirmed のシフトが1件もないアルバイトを返す（提出ボタンを押していない＝未提出者） */
 export const getUnsubmittedStaff = async (
     year: number,
     month: number
@@ -323,7 +323,11 @@ export const getUnsubmittedStaff = async (
         getAllStaff(),
         getAllShifts(year, month),
     ]);
-    const hasAnyShift = new Set<string>();
-    shifts.forEach((s) => hasAnyShift.add(s.userId));
-    return staffList.filter((s) => !hasAnyShift.has(s.id));
+    const submitted = new Set<string>();
+    shifts.forEach((s) => {
+        if (s.status === "submitted" || s.status === "confirmed") {
+            submitted.add(s.userId);
+        }
+    });
+    return staffList.filter((s) => !submitted.has(s.id));
 };
