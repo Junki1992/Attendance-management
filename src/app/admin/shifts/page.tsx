@@ -176,8 +176,8 @@ export default function AdminShiftGrid() {
     const unsub = subscribeAllShifts(year, month, (s) => {
       setShifts(s);
       const map: { [key: string]: number } = {};
-      // 合計はセル表示と一致させるため、draft も含める（セルに表示されているデータの合計を表示）
-      s.forEach((sh) => {
+      // 管理画面には提出済み・確定済みのみ表示。draft は表示しない
+      s.filter((sh) => sh.status !== "draft").forEach((sh) => {
         const h = calcHours(sh);
         if (h === "OFF") return;
         const day = parseInt(sh.date.split("-")[2], 10);
@@ -201,6 +201,12 @@ export default function AdminShiftGrid() {
     [shifts]
   );
 
+  /** このユーザーに提出済み（未確定）のシフトが1件以上あるか（却下ボタン表示用） */
+  const hasSubmittedShifts = useCallback(
+    (userId: string) => shifts.some((s) => s.userId === userId && s.status === "submitted"),
+    [shifts]
+  );
+
   /** このユーザーの当月シフトがすべて確定済みで、確定後に編集されていなければ true（シフトなしは false） */
   const isFullyConfirmed = useCallback(
     (userId: string) => {
@@ -208,12 +214,6 @@ export default function AdminShiftGrid() {
       if (userShifts.length === 0) return false;
       return userShifts.every((s) => s.status === "confirmed" && !s.editedAfterConfirmed);
     },
-    [shifts]
-  );
-
-  /** このユーザーに提出済み（未確定）のシフトが1件以上あるか（却下ボタン表示用） */
-  const hasSubmittedShifts = useCallback(
-    (userId: string) => shifts.some((s) => s.userId === userId && s.status === "submitted"),
     [shifts]
   );
 
@@ -317,12 +317,17 @@ export default function AdminShiftGrid() {
     setConfirmingUserId(uid);
     try {
       const ok = await rejectShiftsForUser(uid, year, month);
+      const message = ok
+        ? `${month + 1}月のシフトが却下されました。\n理由: ${rejectComment.trim()}`
+        : `${month + 1}月のシフトに修正が必要です。\n理由: ${rejectComment.trim()}\n内容を確認して提出してください。`;
+      await createNotification(uid, "shift_rejected", message);
       if (!ok) {
-        alert("このアルバイトに提出済みのシフトがありません。");
+        setRejectingUserId(null);
+        setRejectComment("");
+        setConfirmingUserId(null);
+        alert("下書きのみのためステータスは変更しませんでしたが、通知を送りました。");
         return;
       }
-      const message = `${month + 1}月のシフトが却下されました。\n理由: ${rejectComment.trim()}`;
-      await createNotification(uid, "shift_rejected", message);
       setRejectingUserId(null);
       setRejectComment("");
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
@@ -678,7 +683,10 @@ export default function AdminShiftGrid() {
                           合計 {totalHours}h
                         </span>
                       </div>
-                      {hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && (
+                      {hasShiftsInMonth(user.id) && (isFullyConfirmed(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isFullyConfirmed(user.id))) && (
+                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>確定済み</p>
+                      )}
+                      {hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && confirmingUserId !== user.id && !(confirmingSelected && selectedUserIds.has(user.id)) && !confirming && (
                         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
                           <button
                             type="button"
@@ -688,7 +696,7 @@ export default function AdminShiftGrid() {
                             onClick={() => !userHas36Violation(user.id) && handleConfirmOne(user.id)}
                             title={userHas36Violation(user.id) ? "36協定に抵触しているため確定できません" : undefined}
                           >
-                            {confirmingUserId === user.id ? "送信中..." : "確定通知を送る"}
+                            確定通知を送る
                           </button>
                           {hasSubmittedShifts(user.id) && (
                             <button
@@ -702,9 +710,6 @@ export default function AdminShiftGrid() {
                             </button>
                           )}
                         </div>
-                      )}
-                      {hasShiftsInMonth(user.id) && isFullyConfirmed(user.id) && (
-                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>確定済み</p>
                       )}
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px", fontSize: "0.7rem" }}>
                         {dayOfWeek.map((d, colIndex) => (
@@ -729,7 +734,7 @@ export default function AdminShiftGrid() {
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                           const isHoliday = isJapaneseHoliday(date);
                           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                          const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr);
+                          const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr && s.status !== "draft");
                           const h = shift ? calcHours(shift) : 0;
                           const numHours = h === "OFF" ? 0 : (h as number);
                           const isOver = isDailyOver(numHours);
@@ -887,7 +892,7 @@ export default function AdminShiftGrid() {
                       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                       const isHoliday = isJapaneseHoliday(date);
                       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                      const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr);
+                      const shift = shifts.find((s) => s.userId === user.id && s.date === dateStr && s.status !== "draft");
                       const h = shift ? calcHours(shift) : 0;
                       const numHours = h === "OFF" ? 0 : (h as number);
                       const isOver = isDailyOver(numHours);
@@ -945,7 +950,7 @@ export default function AdminShiftGrid() {
                     >
                       {!hasShiftsInMonth(user.id) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="シフトがありません">—</span>
-                      ) : isFullyConfirmed(user.id) ? (
+                      ) : isFullyConfirmed(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isFullyConfirmed(user.id)) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="この人はすでに確定済みです">
                           確定済み
                         </span>
