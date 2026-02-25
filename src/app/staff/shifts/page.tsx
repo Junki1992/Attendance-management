@@ -446,22 +446,32 @@ export default function ShiftCalendar() {
         return false;
     })();
 
-    /** 36協定抵触: 1日8時間超 or 週40時間超 */
-    const has36Violation = useMemo(() => {
+    /** 36協定アラート用: 1日8時間超・週40時間超の該当をリスト化 */
+    const alert36 = useMemo(() => {
         const getHours = (d: number) => calcHours(shifts[d] ?? "");
         const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+        const daily: { day: number; hours: number }[] = [];
+        const weekly: { weekLabel: string; total: number }[] = [];
+        const weekTotals: Record<number, { total: number; weekStart: Date }> = {};
         for (const d of DAYS) {
-            if (getHours(d) > 8) return true;
-        }
-        const weekTotals: Record<number, number> = {};
-        for (const d of DAYS) {
+            const h = getHours(d);
+            if (h > 8) daily.push({ day: d, hours: h });
             const date = new Date(year, month, d);
             const dow = date.getDay();
             const weekStart = new Date(year, month, d - dow);
             const weekId = weekStart.getTime();
-            weekTotals[weekId] = (weekTotals[weekId] ?? 0) + getHours(d);
+            if (!weekTotals[weekId]) weekTotals[weekId] = { total: 0, weekStart };
+            weekTotals[weekId].total += h;
         }
-        return Object.values(weekTotals).some((t) => t > 40);
+        Object.values(weekTotals).forEach(({ total, weekStart }) => {
+            if (total > 40) {
+                const ws = weekStart;
+                const we = new Date(ws);
+                we.setDate(we.getDate() + 6);
+                weekly.push({ weekLabel: `${ws.getMonth() + 1}/${ws.getDate()}〜${we.getMonth() + 1}/${we.getDate()}`, total });
+            }
+        });
+        return { daily, weekly };
     }, [shifts, daysInMonth, year, month]);
 
     const calculateSalary = () => {
@@ -546,20 +556,37 @@ export default function ShiftCalendar() {
                     </div>
                 );
             })()}
-            {!monthIsConfirmed && !monthIsPastDeadline && has36Violation && (
+            {/* 36協定アラート（管理者画面と同様の形式で表示するが、提出・確定は可能） */}
+            {(alert36.daily.length > 0 || alert36.weekly.length > 0) && (
                 <div
                     style={{
                         padding: "0.75rem 1rem",
                         marginBottom: "1rem",
-                        backgroundColor: "#FEF3C7",
+                        borderColor: "#F59E0B",
+                        backgroundColor: "#FFFBEB",
                         border: "1px solid #F59E0B",
                         borderRadius: "var(--radius-md)",
                         color: "#92400E",
-                        fontWeight: 500,
-                        fontSize: "0.9rem",
                     }}
                 >
-                    1日8時間超または週40時間超のため提出できません。シフトを調整してください。
+                    <h3 style={{ fontSize: "0.95rem", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <span>36協定アラート</span>
+                        <span style={{ color: "var(--destructive)" }}>⚠️ 要確認</span>
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.875rem" }}>
+                        {alert36.daily.length > 0 && (
+                            <div>
+                                <strong>1日8時間超過:</strong>{" "}
+                                {alert36.daily.map((x) => `${month + 1}/${x.day} (${x.hours}h)`).join("、")}
+                            </div>
+                        )}
+                        {alert36.weekly.length > 0 && (
+                            <div>
+                                <strong>週40時間超過:</strong>{" "}
+                                {alert36.weekly.map((x) => `${x.weekLabel} ${x.total}h`).join("、")}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
             {!monthIsPastDeadline && Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => isDayPastDeadline(d)) && (
@@ -764,8 +791,7 @@ export default function ShiftCalendar() {
                         <button
                             className="btn btn-primary"
                             onClick={handleSubmit}
-                            disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges || has36Violation}
-                            title={has36Violation ? "1日8時間超または週40時間超のため提出できません。シフトを調整してください。" : undefined}
+                            disabled={loading || monthIsConfirmed || !hasShiftsToSave || !hasChanges}
                         >
                             {loading ? "処理中..." : monthIsConfirmed ? "確定済" : "提出"}
                         </button>

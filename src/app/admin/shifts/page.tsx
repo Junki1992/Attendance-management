@@ -541,25 +541,6 @@ export default function AdminShiftGrid() {
     return { daily, weekly, violatedUserIds };
   }, [staffList, DAYS, getShift, year, month]);
 
-  /** 36協定に抵触しているユーザーは確定不可 */
-  const userHas36Violation = useCallback(
-    (uid: string) => alert36.violatedUserIds.has(uid),
-    [alert36.violatedUserIds]
-  );
-
-  /** 確定対象のうち1人でも36協定抵触がいれば一括確定・選択送信を無効にする */
-  const hasConfirmableWith36Violation = useMemo(
-    () =>
-      staffList.some(
-        (s) => hasShiftsInMonth(s.id) && !isFullyConfirmed(s.id) && userHas36Violation(s.id)
-      ),
-    [staffList, hasShiftsInMonth, isFullyConfirmed, userHas36Violation]
-  );
-  const selectedHas36Violation = useMemo(
-    () => Array.from(selectedUserIds).some((uid) => userHas36Violation(uid)),
-    [selectedUserIds, userHas36Violation]
-  );
-
   return (
     <div>
       {/* 36協定アラート（最上部に常設） */}
@@ -688,8 +669,8 @@ export default function AdminShiftGrid() {
             <button
               className="btn btn-outline"
               onClick={handleConfirmSelected}
-              disabled={loading || confirming || confirmingSelected || selectedUserIds.size === 0 || selectedHas36Violation}
-              title={selectedHas36Violation ? "36協定に抵触している人が含まれているため確定できません" : selectedUserIds.size === 0 ? "下の表で送りたい人にチェックを入れてください" : `選択した ${selectedUserIds.size} 名に送る`}
+              disabled={loading || confirming || confirmingSelected || selectedUserIds.size === 0}
+              title={selectedUserIds.size === 0 ? "下の表で送りたい人にチェックを入れてください" : `選択した ${selectedUserIds.size} 名に送る`}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {confirmingSelected ? "送信中..." : `選択した人に送る${selectedUserIds.size > 0 ? ` (${selectedUserIds.size}人)` : ""}`}
@@ -697,8 +678,8 @@ export default function AdminShiftGrid() {
             <button
               className="btn btn-primary"
               onClick={handleConfirm}
-              disabled={loading || confirming || !hasShiftsToConfirm || hasConfirmableWith36Violation}
-              title={hasConfirmableWith36Violation ? "36協定に抵触している人がいるため確定できません" : !hasShiftsToConfirm ? "全員のシフトがすでに確定済みです" : undefined}
+              disabled={loading || confirming || !hasShiftsToConfirm}
+              title={!hasShiftsToConfirm ? "全員のシフトがすでに確定済みです" : undefined}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {confirming ? "処理中..." : "確定して通知"}
@@ -770,9 +751,8 @@ export default function AdminShiftGrid() {
                             type="button"
                             className="btn btn-outline"
                             style={{ fontSize: "0.8rem", padding: "0.35rem 0.6rem" }}
-                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId || userHas36Violation(user.id)}
-                            onClick={() => !userHas36Violation(user.id) && handleConfirmOne(user.id)}
-                            title={userHas36Violation(user.id) ? "36協定に抵触しているため確定できません" : undefined}
+                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                            onClick={() => handleConfirmOne(user.id)}
                           >
                             確定通知を送る
                           </button>
@@ -943,16 +923,16 @@ export default function AdminShiftGrid() {
                           display: "flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          cursor: isFullyConfirmed(user.id) || userHas36Violation(user.id) ? "not-allowed" : "pointer",
-                          opacity: isFullyConfirmed(user.id) || userHas36Violation(user.id) ? 0.7 : 1,
+                          cursor: isFullyConfirmed(user.id) ? "not-allowed" : "pointer",
+                          opacity: isFullyConfirmed(user.id) ? 0.7 : 1,
                         }}
-                        title={userHas36Violation(user.id) ? "36協定に抵触しているため確定できません" : !hasShiftsInMonth(user.id) ? "シフトがありません" : isFullyConfirmed(user.id) ? "この人はすでに確定済みです" : "確定通知を送る人にチェック"}
+                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : isFullyConfirmed(user.id) ? "この人はすでに確定済みです" : "確定通知を送る人にチェック"}
                       >
                         <input
                           type="checkbox"
                           checked={selectedUserIds.has(user.id)}
-                          onChange={() => hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && !userHas36Violation(user.id) && toggleSelected(user.id)}
-                          disabled={!hasShiftsInMonth(user.id) || isFullyConfirmed(user.id) || userHas36Violation(user.id)}
+                          onChange={() => hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && toggleSelected(user.id)}
+                          disabled={!hasShiftsInMonth(user.id) || isFullyConfirmed(user.id)}
                         />
                       </label>
                       {user.name}
@@ -1038,9 +1018,9 @@ export default function AdminShiftGrid() {
                             type="button"
                             className="btn btn-outline"
                             style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId || userHas36Violation(user.id)}
-                            onClick={() => !userHas36Violation(user.id) && handleConfirmOne(user.id)}
-                            title={userHas36Violation(user.id) ? "36協定に抵触しているため確定できません" : `${user.name}さんに確定通知を送る`}
+                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                            onClick={() => handleConfirmOne(user.id)}
+                            title={`${user.name}さんに確定通知を送る`}
                           >
                             {confirmingUserId === user.id ? "送信中..." : "送る"}
                           </button>
