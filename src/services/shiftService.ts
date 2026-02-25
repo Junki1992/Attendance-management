@@ -191,10 +191,21 @@ export const deleteShiftsByUserId = async (userId: string): Promise<number> => {
     return deleted;
 };
 
-export const confirmShifts = async (year: number, month: number) => {
+/** 確定範囲: 全月 / 1～15日分 / 16日～月末 */
+export type ConfirmBlock = "all" | "first" | "second";
+
+function isShiftInBlock(dateStr: string, block: ConfirmBlock): boolean {
+    const day = parseInt(dateStr.split("-")[2]!, 10);
+    if (block === "first") return day <= 15;
+    if (block === "second") return day >= 16;
+    return true;
+}
+
+export const confirmShifts = async (year: number, month: number, block: ConfirmBlock = "all") => {
     // 1. Get all shifts for the month（提出済み・下書きをすべて確定扱いに）
     const shifts = await getAllShifts(year, month);
-    const toConfirm = shifts.filter((s) => s.status !== "confirmed");
+    const filtered = block === "all" ? shifts : shifts.filter((s) => isShiftInBlock(s.date, block));
+    const toConfirm = filtered.filter((s) => s.status !== "confirmed");
     const affectedUserIds = new Set<string>(toConfirm.map((s) => s.userId));
 
     // 2. 確定時に時給スナップショットを保存（出社/在宅で時給が違う場合は勤務形態に応じてセット）
@@ -216,14 +227,15 @@ export const confirmShifts = async (year: number, month: number) => {
 };
 
 /** 指定ユーザーのその月のシフトのみ確定する（個別確定通知用） */
-export const confirmShiftsForUser = async (userId: string, year: number, month: number): Promise<boolean> => {
+export const confirmShiftsForUser = async (userId: string, year: number, month: number, block: ConfirmBlock = "all"): Promise<boolean> => {
     const shifts = await getAllShifts(year, month);
     const userShifts = shifts.filter((s) => s.userId === userId);
-    if (userShifts.length === 0) return false;
+    const filtered = block === "all" ? userShifts : userShifts.filter((s) => isShiftInBlock(s.date, block));
+    if (filtered.length === 0) return false;
 
     const profile = await getUserProfile(userId);
 
-    const toUpdate = userShifts.filter((s) => s.status !== "confirmed");
+    const toUpdate = filtered.filter((s) => s.status !== "confirmed");
     await Promise.all(
         toUpdate.map((shift) => {
             const docId = `${shift.userId}_${shift.date}`;
@@ -234,7 +246,7 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     );
     // 確定通知を送ったので editedAfterConfirmed をクリア（再通知不要に）
     await Promise.all(
-        userShifts.map((shift) => {
+        filtered.map((shift) => {
             const docId = `${shift.userId}_${shift.date}`;
             const shiftRef = doc(db, "shifts", docId);
             return setDoc(shiftRef, { editedAfterConfirmed: false }, { merge: true });

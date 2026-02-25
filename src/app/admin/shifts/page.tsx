@@ -13,6 +13,7 @@ import {
   getShiftWorkTypeLabel,
   Shift,
   type ShiftWorkType,
+  type ConfirmBlock,
 } from "@/services/shiftService";
 import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
@@ -33,6 +34,24 @@ function calcHours(s: Shift): number | "OFF" {
 }
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
+
+function getConfirmBlockLabel(block: ConfirmBlock): string {
+  if (block === "all") return "全月";
+  if (block === "first") return "1～15日分";
+  return "16日～月末";
+}
+
+function getConfirmMessage(block: ConfirmBlock, month: number, hadEdited: boolean): string {
+  const m = month + 1;
+  if (hadEdited) {
+    if (block === "all") return `${m}月のシフトが変更されました。確認してください。`;
+    if (block === "first") return `${m}月1～15日分のシフトが変更されました。確認してください。`;
+    return `${m}月16日～月末のシフトが変更されました。確認してください。`;
+  }
+  if (block === "all") return `${m}月のシフトが確定しました。確認してください。`;
+  if (block === "first") return `${m}月1～15日分のシフトが確定しました。確認してください。`;
+  return `${m}月16日～月末のシフトが確定しました。確認してください。`;
+}
 
 /** 表のセル用：勤務時間を「11-19」「11-19 在宅」のように表示（ぱっと見で何時～何時か分かるように） */
 function formatShiftCellLabel(shift: Shift | null | undefined): string {
@@ -87,6 +106,7 @@ export default function AdminShiftGrid() {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [reminding, setReminding] = useState(false);
   const [csvCopied, setCsvCopied] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState<ConfirmBlock>("all");
   const [error, setError] = useState<string | null>(null);
   const [confirmedNotifs, setConfirmedNotifs] = useState<Notification[]>([]);
   const [notifUserIdToName, setNotifUserIdToName] = useState<Record<string, string>>({});
@@ -217,11 +237,29 @@ export default function AdminShiftGrid() {
     [shifts]
   );
 
-  /** 確定対象が1人以上いるか（シフトがあり、まだ確定していない人） */
-  const hasShiftsToConfirm = useMemo(
-    () => staffList.some((s) => hasShiftsInMonth(s.id) && !isFullyConfirmed(s.id)),
-    [staffList, hasShiftsInMonth, isFullyConfirmed]
+  /** 指定ブロック内に未確定シフトがあるか */
+  const isInBlock = useCallback(
+    (dateStr: string, block: ConfirmBlock) => {
+      const day = parseInt(dateStr.split("-")[2]!, 10);
+      if (block === "first") return day <= 15;
+      if (block === "second") return day >= 16;
+      return true;
+    },
+    []
   );
+
+  /** 確定対象が1人以上いるか（選択中のブロック内でシフトがあり、まだ確定していない人） */
+  const hasShiftsToConfirm = useMemo(() => {
+    if (confirmBlock === "all") {
+      return staffList.some((s) => hasShiftsInMonth(s.id) && !isFullyConfirmed(s.id));
+    }
+    return staffList.some((s) => {
+      const userShifts = shifts.filter((x) => x.userId === s.id && x.status !== "draft");
+      const inBlock = userShifts.filter((x) => isInBlock(x.date, confirmBlock));
+      if (inBlock.length === 0) return false;
+      return inBlock.some((x) => x.status !== "confirmed");
+    });
+  }, [staffList, shifts, confirmBlock, hasShiftsInMonth, isFullyConfirmed, isInBlock]);
 
   const toggleSelected = (userId: string) => {
     setSelectedUserIds((prev) => {
@@ -247,11 +285,12 @@ export default function AdminShiftGrid() {
   };
 
   const handleConfirm = async () => {
-    if (!confirm(`${year}年${month + 1}月のシフトを確定し、アルバイトへ通知を送りますか？`))
+    const blockLabel = getConfirmBlockLabel(confirmBlock);
+    if (!confirm(`${year}年${month + 1}月の${blockLabel}のシフトを確定し、アルバイトへ通知を送りますか？`))
       return;
     setConfirming(true);
     try {
-      const affectedUserIds = await confirmShifts(year, month);
+      const affectedUserIds = await confirmShifts(year, month, confirmBlock);
       if (process.env.NODE_ENV === "development") {
         console.log("[admin/shifts] handleConfirm: affectedUserIds", affectedUserIds);
       }
@@ -259,13 +298,10 @@ export default function AdminShiftGrid() {
         alert("確定するシフトがありませんでした。");
         return;
       }
+      const message = getConfirmMessage(confirmBlock, month, false);
       await Promise.all(
         affectedUserIds.map((uid) =>
-          createNotification(
-            uid,
-            "shift_confirmed",
-            `${month + 1}月のシフトが確定しました。確認してください。`
-          )
+          createNotification(uid, "shift_confirmed", message)
         )
       );
       getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
@@ -282,15 +318,18 @@ export default function AdminShiftGrid() {
   const handleConfirmOne = async (userId: string) => {
     setConfirmingUserId(userId);
     try {
-      const hadEdited = shifts.some((s) => s.userId === userId && s.editedAfterConfirmed);
-      const hasShifts = await confirmShiftsForUser(userId, year, month);
+      const hadEdited = shifts.some(
+        (s) =>
+          s.userId === userId &&
+          s.editedAfterConfirmed &&
+          (confirmBlock === "all" || isInBlock(s.date, confirmBlock))
+      );
+      const hasShifts = await confirmShiftsForUser(userId, year, month, confirmBlock);
       if (!hasShifts) {
-        alert("このアルバイトのシフトがありません。");
+        alert(`このアルバイトの${getConfirmBlockLabel(confirmBlock)}に確定するシフトがありません。`);
         return;
       }
-      const message = hadEdited
-        ? `${month + 1}月のシフトが変更されました。確認してください。`
-        : `${month + 1}月のシフトが確定しました。確認してください。`;
+      const message = getConfirmMessage(confirmBlock, month, hadEdited);
       await createNotification(userId, "shift_confirmed", message);
       getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
@@ -345,29 +384,50 @@ export default function AdminShiftGrid() {
     }
   };
 
+  /** 指定ユーザーが選択ブロック内に未確定シフトを持つか */
+  const hasUnconfirmedInBlock = useCallback(
+    (uid: string) => {
+      const userShifts = shifts.filter((x) => x.userId === uid && x.status !== "draft");
+      const inBlock = confirmBlock === "all" ? userShifts : userShifts.filter((x) => isInBlock(x.date, confirmBlock));
+      return inBlock.some((x) => x.status !== "confirmed");
+    },
+    [shifts, confirmBlock, isInBlock]
+  );
+
   const handleConfirmSelected = async () => {
     const ids = Array.from(selectedUserIds).filter(
-      (uid) => hasShiftsInMonth(uid) && !isFullyConfirmed(uid)
+      (uid) => hasShiftsInMonth(uid) && !isFullyConfirmed(uid) && hasUnconfirmedInBlock(uid)
     );
     if (ids.length === 0) {
-      alert("送信対象を選択してください（シフトがあり、まだ確定していない人にチェックを入れてください）。");
+      const hint =
+        confirmBlock === "all"
+          ? "シフトがあり、まだ確定していない人にチェックを入れてください"
+          : `${getConfirmBlockLabel(confirmBlock)}に未確定シフトがある人にチェックを入れてください`;
+      alert(`送信対象を選択してください（${hint}）。`);
       return;
     }
-    if (!confirm(`選択した ${ids.length} 名に確定通知を送りますか？`)) return;
+    const blockLabel = getConfirmBlockLabel(confirmBlock);
+    if (!confirm(`選択した ${ids.length} 名に${blockLabel}の確定通知を送りますか？`)) return;
     setConfirmingSelected(true);
     try {
+      let sentCount = 0;
       for (const uid of ids) {
-        const hadEdited = shifts.some((s) => s.userId === uid && s.editedAfterConfirmed);
-        await confirmShiftsForUser(uid, year, month);
-        const message = hadEdited
-          ? `${month + 1}月のシフトが変更されました。確認してください。`
-          : `${month + 1}月のシフトが確定しました。確認してください。`;
+        const hadEdited = shifts.some(
+          (s) =>
+            s.userId === uid &&
+            s.editedAfterConfirmed &&
+            (confirmBlock === "all" || isInBlock(s.date, confirmBlock))
+        );
+        const hasShifts = await confirmShiftsForUser(uid, year, month, confirmBlock);
+        if (!hasShifts) continue;
+        const message = getConfirmMessage(confirmBlock, month, hadEdited);
         await createNotification(uid, "shift_confirmed", message);
+        sentCount += 1;
       }
       getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
       getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
       setSelectedUserIds(new Set());
-      alert(`${ids.length} 名に確定通知を送りました。`);
+      alert(`${sentCount} 名に確定通知を送りました。`);
     } catch (e) {
       console.error(e);
       alert("確定通知の送信に失敗しました");
@@ -598,7 +658,25 @@ export default function AdminShiftGrid() {
               ›
             </button>
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.875rem" }}>
+              <span style={{ color: "var(--text-muted)" }}>確定範囲:</span>
+              <select
+                value={confirmBlock}
+                onChange={(e) => setConfirmBlock(e.target.value as ConfirmBlock)}
+                style={{
+                  padding: "0.35rem 0.5rem",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--surface)",
+                  fontSize: "0.875rem",
+                }}
+              >
+                <option value="all">全月</option>
+                <option value="first">1～15日分</option>
+                <option value="second">16日～月末</option>
+              </select>
+            </label>
             <button
               className="btn btn-outline"
               onClick={handleCopyCsv}

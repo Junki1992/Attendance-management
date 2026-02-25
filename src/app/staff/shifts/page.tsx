@@ -6,7 +6,7 @@ import { getUserShifts, saveShift, deleteShift, getShiftWorkType, getWorkTypeLab
 import { getUserProfile, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
 import { saveShiftSubmitComment } from "@/services/shiftSubmitCommentService";
-import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
+import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 
@@ -512,6 +512,40 @@ export default function ShiftCalendar() {
                     この月の提出期限は過ぎています。
                 </div>
             )}
+            {(() => {
+                if (monthIsConfirmed || monthIsPastDeadline || !settings) return null;
+                const hasSubmittedOrConfirmed = Object.values(submittedByDay).some(Boolean) || Object.values(confirmedByDay).some(Boolean);
+                if (hasSubmittedOrConfirmed) return null;
+                const firstDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-01`, settings);
+                const secondDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-16`, settings);
+                const now = Date.now();
+                const ms3days = 3 * 24 * 60 * 60 * 1000;
+                const firstImminent = firstDeadline.getTime() > now && firstDeadline.getTime() - now <= ms3days;
+                const secondImminent = secondDeadline.getTime() > now && secondDeadline.getTime() - now <= ms3days;
+                if (!firstImminent && !secondImminent) return null;
+                const l = getDeadlineLabelsForMonthWithSettings(year, month, settings);
+                return (
+                    <div
+                        style={{
+                            padding: "0.75rem 1rem",
+                            marginBottom: "1rem",
+                            backgroundColor: "#FEF3C7",
+                            border: "1px solid #F59E0B",
+                            borderRadius: "var(--radius-md)",
+                            color: "#92400E",
+                            fontWeight: 500,
+                            fontSize: "0.9rem",
+                        }}
+                    >
+                        <strong>提出期限が間近です。</strong>{" "}
+                        {firstImminent && secondImminent
+                            ? `1～15日分: ${l.firstBlock}まで、16日～月末: ${l.secondBlock}まで`
+                            : firstImminent
+                                ? `1～15日分: ${l.firstBlock}まで`
+                                : `16日～月末: ${l.secondBlock}まで`}
+                    </div>
+                );
+            })()}
             {!monthIsConfirmed && !monthIsPastDeadline && has36Violation && (
                 <div
                     style={{
