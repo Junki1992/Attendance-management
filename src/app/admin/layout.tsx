@@ -18,6 +18,7 @@ export default function AdminLayout({
     const pathname = usePathname();
     const [showNotifications, setShowNotifications] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [unreadMessageCount, setUnreadMessageCount] = useState(0);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
 
@@ -36,6 +37,7 @@ export default function AdminLayout({
         if (!user) return;
         const unsubscribe = subscribeNotifications(user.uid, (notifs) => {
             setUnreadCount(notifs.filter(n => !n.read).length);
+            setUnreadMessageCount(notifs.filter(n => n.type === "message" && !n.read).length);
         });
         return () => unsubscribe();
     }, [user]);
@@ -197,7 +199,14 @@ export default function AdminLayout({
                             <Link href="/admin" style={{ textDecoration: 'none', color: path === '/admin' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin' ? '2px solid #fff' : '2px solid transparent' }}>ホーム</Link>
                             <Link href="/admin/shifts" style={{ textDecoration: 'none', color: path === '/admin/shifts' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin/shifts' ? '2px solid #fff' : '2px solid transparent' }}>シフト表</Link>
                             <Link href="/admin/shift-change-requests" style={{ textDecoration: 'none', color: path === '/admin/shift-change-requests' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin/shift-change-requests' ? '2px solid #fff' : '2px solid transparent' }}>変更申請</Link>
-                            <Link href="/admin/chat" style={{ textDecoration: 'none', color: path === '/admin/chat' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin/chat' ? '2px solid #fff' : '2px solid transparent' }}>チャット</Link>
+                            <Link href="/admin/chat" style={{ textDecoration: 'none', color: path === '/admin/chat' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin/chat' ? '2px solid #fff' : '2px solid transparent', position: 'relative', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                チャット
+                                {unreadMessageCount > 0 && (
+                                    <span style={{ backgroundColor: '#ef4444', color: 'white', fontSize: '0.6rem', minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', fontWeight: 600 }}>
+                                        {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                                    </span>
+                                )}
+                            </Link>
                             <Link href="/admin/settings" style={{ textDecoration: 'none', color: path === '/admin/settings' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin/settings' ? '2px solid #fff' : '2px solid transparent' }}>設定</Link>
                             <button 
                                 onClick={handleLogout}
@@ -330,7 +339,10 @@ export default function AdminLayout({
                                 borderRadius: '8px',
                                 backgroundColor: path === '/admin/chat' ? 'rgba(224, 231, 255, 0.15)' : 'transparent',
                                 transition: 'all 0.2s ease',
-                                fontWeight: 600
+                                fontWeight: 600,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem'
                             }}
                             onMouseEnter={(e) => {
                                 if (path !== '/admin/chat') {
@@ -344,6 +356,11 @@ export default function AdminLayout({
                             }}
                         >
                             チャット
+                            {unreadMessageCount > 0 && (
+                                <span style={{ backgroundColor: '#ef4444', color: 'white', fontSize: '0.65rem', minWidth: '18px', height: '18px', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px', fontWeight: 600 }}>
+                                    {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                                </span>
+                            )}
                         </Link>
                         <Link 
                             href="/admin/settings" 
