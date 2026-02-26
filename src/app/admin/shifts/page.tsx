@@ -248,6 +248,17 @@ export default function AdminShiftGrid() {
     []
   );
 
+  /** 選択中の確定ブロックがこのユーザーに対してすでに確定済みか（ブロック内のシフトがすべて確定＆編集なし） */
+  const isBlockConfirmedForUser = useCallback(
+    (userId: string) => {
+      const userShifts = shifts.filter((s) => s.userId === userId && s.status !== "draft");
+      const inBlock = confirmBlock === "all" ? userShifts : userShifts.filter((s) => isInBlock(s.date, confirmBlock));
+      if (inBlock.length === 0) return false;
+      return inBlock.every((s) => s.status === "confirmed" && !s.editedAfterConfirmed);
+    },
+    [shifts, confirmBlock, isInBlock]
+  );
+
   /** 確定対象が1人以上いるか（選択中のブロック内でシフトがあり、まだ確定していない人） */
   const hasShiftsToConfirm = useMemo(() => {
     if (confirmBlock === "all") {
@@ -396,7 +407,7 @@ export default function AdminShiftGrid() {
 
   const handleConfirmSelected = async () => {
     const ids = Array.from(selectedUserIds).filter(
-      (uid) => hasShiftsInMonth(uid) && !isFullyConfirmed(uid) && hasUnconfirmedInBlock(uid)
+      (uid) => hasShiftsInMonth(uid) && !isBlockConfirmedForUser(uid) && hasUnconfirmedInBlock(uid)
     );
     if (ids.length === 0) {
       const hint =
@@ -670,7 +681,7 @@ export default function AdminShiftGrid() {
               className="btn btn-outline"
               onClick={handleConfirmSelected}
               disabled={loading || confirming || confirmingSelected || selectedUserIds.size === 0}
-              title={selectedUserIds.size === 0 ? "下の表で送りたい人にチェックを入れてください" : `選択した ${selectedUserIds.size} 名に送る`}
+              title={selectedUserIds.size === 0 ? `下の表で${getConfirmBlockLabel(confirmBlock)}を送りたい人にチェックを入れてください` : `選択した ${selectedUserIds.size} 名に${getConfirmBlockLabel(confirmBlock)}を送る`}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {confirmingSelected ? "送信中..." : `選択した人に送る${selectedUserIds.size > 0 ? ` (${selectedUserIds.size}人)` : ""}`}
@@ -679,7 +690,7 @@ export default function AdminShiftGrid() {
               className="btn btn-primary"
               onClick={handleConfirm}
               disabled={loading || confirming || !hasShiftsToConfirm}
-              title={!hasShiftsToConfirm ? "全員のシフトがすでに確定済みです" : undefined}
+              title={!hasShiftsToConfirm ? `${getConfirmBlockLabel(confirmBlock)}は全員確定済みです` : undefined}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
             >
               {confirming ? "処理中..." : "確定して通知"}
@@ -742,10 +753,10 @@ export default function AdminShiftGrid() {
                           合計 {totalHours}h
                         </span>
                       </div>
-                      {hasShiftsInMonth(user.id) && (isFullyConfirmed(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isFullyConfirmed(user.id))) && (
-                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>確定済み</p>
+                      {hasShiftsInMonth(user.id) && (isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id))) && (
+                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>{isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}</p>
                       )}
-                      {hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && confirmingUserId !== user.id && !(confirmingSelected && selectedUserIds.has(user.id)) && !confirming && (
+                      {hasShiftsInMonth(user.id) && !isBlockConfirmedForUser(user.id) && confirmingUserId !== user.id && !(confirmingSelected && selectedUserIds.has(user.id)) && !confirming && (
                         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
                           <button
                             type="button"
@@ -798,6 +809,7 @@ export default function AdminShiftGrid() {
                           const isOver = isDailyOver(numHours);
                           const hasData = !!shift;
                           const isEditedLate = !!shift?.editedAfterDeadline;
+                          const isConfirmed = shift?.status === "confirmed" && !shift?.editedAfterConfirmed;
                           const baseBg = isOver ? "#FEE2E2" : numHours > 0 ? "#EEF2FF" : (isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : "var(--surface-hover)");
                           return (
                             <div
@@ -812,6 +824,7 @@ export default function AdminShiftGrid() {
                                 padding: "0.2rem",
                                 borderRadius: "4px",
                                 backgroundColor: baseBg,
+                                borderLeft: isConfirmed ? "3px solid rgba(34, 197, 94, 0.7)" : undefined,
                                 color: isOver || isEditedLate ? "#B91C1C" : "inherit",
                                 cursor: hasData ? "pointer" : "default",
                               }}
@@ -892,7 +905,7 @@ export default function AdminShiftGrid() {
                     minWidth: "72px",
                     fontSize: "0.75rem",
                   }}
-                  title="この人にだけ確定通知を送る"
+                  title={`${getConfirmBlockLabel(confirmBlock)}の確定通知を送る（選択中の範囲）`}
                 >
                   確定通知
                 </th>
@@ -926,16 +939,16 @@ export default function AdminShiftGrid() {
                           display: "flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          cursor: isFullyConfirmed(user.id) ? "not-allowed" : "pointer",
-                          opacity: isFullyConfirmed(user.id) ? 0.7 : 1,
+                          cursor: isBlockConfirmedForUser(user.id) ? "not-allowed" : "pointer",
+                          opacity: isBlockConfirmedForUser(user.id) ? 0.7 : 1,
                         }}
-                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : isFullyConfirmed(user.id) ? "この人はすでに確定済みです" : "確定通知を送る人にチェック"}
+                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : isBlockConfirmedForUser(user.id) ? `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです` : "確定通知を送る人にチェック"}
                       >
                         <input
                           type="checkbox"
                           checked={selectedUserIds.has(user.id)}
-                          onChange={() => hasShiftsInMonth(user.id) && !isFullyConfirmed(user.id) && toggleSelected(user.id)}
-                          disabled={!hasShiftsInMonth(user.id) || isFullyConfirmed(user.id)}
+                          onChange={() => hasShiftsInMonth(user.id) && !isBlockConfirmedForUser(user.id) && toggleSelected(user.id)}
+                          disabled={!hasShiftsInMonth(user.id) || isBlockConfirmedForUser(user.id)}
                         />
                       </label>
                       {user.name}
@@ -959,7 +972,8 @@ export default function AdminShiftGrid() {
                       const isOver = isDailyOver(numHours);
                       const hasData = !!shift;
                       const isEditedLate = !!shift?.editedAfterDeadline;
-                      const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : hasData ? "クリックで編集" : "クリックでシフトを追加";
+                      const isConfirmed = shift?.status === "confirmed" && !shift?.editedAfterConfirmed;
+                      const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : isConfirmed ? "確定済み・クリックで編集" : hasData ? "クリックで編集" : "クリックでシフトを追加";
                       const baseCellBg = isOver
                         ? "#FEE2E2"
                         : numHours > 0
@@ -975,6 +989,7 @@ export default function AdminShiftGrid() {
                           onClick={() => setEditingCell({ userId: user.id, day: d })}
                           style={{
                             border: "1px solid var(--border)",
+                            borderLeft: isConfirmed ? "3px solid rgba(34, 197, 94, 0.7)" : undefined,
                             textAlign: "center",
                             backgroundColor: baseCellBg,
                             color: isOver || isEditedLate ? "#B91C1C" : "inherit",
@@ -1011,9 +1026,9 @@ export default function AdminShiftGrid() {
                     >
                       {!hasShiftsInMonth(user.id) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="シフトがありません">—</span>
-                      ) : isFullyConfirmed(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isFullyConfirmed(user.id)) ? (
-                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="この人はすでに確定済みです">
-                          確定済み
+                      ) : isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id)) ? (
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title={isFullyConfirmed(user.id) ? "全月確定済みです" : `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです`}>
+                          {isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}
                         </span>
                       ) : (
                         <span style={{ display: "flex", gap: "0.35rem", justifyContent: "center", flexWrap: "wrap" }}>
