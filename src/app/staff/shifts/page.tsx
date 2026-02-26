@@ -892,11 +892,13 @@ export default function ShiftCalendar() {
                                 {(() => {
                                     const displayLabel = shifts[day] ?? (monthIsConfirmed ? "OFF" : null);
                                     if (!displayLabel) return null;
+                                    /** 月確定時はドキュメントのない日（OFFフォールバック）も確定扱い */
+                                    const effectiveConfirmed = isConfirmed || (monthIsConfirmed && shifts[day] === undefined);
                                     return (
                                         <div
                                             style={{
-                                                backgroundColor: grayedOut ? "#E5E7EB" : (isConfirmed ? "#D1FAE5" : (displayLabel === "OFF" ? "#F3F4F6" : "#EEF2FF")),
-                                                color: grayedOut ? "#9CA3AF" : (isConfirmed ? "#065F46" : (displayLabel === "OFF" ? "#4B5563" : "#4F46E5")),
+                                                backgroundColor: grayedOut ? "#E5E7EB" : (effectiveConfirmed ? "#D1FAE5" : (displayLabel === "OFF" ? "#F3F4F6" : "#EEF2FF")),
+                                                color: grayedOut ? "#9CA3AF" : (effectiveConfirmed ? "#065F46" : (displayLabel === "OFF" ? "#4B5563" : "#4F46E5")),
                                                 padding: "0.15rem 0.2rem",
                                                 borderRadius: "4px",
                                                 fontSize: "0.65rem",
@@ -908,7 +910,7 @@ export default function ShiftCalendar() {
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {formatShiftLabel(displayLabel)}{(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}{isConfirmed ? " 確定" : submittedByDay[day] ? " 提出" : " 下書き"}
+                                            {formatShiftLabel(displayLabel)}{(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}{effectiveConfirmed ? " 確定" : submittedByDay[day] ? " 提出" : " 下書き"}
                                         </div>
                                     );
                                 })()}
