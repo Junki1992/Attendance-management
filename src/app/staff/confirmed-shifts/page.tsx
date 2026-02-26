@@ -266,6 +266,10 @@ export default function StaffConfirmedShiftsPage() {
               const s = shiftByDay[detailModalDay];
               const pendingReq = pendingRequestByDay[detailModalDay];
               const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(detailModalDay).padStart(2, "0")}`;
+              const effectiveConfirmed =
+                (s?.status === "confirmed") ||
+                (detailModalDay <= 15 && firstBlockConfirmed) ||
+                (detailModalDay >= 16 && secondBlockConfirmed);
 
               const openChangeRequestForm = () => {
                 setDetailModalDay(null);
@@ -279,7 +283,7 @@ export default function StaffConfirmedShiftsPage() {
                 } else {
                   setModalHopeStart("09:00");
                   setModalHopeEnd("18:00");
-                  setModalHopeIsOff(false);
+                  setModalHopeIsOff(true);
                   setModalHopeIsRemote(false);
                 }
                 setModalReason("");
@@ -340,7 +344,7 @@ export default function StaffConfirmedShiftsPage() {
                   )}
 
                   <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                    {!pendingReq && s?.status === "confirmed" && (
+                    {!pendingReq && effectiveConfirmed && (
                       <button className="btn btn-outline" onClick={openChangeRequestForm}>
                         変更申請
                       </button>
@@ -475,7 +479,7 @@ export default function StaffConfirmedShiftsPage() {
             }}
           >
             <div style={{ gridColumn: "1 / -1", padding: "0.5rem", backgroundColor: "#EEF2FF", fontSize: "0.85rem", color: "var(--primary)" }}>
-              日付をクリックで詳細表示
+              日付をクリックで詳細表示・変更申請
             </div>
             {dayOfWeek.map((d, colIndex) => (
               <div
