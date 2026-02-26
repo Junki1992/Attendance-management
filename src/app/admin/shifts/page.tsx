@@ -804,8 +804,9 @@ export default function AdminShiftGrid() {
                               key={day}
                               onClick={hasData ? () => setEditingCell({ userId: user.id, day }) : undefined}
                               style={{
-                                minHeight: "32px",
+                                minHeight: "36px",
                                 display: "flex",
+                                flexDirection: "column",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 padding: "0.2rem",
@@ -815,6 +816,7 @@ export default function AdminShiftGrid() {
                                 cursor: hasData ? "pointer" : "default",
                               }}
                             >
+                              <span style={{ fontSize: "0.6rem", opacity: 0.85, lineHeight: 1 }}>{day}</span>
                               {h === "OFF" ? "OFF" : numHours > 0 ? formatShiftCellLabel(shift) : ""}
                             </div>
                           );
@@ -870,6 +872,7 @@ export default function AdminShiftGrid() {
                       }}
                     >
                       {d}
+                      <span style={{ fontSize: "0.7em", display: "block" }}>({WEEKDAY_LABELS[date.getDay()]})</span>
                     </th>
                   );
                 })}
