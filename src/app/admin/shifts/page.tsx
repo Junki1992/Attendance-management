@@ -395,6 +395,16 @@ export default function AdminShiftGrid() {
     }
   };
 
+  /** 指定ユーザーが選択ブロック内にシフトを1件以上持つか */
+  const hasShiftsInBlock = useCallback(
+    (uid: string) => {
+      const userShifts = shifts.filter((x) => x.userId === uid && x.status !== "draft");
+      const inBlock = confirmBlock === "all" ? userShifts : userShifts.filter((x) => isInBlock(x.date, confirmBlock));
+      return inBlock.length > 0;
+    },
+    [shifts, confirmBlock, isInBlock]
+  );
+
   /** 指定ユーザーが選択ブロック内に未確定シフトを持つか */
   const hasUnconfirmedInBlock = useCallback(
     (uid: string) => {
@@ -753,10 +763,13 @@ export default function AdminShiftGrid() {
                           合計 {totalHours}h
                         </span>
                       </div>
-                      {hasShiftsInMonth(user.id) && (isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id))) && (
+                      {hasShiftsInMonth(user.id) && !hasShiftsInBlock(user.id) && (
+                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }} title={`${getConfirmBlockLabel(confirmBlock)}にシフトがありません`}>—</p>
+                      )}
+                      {hasShiftsInMonth(user.id) && hasShiftsInBlock(user.id) && (isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id))) && (
                         <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>{isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}</p>
                       )}
-                      {hasShiftsInMonth(user.id) && !isBlockConfirmedForUser(user.id) && confirmingUserId !== user.id && !(confirmingSelected && selectedUserIds.has(user.id)) && !confirming && (
+                      {hasShiftsInMonth(user.id) && hasShiftsInBlock(user.id) && !isBlockConfirmedForUser(user.id) && confirmingUserId !== user.id && !(confirmingSelected && selectedUserIds.has(user.id)) && !confirming && (
                         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
                           <button
                             type="button"
@@ -939,16 +952,16 @@ export default function AdminShiftGrid() {
                           display: "flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          cursor: isBlockConfirmedForUser(user.id) ? "not-allowed" : "pointer",
-                          opacity: isBlockConfirmedForUser(user.id) ? 0.7 : 1,
+                          cursor: isBlockConfirmedForUser(user.id) || !hasShiftsInBlock(user.id) ? "not-allowed" : "pointer",
+                          opacity: isBlockConfirmedForUser(user.id) || !hasShiftsInBlock(user.id) ? 0.7 : 1,
                         }}
-                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : isBlockConfirmedForUser(user.id) ? `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです` : "確定通知を送る人にチェック"}
+                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : !hasShiftsInBlock(user.id) ? `${getConfirmBlockLabel(confirmBlock)}にシフトがありません` : isBlockConfirmedForUser(user.id) ? `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです` : "確定通知を送る人にチェック"}
                       >
                         <input
                           type="checkbox"
                           checked={selectedUserIds.has(user.id)}
-                          onChange={() => hasShiftsInMonth(user.id) && !isBlockConfirmedForUser(user.id) && toggleSelected(user.id)}
-                          disabled={!hasShiftsInMonth(user.id) || isBlockConfirmedForUser(user.id)}
+                          onChange={() => hasShiftsInMonth(user.id) && hasShiftsInBlock(user.id) && !isBlockConfirmedForUser(user.id) && toggleSelected(user.id)}
+                          disabled={!hasShiftsInMonth(user.id) || !hasShiftsInBlock(user.id) || isBlockConfirmedForUser(user.id)}
                         />
                       </label>
                       {user.name}
@@ -1026,6 +1039,8 @@ export default function AdminShiftGrid() {
                     >
                       {!hasShiftsInMonth(user.id) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="シフトがありません">—</span>
+                      ) : !hasShiftsInBlock(user.id) ? (
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title={`${getConfirmBlockLabel(confirmBlock)}にシフトがありません`}>—</span>
                       ) : isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id)) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title={isFullyConfirmed(user.id) ? "全月確定済みです" : `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです`}>
                           {isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}
