@@ -74,7 +74,7 @@ export default function StaffConfirmedShiftsPage() {
         ]);
         setProfile(profile ?? null);
         if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
-        setShifts(data.filter((s) => s.status === "confirmed"));
+        setShifts(data.filter((s) => s.status === "confirmed" || s.status === "submitted"));
         setMyRequests(reqs);
       } catch (e) {
         console.error(e);
@@ -91,6 +91,18 @@ export default function StaffConfirmedShiftsPage() {
     shiftByDay[d] = s;
   });
 
+  /** 確定分のみの勤務合計・給与（未確定は含めない） */
+  const confirmedShifts = shifts.filter((s) => s.status === "confirmed");
+  let totalHours = 0;
+  let salaryExact = 0;
+  confirmedShifts.forEach((s) => {
+    const h = calcHours(s);
+    totalHours += h;
+    const wage = s.hourlyWage ?? getWageForWorkType(profile, getShiftWorkType(s));
+    salaryExact += h * wage;
+  });
+  const salary = Math.floor(salaryExact);
+
   /** 当月の変更申請中（pending）の日付 → 申請 */
   const pendingRequestByDay: Record<number, ShiftChangeRequest> = {};
   myRequests
@@ -101,16 +113,6 @@ export default function StaffConfirmedShiftsPage() {
         pendingRequestByDay[d] = r;
       }
     });
-
-  let totalHours = 0;
-  let salaryExact = 0;
-  shifts.forEach((s) => {
-    const h = calcHours(s);
-    totalHours += h;
-    const wage = s.hourlyWage ?? getWageForWorkType(profile, getShiftWorkType(s));
-    salaryExact += h * wage;
-  });
-  const salary = Math.floor(salaryExact);
 
   const changeMonth = (delta: number) => {
     let m = month + delta;
@@ -208,7 +210,7 @@ export default function StaffConfirmedShiftsPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
           <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
-            勤務合計: <strong>{totalHours.toFixed(1)}h</strong>
+            勤務合計（確定分）: <strong>{totalHours.toFixed(1)}h</strong>
             {" / "}
             概算給与: <strong style={{ color: "var(--primary)" }}>¥{salary.toLocaleString()}</strong>（時給
             ¥{hourlyWage}）
@@ -281,7 +283,9 @@ export default function StaffConfirmedShiftsPage() {
                 <>
                   {s ? (
                     <div style={{ marginBottom: "1rem" }}>
-                      <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>確定シフト</div>
+                      <div style={{ fontSize: "0.875rem", color: s.status === "confirmed" ? "var(--text-muted)" : "#B45309", marginBottom: "0.25rem" }}>
+                        {s.status === "confirmed" ? "確定シフト" : "提出済み（未確定）"}
+                      </div>
                       <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                         {s.startTime === "00:00" && s.endTime === "00:00" ? "OFF" : `${s.startTime} ～ ${s.endTime}`}
                       </div>
@@ -494,6 +498,7 @@ export default function StaffConfirmedShiftsPage() {
               const cellBg = isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : "var(--surface)";
               const dayColor = isHoliday ? "#EA580C" : isWeekend ? "#2563EB" : "var(--text-main)";
               const s = shiftByDay[day];
+              const isConfirmed = s?.status === "confirmed";
               const label = !s
                 ? "OFF"
                 : s.startTime === "00:00" && s.endTime === "00:00"
@@ -528,23 +533,43 @@ export default function StaffConfirmedShiftsPage() {
                     {day}
                   </div>
                   {label && (
-                    <div
-                      style={{
-                        backgroundColor:
-                          label === "OFF" ? "#F3F4F6" : "#EEF2FF",
-                        color: label === "OFF" ? "#4B5563" : "#4F46E5",
-                        padding: "0.15rem 0.2rem",
-                        borderRadius: "4px",
-                        fontSize: "0.65rem",
-                        textAlign: "center",
-                        fontWeight: 500,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {label === "OFF" ? "OFF" : label}
-                    </div>
+                    <>
+                      <div
+                        style={{
+                          backgroundColor:
+                            isConfirmed
+                              ? (label === "OFF" ? "#F3F4F6" : "#D1FAE5")
+                              : (label === "OFF" ? "#FEF3C7" : "#FEF3C7"),
+                          color:
+                            isConfirmed
+                              ? (label === "OFF" ? "#4B5563" : "#065F46")
+                              : (label === "OFF" ? "#92400E" : "#92400E"),
+                          padding: "0.15rem 0.2rem",
+                          borderRadius: "4px",
+                          fontSize: "0.65rem",
+                          textAlign: "center",
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {label === "OFF" ? "OFF" : label}
+                      </div>
+                      {s && !isConfirmed && (
+                        <div
+                          style={{
+                            marginTop: "0.1rem",
+                            fontSize: "0.6rem",
+                            color: "#B45309",
+                            fontWeight: 600,
+                            textAlign: "center",
+                          }}
+                        >
+                          未確定
+                        </div>
+                      )}
+                    </>
                   )}
                   {pendingReq && (
                     <div
