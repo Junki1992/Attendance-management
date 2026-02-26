@@ -332,7 +332,7 @@ export default function StaffConfirmedShiftsPage() {
                   )}
 
                   <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                    {!pendingReq && (
+                    {!pendingReq && s?.status === "confirmed" && (
                       <button className="btn btn-outline" onClick={openChangeRequestForm}>
                         変更申請
                       </button>
@@ -410,7 +410,6 @@ export default function StaffConfirmedShiftsPage() {
                 value={modalReason}
                 onChange={(e) => setModalReason(e.target.value)}
                 rows={3}
-                placeholder="例: 用事が入ったため"
                 required
                 style={{ width: "100%", padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", resize: "vertical" }}
               />
