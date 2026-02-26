@@ -86,10 +86,18 @@ export default function StaffConfirmedShiftsPage() {
   }, [user, year, month]);
 
   const shiftByDay: Record<number, Shift> = {};
+  const confirmedByDay: Record<number, boolean> = {};
+  const submittedByDay: Record<number, boolean> = {};
   shifts.forEach((s) => {
     const d = parseInt(s.date.split("-")[2], 10);
     shiftByDay[d] = s;
+    if (s.status === "confirmed") confirmedByDay[d] = true;
+    if (s.status === "submitted") submittedByDay[d] = true;
   });
+
+  const firstBlockConfirmed = Array.from({ length: Math.min(15, lastDay) }, (_, i) => i + 1).some((d) => confirmedByDay[d]);
+  const secondBlockConfirmed = Array.from({ length: Math.max(0, lastDay - 15) }, (_, i) => i + 16).some((d) => confirmedByDay[d]);
+  const hasSubmittedInSecondBlock = Array.from({ length: Math.max(0, lastDay - 15) }, (_, i) => i + 16).some((d) => submittedByDay[d]);
 
   /** 確定分のみの勤務合計・給与（未確定は含めない） */
   const confirmedShifts = shifts.filter((s) => s.status === "confirmed");
@@ -497,7 +505,11 @@ export default function StaffConfirmedShiftsPage() {
               const cellBg = isHoliday ? "rgba(254, 215, 170, 0.8)" : isWeekend ? "rgba(191, 219, 254, 0.8)" : "var(--surface)";
               const dayColor = isHoliday ? "#EA580C" : isWeekend ? "#2563EB" : "var(--text-main)";
               const s = shiftByDay[day];
-              const isConfirmed = s?.status === "confirmed";
+              const hasDoc = !!s;
+              const effectiveConfirmed =
+                (s?.status === "confirmed") ||
+                (day <= 15 && firstBlockConfirmed) ||
+                (day >= 16 && secondBlockConfirmed);
               const label = !s
                 ? "OFF"
                 : s.startTime === "00:00" && s.endTime === "00:00"
@@ -505,6 +517,12 @@ export default function StaffConfirmedShiftsPage() {
                   : `${s.startTime} - ${s.endTime}${getShiftWorkTypeLabel(s) !== "出社" ? ` ${getShiftWorkTypeLabel(s)}` : ""}`;
 
               const pendingReq = pendingRequestByDay[day];
+              const statusLabel =
+                !effectiveConfirmed &&
+                (hasDoc ? s?.status === "submitted" : day >= 16 && hasSubmittedInSecondBlock)
+                  ? "未確定"
+                  : null;
+
               return (
                 <div
                   key={day}
@@ -536,11 +554,11 @@ export default function StaffConfirmedShiftsPage() {
                       <div
                         style={{
                           backgroundColor:
-                            isConfirmed
+                            effectiveConfirmed
                               ? (label === "OFF" ? "#F3F4F6" : "#D1FAE5")
                               : (label === "OFF" ? "#FEF3C7" : "#FEF3C7"),
                           color:
-                            isConfirmed
+                            effectiveConfirmed
                               ? (label === "OFF" ? "#4B5563" : "#065F46")
                               : (label === "OFF" ? "#92400E" : "#92400E"),
                           padding: "0.15rem 0.2rem",
@@ -555,7 +573,7 @@ export default function StaffConfirmedShiftsPage() {
                       >
                         {label === "OFF" ? "OFF" : label}
                       </div>
-                      {s && !isConfirmed && (
+                      {statusLabel && (
                         <div
                           style={{
                             marginTop: "0.1rem",
@@ -565,7 +583,7 @@ export default function StaffConfirmedShiftsPage() {
                             textAlign: "center",
                           }}
                         >
-                          未確定
+                          {statusLabel}
                         </div>
                       )}
                     </>

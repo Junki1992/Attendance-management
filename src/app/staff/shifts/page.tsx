@@ -650,7 +650,7 @@ export default function ShiftCalendar() {
                                 <>
                                     <div style={{ marginBottom: "1rem" }}>
                                         <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-                                            {isConfirmed ? "確定シフト" : submittedByDay[detailModalDay] ? "提出シフト" : "下書き"}
+                                            {isConfirmed ? "確定シフト" : submittedByDay[detailModalDay] ? "提出済みシフト" : "下書き"}
                                         </div>
                                         <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                                             {isOff ? "OFF" : label.replace(" - ", " ～ ")}
@@ -892,8 +892,18 @@ export default function ShiftCalendar() {
                                 {(() => {
                                     const displayLabel = shifts[day] ?? (monthIsConfirmed ? "OFF" : null);
                                     if (!displayLabel) return null;
-                                    /** 月確定時はドキュメントのない日（OFFフォールバック）も確定扱い */
-                                    const effectiveConfirmed = isConfirmed || (monthIsConfirmed && shifts[day] === undefined);
+                                    const hasDoc = shifts[day] !== undefined;
+                                    const firstBlockConfirmed = Array.from({ length: Math.min(15, daysInMonth) }, (_, i) => i + 1).some((d) => confirmedByDay[d]);
+                                    const secondBlockConfirmed = Array.from({ length: Math.max(0, daysInMonth - 15) }, (_, i) => i + 16).some((d) => confirmedByDay[d]);
+                                    const hasSubmittedInSecondBlock = Array.from({ length: Math.max(0, daysInMonth - 15) }, (_, i) => i + 16).some((d) => submittedByDay[d]);
+                                    const statusLabel = hasDoc
+                                        ? (isConfirmed ? " 確定" : submittedByDay[day] ? " 提出済み" : " 下書き")
+                                        : (day <= 15 && firstBlockConfirmed) || (day >= 16 && secondBlockConfirmed)
+                                            ? " 確定"
+                                            : day >= 16 && !secondBlockConfirmed && hasSubmittedInSecondBlock
+                                                ? " 提出済み"
+                                                : "";
+                                    const effectiveConfirmed = hasDoc ? isConfirmed : (day <= 15 && firstBlockConfirmed) || (day >= 16 && secondBlockConfirmed);
                                     return (
                                         <div
                                             style={{
@@ -910,7 +920,7 @@ export default function ShiftCalendar() {
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {formatShiftLabel(displayLabel)}{(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}{effectiveConfirmed ? " 確定" : submittedByDay[day] ? " 提出" : " 下書き"}
+                                            {formatShiftLabel(displayLabel)}{(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}{statusLabel}
                                         </div>
                                     );
                                 })()}
