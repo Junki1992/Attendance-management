@@ -6,6 +6,7 @@ import Avatar from "@/components/Avatar";
 import { getAllStaff, StaffItem } from "@/services/userService";
 import { useAuth } from "@/context/AuthContext";
 import { subscribeNotifications } from "@/services/notificationService";
+import { subscribePresence } from "@/services/presenceService";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -15,11 +16,18 @@ export default function AdminChatPage() {
     const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
     const [isMobile, setIsMobile] = useState(false);
     const [notifications, setNotifications] = useState<{ type: string; read: boolean; senderId?: string }[]>([]);
+    const [onlineStaffIds, setOnlineStaffIds] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         if (user?.role !== "admin") return;
         getAllStaff().then(setStaffList);
     }, [user?.role]);
+
+    useEffect(() => {
+        if (user?.role !== "admin" || staffList.length === 0) return;
+        const staffIds = staffList.map((s) => s.id).filter(Boolean);
+        return subscribePresence(staffIds, setOnlineStaffIds);
+    }, [user?.role, staffList]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -100,7 +108,25 @@ export default function AdminChatPage() {
                             transition: "background-color 0.15s ease",
                         }}
                     >
-                        <Avatar photoURL={staff.photoURL} name={staff.name} size="sm" />
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                            <Avatar photoURL={staff.photoURL} name={staff.name} size="sm" />
+                            {onlineStaffIds[staff.id] && (
+                                <span
+                                    title="オンライン"
+                                    style={{
+                                        position: "absolute",
+                                        bottom: 0,
+                                        right: 0,
+                                        width: "10px",
+                                        height: "10px",
+                                        borderRadius: "50%",
+                                        backgroundColor: "#22c55e",
+                                        border: "2px solid var(--surface)",
+                                    }}
+                                    aria-label="オンライン"
+                                />
+                            )}
+                        </div>
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {staff.name}
                         </span>

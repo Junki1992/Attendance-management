@@ -121,6 +121,13 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null && isAdmin();
     }
     
+    // presence: オンライン状態（lastActiveAt）。スタッフがハートビートで更新、管理者がチャット一覧で参照
+    match /presence/{userId} {
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create, update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
     // shiftChangeRequests コレクション
     match /shiftChangeRequests/{requestId} {
       allow read: if request.auth != null;

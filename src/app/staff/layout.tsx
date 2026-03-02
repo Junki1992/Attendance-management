@@ -8,6 +8,7 @@ import NotificationList from "@/components/NotificationList";
 import Avatar from "@/components/Avatar";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
 import { subscribeNotifications, ensureChatworkIdReminderNotification } from "@/services/notificationService";
+import { updatePresence } from "@/services/presenceService";
 
 export default function StaffLayout({
     children,
@@ -56,6 +57,13 @@ export default function StaffLayout({
             ensureChatworkIdReminderNotification(user.uid).catch(() => {});
         }
     }, [user?.uid, user?.role, user?.chatworkAccountId]);
+
+    useEffect(() => {
+        if (!user || user.role !== "staff") return;
+        updatePresence(user.uid).catch(() => {});
+        const interval = setInterval(() => updatePresence(user.uid).catch(() => {}), 30000);
+        return () => clearInterval(interval);
+    }, [user?.uid, user?.role]);
 
     useEffect(() => {
         if (pathname.replace(/\/$/, "") === '/staff/chat') {
