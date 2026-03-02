@@ -89,7 +89,7 @@ async function createChatworkPrivateRoom(apiToken: string, accountId: string): P
     },
     body: new URLSearchParams({
       name: "翌日出勤通知",
-      member_admin_ids: accountId.trim(),
+      members_admin_ids: accountId.trim(),
     }).toString(),
   });
   if (!res.ok) {

@@ -132,7 +132,7 @@ async function main() {
         const createRes = await fetch("https://api.chatwork.com/v2/rooms", {
           method: "POST",
           headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ name: "翌日出勤通知", member_admin_ids: dest.id }).toString(),
+          body: new URLSearchParams({ name: "翌日出勤通知", members_admin_ids: dest.id }).toString(),
         });
         if (!createRes.ok) {
           const t = await createRes.text();
