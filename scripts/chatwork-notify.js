@@ -129,10 +129,22 @@ async function main() {
     let targetRoomId;
     if (dest.type === "personal") {
       try {
+        // 自分を必ず members_admin_ids に含める（Chatwork API の要件）
+        const meRes = await fetch("https://api.chatwork.com/v2/me", {
+          headers: { "X-ChatworkToken": token },
+        });
+        if (!meRes.ok) throw new Error("自分のアカウント情報を取得できませんでした");
+        const meJson = await meRes.json();
+        const myAccountId = meJson?.account_id != null ? String(meJson.account_id) : null;
+        if (!myAccountId) throw new Error("account_id を取得できませんでした");
+        const bodyParams = new URLSearchParams();
+        bodyParams.set("name", "翌日出勤通知");
+        bodyParams.set("members_admin_ids", dest.id);
+        bodyParams.set("members_member_ids", myAccountId);
         const createRes = await fetch("https://api.chatwork.com/v2/rooms", {
           method: "POST",
           headers: { "X-ChatworkToken": token, "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ name: "翌日出勤通知", members_admin_ids: dest.id }).toString(),
+          body: bodyParams.toString(),
         });
         if (!createRes.ok) {
           const t = await createRes.text();
