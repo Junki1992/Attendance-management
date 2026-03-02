@@ -82,9 +82,10 @@ export default function AdminLayout({
                         <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem', borderRadius: '4px', backgroundColor: 'rgba(255,255,255,0.2)', fontWeight: 600, flexShrink: 0 }}>管理者</span>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, minWidth: 0, padding: '0.25rem 0.5rem', borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.15)' }} title="ログイン中">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0, minWidth: 0, padding: '0.25rem 0.5rem', borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.2)' }} title={`ログイン中: ${user.name}`}>
                             <Avatar photoURL={user.photoURL} name={user.name} size="sm" />
-                            <span style={{ fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80px' }}>{user.name}</span>
+                            <span style={{ fontSize: '0.65rem', opacity: 0.9 }}>ログイン中</span>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70px' }}>{user.name}</span>
                         </div>
                         <div style={{ position: 'relative' }}>
                             <button 
@@ -210,8 +211,9 @@ export default function AdminLayout({
                                 )}
                             </Link>
                             <Link href="/admin/settings" style={{ textDecoration: 'none', color: path === '/admin/settings' ? '#fff' : '#e0e7ff', fontSize: '0.9rem', whiteSpace: 'nowrap', fontWeight: 600, padding: '0.25rem 0', borderBottom: path === '/admin/settings' ? '2px solid #fff' : '2px solid transparent' }}>設定</Link>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.75rem', marginLeft: '0.5rem', borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)' }} title="ログイン中">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.75rem', marginLeft: '0.5rem', borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.35)' }} title={`ログイン中: ${user.name}`}>
                                 <Avatar photoURL={user.photoURL} name={user.name} size="sm" />
+                                <span style={{ fontSize: '0.7rem', opacity: 0.9 }}>ログイン中</span>
                                 <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{user.name}</span>
                             </div>
                             <button 
