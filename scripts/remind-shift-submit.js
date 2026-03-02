@@ -2,6 +2,8 @@
  * シフト提出催促（GitHub Actions で毎日 09:00 JST に実行）
  * 設定（settings/app）の firstBlockDeadlineDay / secondBlockDeadlineDay および deadlineOverrides に従い、
  * 締切日当日に未提出者へ通知を送信する。
+ * - アプリ内通知（Firestore notifications）
+ * - Chatwork グルチャ（通知先のルームに To メンション付きで送信）
  *
  * 実行: node scripts/remind-shift-submit.js
  * 環境変数: GOOGLE_APPLICATION_CREDENTIALS_JSON (Firebase サービスアカウントの JSON 文字列)
@@ -102,10 +104,38 @@ async function main() {
   }
 
   const usersSnap = await db.collection("users").where("role", "==", "staff").get();
-  const staff = usersSnap.docs.map((d) => ({ id: d.id, name: (d.data() && d.data().name) ? d.data().name : d.id }));
+  const staff = usersSnap.docs.map((d) => {
+    const data = d.data() || {};
+    const raw = data.chatworkAccountId;
+    const chatworkAccountId = raw != null ? String(raw).trim() : "";
+    return {
+      id: d.id,
+      name: data.name || d.id,
+      chatworkAccountId: chatworkAccountId || undefined,
+    };
+  });
   if (staff.length === 0) {
     console.log("[remind-shift-submit] no staff found");
     process.exit(0);
+  }
+
+  let chatworkToken = null;
+  const chatworkRooms = [];
+  const chatworkSnap = await db.doc("settings/chatwork").get();
+  if (chatworkSnap.exists) {
+    const cw = chatworkSnap.data();
+    chatworkToken = process.env.CHATWORK_API_TOKEN || cw?.apiToken?.trim();
+    const rawDests = cw?.notificationDestinations;
+    if (Array.isArray(rawDests)) {
+      rawDests.forEach((x) => {
+        if (x && x.type === "room" && x.id && String(x.id).trim()) {
+          chatworkRooms.push(String(x.id).trim());
+        }
+      });
+    }
+    if (chatworkRooms.length === 0 && cw?.roomId?.trim()) {
+      chatworkRooms.push(cw.roomId.trim());
+    }
   }
 
   let totalCreated = 0;
@@ -124,29 +154,53 @@ async function main() {
       }
     });
 
+    const unsubmitted = staff.filter((s) => !submitted.has(s.id));
     const promises = [];
     let createdCount = 0;
-    staff.forEach((s) => {
-      if (!submitted.has(s.id)) {
-        promises.push(
-          db
-            .collection("notifications")
-            .add({
-              userId: s.id,
-              type: "remind_submit",
-              message,
-              read: false,
-              createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            })
-            .then(() => {
-              createdCount += 1;
-            })
-            .catch((e) => console.error("[remind-shift-submit] notif add failed", s.id, e))
-        );
-      }
+    unsubmitted.forEach((s) => {
+      promises.push(
+        db
+          .collection("notifications")
+          .add({
+            userId: s.id,
+            type: "remind_submit",
+            message,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+          .then(() => {
+            createdCount += 1;
+          })
+          .catch((e) => console.error("[remind-shift-submit] notif add failed", s.id, e))
+      );
     });
     await Promise.all(promises);
     totalCreated += createdCount;
+
+    if (unsubmitted.length > 0 && chatworkToken && chatworkRooms.length > 0) {
+      const mentions = unsubmitted
+        .filter((s) => s.chatworkAccountId)
+        .map((s) => `[To:${s.chatworkAccountId}]`)
+        .join("");
+      const body = mentions ? `${mentions}\n【シフト提出催促】${message}` : `【シフト提出催促】${message}`;
+      for (const roomId of chatworkRooms) {
+        try {
+          const res = await fetch(`https://api.chatwork.com/v2/rooms/${roomId}/messages`, {
+            method: "POST",
+            headers: { "X-ChatworkToken": chatworkToken, "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({ body }).toString(),
+          });
+          if (!res.ok) {
+            console.error("[remind-shift-submit] Chatwork send failed", roomId, res.status, await res.text());
+          } else {
+            console.log("[remind-shift-submit] Chatwork sent to room", roomId);
+          }
+        } catch (e) {
+          console.error("[remind-shift-submit] Chatwork error", roomId, e);
+        }
+      }
+    }
+
     console.log("[remind-shift-submit] block done", { blockLabel, startStr, endStr, createdCount });
   }
   console.log("[remind-shift-submit] finished", { totalCreated });
