@@ -156,8 +156,13 @@ async function main() {
         if (!firstRoomIdForError) firstRoomIdForError = targetRoomId;
         console.log("[chatwork-notify] Created 1-on-1 room:", targetRoomId);
       } catch (e) {
+        const msg = e?.message || String(e);
         console.error("[chatwork-notify] Create room error for", dest.id, e);
-        lastError = e?.message || String(e);
+        if (msg.includes("contact list")) {
+          lastError = `${msg} → アカウントID ${dest.id} をChatworkの連絡先に追加してください`;
+        } else {
+          lastError = msg;
+        }
         continue;
       }
     } else {

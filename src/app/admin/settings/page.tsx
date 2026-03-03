@@ -7,6 +7,7 @@ import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, u
 import { deleteAllUserData } from "@/services/userDeletionService";
 import { getWageChangeLog, recordWageChange, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
+import { subscribePresence } from "@/services/presenceService";
 import { useAuth } from "@/context/AuthContext";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import ProfileImageUpload from "@/components/ProfileImageUpload";
@@ -44,6 +45,7 @@ export default function AdminSettingsPage() {
   const [secondBlockDeadlineTime, setSecondBlockDeadlineTime] = useState("23:59");
   const [deadlineOverrides, setDeadlineOverrides] = useState<AppSettings["deadlineOverrides"]>({});
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [onlineStaffIds, setOnlineStaffIds] = useState<Record<string, boolean>>({});
   const overrideYearMonthOptions = (() => {
     const now = new Date();
     const options: { value: string; label: string }[] = [];
@@ -95,6 +97,12 @@ export default function AdminSettingsPage() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (currentUser?.role !== "admin" || users.length === 0) return;
+    const staffIds = users.filter((u) => u.role === "staff").map((u) => u.uid).filter(Boolean);
+    return subscribePresence(staffIds, setOnlineStaffIds);
+  }, [currentUser?.role, users]);
 
   const openDeleteConfirm = (uid: string, name: string, role: "admin" | "staff") => {
     if (role === "admin") {
@@ -709,7 +717,25 @@ export default function AdminSettingsPage() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
-                  <Avatar photoURL={user.photoURL} name={user.name} size="md" />
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <Avatar photoURL={user.photoURL} name={user.name} size="md" />
+                    {user.role === "staff" && onlineStaffIds[user.uid] && (
+                      <span
+                        title="オンライン"
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: "10px",
+                          height: "10px",
+                          borderRadius: "50%",
+                          backgroundColor: "#22c55e",
+                          border: "2px solid var(--surface)",
+                        }}
+                        aria-label="オンライン"
+                      />
+                    )}
+                  </div>
                   <div style={{ minWidth: 0, overflow: "hidden" }}>
                     <div title={user.name} style={{ fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
                     <div title={user.email} style={{ fontSize: "0.875rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
