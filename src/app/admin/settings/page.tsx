@@ -25,8 +25,7 @@ export default function AdminSettingsPage() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [chatworkToken, setChatworkToken] = useState("");
   const [chatworkDestinations, setChatworkDestinations] = useState<NotificationDestination[]>([]);
-  const [chatworkNotifyHour, setChatworkNotifyHour] = useState(21);
-  const chatworkNotifyHourRef = useRef(21);
+  const [chatworkNotifyTime, setChatworkNotifyTime] = useState("21:00");
   const [chatworkEditing, setChatworkEditing] = useState(false);
   const [chatworkSaving, setChatworkSaving] = useState(false);
   const [chatworkSending, setChatworkSending] = useState(false);
@@ -76,10 +75,10 @@ export default function AdminSettingsPage() {
     getChatworkConfig().then((c) => {
       if (c) {
         const hour = c.notifyHour ?? 21;
+        const minute = c.notifyMinute ?? 0;
         setChatworkToken(c.apiToken);
         setChatworkDestinations(c.notificationDestinations?.length ? [...c.notificationDestinations] : []);
-        setChatworkNotifyHour(hour);
-        chatworkNotifyHourRef.current = hour;
+        setChatworkNotifyTime(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
       }
     }).catch(() => {});
     if (process.env.NODE_ENV !== "production") {
@@ -302,21 +301,14 @@ export default function AdminSettingsPage() {
             <div>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>自動通知時刻（日本時間）</label>
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                GitHub Actions が毎時実行され、この時刻に通知を送信します
+                GitHub Actions が5分ごとに実行され、この時刻に通知を送信します（5分単位で指定してください）
               </p>
-              <select
-                value={chatworkNotifyHour}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setChatworkNotifyHour(v);
-                  chatworkNotifyHourRef.current = v;
-                }}
+              <input
+                type="time"
+                value={chatworkNotifyTime}
+                onChange={(e) => setChatworkNotifyTime(e.target.value || "21:00")}
                 style={{ padding: "0.5rem", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", fontSize: "1rem" }}
-              >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
-                ))}
-              </select>
+              />
             </div>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               <button
@@ -326,10 +318,12 @@ export default function AdminSettingsPage() {
                 onClick={async () => {
                   setChatworkSaving(true);
                   try {
+                    const [h, m] = chatworkNotifyTime.split(":").map((x) => parseInt(x, 10) || 0);
                     await saveChatworkConfig({
                       apiToken: chatworkToken.trim(),
                       notificationDestinations: chatworkDestinations.filter((d) => d.id.trim()),
-                      notifyHour: chatworkNotifyHourRef.current,
+                      notifyHour: Math.min(23, Math.max(0, h)),
+                      notifyMinute: Math.min(59, Math.max(0, m)),
                     });
                     setChatworkEditing(false);
                     setChatworkDestinations(chatworkDestinations.filter((d) => d.id.trim()));
@@ -379,15 +373,15 @@ export default function AdminSettingsPage() {
             </div>
             <div>
               <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>自動通知時刻: </span>
-              <span>{String(chatworkNotifyHour).padStart(2, "0")}:00（日本時間）</span>
+              <span>{chatworkNotifyTime}（日本時間）</span>
             </div>
             {process.env.NODE_ENV !== "production" && chatworkRaw != null && (
               <div style={{ fontSize: "0.75rem", padding: "0.5rem", backgroundColor: "var(--surface-hover)", borderRadius: "var(--radius-md)", fontFamily: "monospace" }}>
                 <div style={{ fontWeight: 600, marginBottom: "0.25rem", color: "var(--text-muted)" }}>Firestore 生データ（chatwork-notify.js が参照する settings/chatwork）</div>
                 <div>notificationDestinations: {JSON.stringify(chatworkRaw.notificationDestinations)}</div>
-                <div>notifyHour: {JSON.stringify(chatworkRaw.notifyHour)} (型: {typeof chatworkRaw.notifyHour})</div>
+                <div>notifyHour: {JSON.stringify(chatworkRaw.notifyHour)} notifyMinute: {JSON.stringify(chatworkRaw.notifyMinute)}</div>
                 <div style={{ marginTop: "0.25rem", color: "var(--text-muted)" }}>
-                  → GitHub Actions は日本時間 {String(Number(chatworkRaw.notifyHour) >= 0 && Number(chatworkRaw.notifyHour) <= 23 ? Number(chatworkRaw.notifyHour) : 21).toString().padStart(2, "0")}:00 に通知送信
+                  → GitHub Actions は日本時間 {String(Number(chatworkRaw.notifyHour) >= 0 && Number(chatworkRaw.notifyHour) <= 23 ? Number(chatworkRaw.notifyHour) : 21).toString().padStart(2, "0")}:{String(Number(chatworkRaw.notifyMinute) >= 0 && Number(chatworkRaw.notifyMinute) <= 59 ? Number(chatworkRaw.notifyMinute) : 0).toString().padStart(2, "0")} に通知送信
                 </div>
               </div>
             )}

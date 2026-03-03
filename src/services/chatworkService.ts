@@ -14,6 +14,8 @@ export interface ChatworkConfig {
   notificationDestinations: NotificationDestination[];
   /** 自動通知時刻（0-23、日本時間）デフォルト 21 */
   notifyHour?: number;
+  /** 自動通知の分（0-59）デフォルト 0 */
+  notifyMinute?: number;
   /** @deprecated 後方互換。notificationDestinations に移行 */
   roomId?: string;
   /** @deprecated 後方互換。notificationDestinations に移行 */
@@ -22,6 +24,7 @@ export interface ChatworkConfig {
 
 const CHATWORK_CONFIG_DOC = "chatwork";
 const DEFAULT_NOTIFY_HOUR = 21;
+const DEFAULT_NOTIFY_MINUTE = 0;
 
 /** Firestore の生データを取得（chatwork-notify.js が読むのと同じドキュメント） */
 export const getChatworkConfigRaw = async (): Promise<Record<string, unknown> | null> => {
@@ -57,10 +60,14 @@ export const getChatworkConfig = async (): Promise<ChatworkConfig | null> => {
   const rawHour = d?.notifyHour;
   const notifyHour =
     typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23 ? rawHour : DEFAULT_NOTIFY_HOUR;
+  const rawMin = d?.notifyMinute;
+  const notifyMinute =
+    typeof rawMin === "number" && rawMin >= 0 && rawMin <= 59 ? Math.floor(rawMin) : DEFAULT_NOTIFY_MINUTE;
   return {
     apiToken: d.apiToken.trim(),
     notificationDestinations,
     notifyHour,
+    notifyMinute,
     ...(d?.roomId != null && { roomId: String(d.roomId).trim() }),
     ...(d?.personalAccountId != null && { personalAccountId: String(d.personalAccountId).trim() }),
   };
@@ -68,13 +75,16 @@ export const getChatworkConfig = async (): Promise<ChatworkConfig | null> => {
 
 export const saveChatworkConfig = async (config: ChatworkConfig): Promise<void> => {
   const ref = doc(db, "settings", CHATWORK_CONFIG_DOC);
-  const { apiToken, notificationDestinations, notifyHour } = config;
+  const { apiToken, notificationDestinations, notifyHour, notifyMinute } = config;
   const data: Record<string, unknown> = {
     apiToken,
     notificationDestinations: (notificationDestinations || []).filter((d) => d.id.trim()).map((d) => ({ type: d.type, id: d.id.trim() })),
   };
   if (typeof notifyHour === "number" && notifyHour >= 0 && notifyHour <= 23) {
     data.notifyHour = notifyHour;
+  }
+  if (typeof notifyMinute === "number" && notifyMinute >= 0 && notifyMinute <= 59) {
+    data.notifyMinute = notifyMinute;
   }
   await setDoc(ref, data, { merge: true });
 };

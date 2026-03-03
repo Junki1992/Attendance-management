@@ -1,5 +1,5 @@
 /**
- * 翌日出勤を Chatwork に送信（GitHub Actions 等で毎日 21:00 に実行）
+ * 翌日出勤を Chatwork に送信（GitHub Actions 等で設定時刻に実行）
  * 実行: node scripts/chatwork-notify.js
  * 環境変数: GOOGLE_APPLICATION_CREDENTIALS_JSON (Firebase サービスアカウントの JSON 文字列)
  *          CHATWORK_API_TOKEN, CHATWORK_ROOM_ID（未設定時は Firestore settings/chatwork から取得）
@@ -74,17 +74,25 @@ async function main() {
 
   const forceSend = process.env.CHATWORK_NOTIFY_FORCE === "1";
   if (!forceSend) {
-    const raw = cfgData?.notifyHour;
+    const rawHour = cfgData?.notifyHour;
     const notifyHour =
-      typeof raw === "number" && raw >= 0 && raw <= 23
-        ? Math.floor(raw)
-        : typeof raw === "string" && /^\d+$/.test(raw)
-          ? Math.min(23, Math.max(0, parseInt(raw, 10)))
+      typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23
+        ? Math.floor(rawHour)
+        : typeof rawHour === "string" && /^\d+$/.test(rawHour)
+          ? Math.min(23, Math.max(0, parseInt(rawHour, 10)))
           : 21;
+    const rawMin = cfgData?.notifyMinute;
+    const notifyMinute =
+      typeof rawMin === "number" && rawMin >= 0 && rawMin <= 59
+        ? Math.floor(rawMin)
+        : typeof rawMin === "string" && /^\d+$/.test(rawMin)
+          ? Math.min(59, Math.max(0, parseInt(rawMin, 10)))
+          : 0;
     const now = new Date();
     const jstHour = (now.getUTCHours() + 9) % 24;
-    if (jstHour !== notifyHour) {
-      console.log("[chatwork-notify] Skip: JST", jstHour, "!= configured", notifyHour, "(UTC", now.getUTCHours() + ":00)");
+    const jstMinute = now.getUTCMinutes();
+    if (jstHour !== notifyHour || jstMinute !== notifyMinute) {
+      console.log("[chatwork-notify] Skip: JST", jstHour + ":" + String(jstMinute).padStart(2, "0"), "!= configured", notifyHour + ":" + String(notifyMinute).padStart(2, "0"));
       process.exit(0);
     }
   }
