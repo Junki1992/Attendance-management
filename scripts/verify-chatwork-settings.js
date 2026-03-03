@@ -70,19 +70,26 @@ async function main() {
   const now = new Date();
   const jstHour = (now.getUTCHours() + 9) % 24;
   const jstMinute = now.getUTCMinutes();
+  const configuredMin = notifyHour * 60 + notifyMinute;
+  const currentMin = jstHour * 60 + jstMinute;
+  const windowEnd = (configuredMin + 30) % 1440;
+  const inWindow = configuredMin + 30 <= 1440
+    ? currentMin >= configuredMin && currentMin < configuredMin + 30
+    : currentMin >= configuredMin || currentMin < windowEnd;
+  const lastSent = data?.lastNotificationDate;
 
   console.log("=== Chatwork 設定（Firestore settings/chatwork）===");
   console.log("apiToken:    ", data?.apiToken ? "***設定済み***" : "(未設定)");
   console.log("roomId:      ", data?.roomId || "(未設定)");
   console.log("notifyHour:  ", rawHour, "notifyMinute:", rawMin, `→ ${String(notifyHour).padStart(2, "0")}:${String(notifyMinute).padStart(2, "0")}（日本時間）`);
+  console.log("lastNotificationDate:", lastSent || "(未送信)");
   console.log("");
   console.log("=== 通知判定（chatwork-notify.js と同じロジック）===");
   console.log("現在の日本時間: ", jstHour + ":" + String(jstMinute).padStart(2, "0"));
-  console.log("設定された時刻: ", notifyHour + ":" + String(notifyMinute).padStart(2, "0"));
-  console.log("この時刻に通知送信: ", jstHour === notifyHour && jstMinute === notifyMinute ? "✅ はい" : "❌ いいえ（スキップ）");
+  console.log("設定された時刻: ", notifyHour + ":" + String(notifyMinute).padStart(2, "0"), "（30分の窓）");
+  console.log("窓内で送信可能: ", inWindow ? "✅ はい" : "❌ いいえ（スキップ）");
   console.log("");
-  console.log("GitHub Actions は毎分実行され、");
-  console.log(`日本時間 ${String(notifyHour).padStart(2, "0")}:${String(notifyMinute).padStart(2, "0")} のときのみ通知を送信します。`);
+  console.log("GitHub Actions は5分ごとに実行。設定時刻から30分以内なら送信（遅延対策）。");
 }
 
 main().catch((e) => {

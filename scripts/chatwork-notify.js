@@ -72,6 +72,10 @@ async function main() {
     process.exit(1);
   }
 
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+
   const forceSend = process.env.CHATWORK_NOTIFY_FORCE === "1";
   if (!forceSend) {
     const rawHour = cfgData?.notifyHour;
@@ -91,15 +95,22 @@ async function main() {
     const now = new Date();
     const jstHour = (now.getUTCHours() + 9) % 24;
     const jstMinute = now.getUTCMinutes();
-    if (jstHour !== notifyHour || jstMinute !== notifyMinute) {
-      console.log("[chatwork-notify] Skip: JST", jstHour + ":" + String(jstMinute).padStart(2, "0"), "!= configured", notifyHour + ":" + String(notifyMinute).padStart(2, "0"));
+    const configuredMin = notifyHour * 60 + notifyMinute;
+    const currentMin = jstHour * 60 + jstMinute;
+    const windowEnd = (configuredMin + 30) % 1440;
+    const inWindow = configuredMin + 30 <= 1440
+      ? currentMin >= configuredMin && currentMin < configuredMin + 30
+      : currentMin >= configuredMin || currentMin < windowEnd;
+    if (!inWindow) {
+      console.log("[chatwork-notify] Skip: JST", jstHour + ":" + String(jstMinute).padStart(2, "0"), "not in window", notifyHour + ":" + String(notifyMinute).padStart(2, "0"), "+30min");
+      process.exit(0);
+    }
+    const lastSent = cfgData?.lastNotificationDate;
+    if (lastSent === dateStr) {
+      console.log("[chatwork-notify] Skip: already sent for", dateStr);
       process.exit(0);
     }
   }
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
 
   console.log("[chatwork-notify] Sending for date:", dateStr, "destinations:", destinations.length);
   const shiftsSnap = await db.collection("shifts").where("date", "==", dateStr).where("status", "==", "confirmed").get();
@@ -192,6 +203,7 @@ async function main() {
     await sendErrorToChatwork(token, firstRoomIdForError, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, lastError);
   }
   if (lastError) process.exit(1);
+  await db.doc("settings/chatwork").set({ lastNotificationDate: dateStr }, { merge: true });
   console.log("[chatwork-notify] Sent OK:", dateStr, "entries:", entries.length);
 }
 

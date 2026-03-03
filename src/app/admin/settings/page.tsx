@@ -301,7 +301,7 @@ export default function AdminSettingsPage() {
             <div>
               <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem" }}>自動通知時刻（日本時間）</label>
               <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                GitHub Actions が5分ごとに実行され、この時刻に通知を送信します（5分単位で指定してください）
+                GitHub Actions が5分ごとに実行。設定時刻から30分以内に実行されれば送信（遅延対策）。5分単位で指定
               </p>
               <input
                 type="time"
