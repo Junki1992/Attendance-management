@@ -1199,7 +1199,7 @@ export default function AdminShiftGrid() {
               </thead>
               <tbody>
                 {confirmedNotifs
-                  .slice((confirmedNotifsPage - 1) * 20, confirmedNotifsPage * 20)
+                  .slice((confirmedNotifsPage - 1) * 10, confirmedNotifsPage * 10)
                   .map((n) => (
                   <tr key={n.id}>
                     <td style={{ padding: "0.5rem", border: "1px solid var(--border)" }}>
@@ -1218,7 +1218,7 @@ export default function AdminShiftGrid() {
               </tbody>
             </table>
             </div>
-            {confirmedNotifs.length > 20 && (
+            {confirmedNotifs.length > 10 && (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
                 <button
                   type="button"
@@ -1230,14 +1230,14 @@ export default function AdminShiftGrid() {
                   ‹ 前へ
                 </button>
                 <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-                  {confirmedNotifsPage} / {Math.ceil(confirmedNotifs.length / 20)}
+                  {confirmedNotifsPage} / {Math.ceil(confirmedNotifs.length / 10)}
                 </span>
                 <button
                   type="button"
                   className="btn btn-outline"
                   style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
-                  disabled={confirmedNotifsPage >= Math.ceil(confirmedNotifs.length / 20)}
-                  onClick={() => setConfirmedNotifsPage((p) => Math.min(Math.ceil(confirmedNotifs.length / 20), p + 1))}
+                  disabled={confirmedNotifsPage >= Math.ceil(confirmedNotifs.length / 10)}
+                  onClick={() => setConfirmedNotifsPage((p) => Math.min(Math.ceil(confirmedNotifs.length / 10), p + 1))}
                 >
                   次へ ›
                 </button>
