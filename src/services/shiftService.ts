@@ -255,6 +255,28 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
     return true;
 };
 
+/** 指定ユーザーのその月の確定済みシフトを取り消す（submitted に戻す）。バイト側で再編集可能になる。確定済みが1件もなければ false */
+export const unconfirmShiftsForUser = async (
+  userId: string,
+  year: number,
+  month: number,
+  block: ConfirmBlock = "all"
+): Promise<boolean> => {
+  const shifts = await getAllShifts(year, month);
+  const userShifts = shifts.filter((s) => s.userId === userId && s.status === "confirmed");
+  const filtered = block === "all" ? userShifts : userShifts.filter((s) => isShiftInBlock(s.date, block));
+  if (filtered.length === 0) return false;
+
+  await Promise.all(
+    filtered.map((shift) => {
+      const docId = `${shift.userId}_${shift.date}`;
+      const shiftRef = doc(db, "shifts", docId);
+      return setDoc(shiftRef, { status: "submitted", editedAfterConfirmed: false }, { merge: true });
+    })
+  );
+  return true;
+};
+
 /** 指定ユーザーのその月の提出済みシフトを却下する（draft に戻す）。提出済みが1件もなければ false */
 export const rejectShiftsForUser = async (userId: string, year: number, month: number): Promise<boolean> => {
     const shifts = await getAllShifts(year, month);

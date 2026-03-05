@@ -5,7 +5,7 @@ import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Times
 export interface Notification {
     id?: string;
     userId: string;
-    type: 'shift_confirmed' | 'shift_rejected' | 'remind_submit' | 'message' | 'shift_change_request' | 'shift_change_approved' | 'shift_change_rejected' | 'hourly_wage_changed' | 'shift_submitted' | 'deadline_changed' | 'chatwork_id_required';
+    type: 'shift_confirmed' | 'shift_rejected' | 'shift_unconfirmed' | 'remind_submit' | 'message' | 'shift_change_request' | 'shift_change_approved' | 'shift_change_rejected' | 'hourly_wage_changed' | 'shift_submitted' | 'deadline_changed' | 'chatwork_id_required';
     message: string;
     read: boolean;
     createdAt: any; // Timestamp

@@ -5,6 +5,7 @@ import {
   confirmShifts,
   confirmShiftsForUser,
   rejectShiftsForUser,
+  unconfirmShiftsForUser,
   saveShift,
   subscribeAllShifts,
   getUnsubmittedStaff,
@@ -103,10 +104,13 @@ export default function AdminShiftGrid() {
   const [confirmingSelected, setConfirmingSelected] = useState(false);
   const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [unconfirmingUserId, setUnconfirmingUserId] = useState<string | null>(null);
+  const [confirmModalUserId, setConfirmModalUserId] = useState<string | null>(null);
+  const [confirmModalBulk, setConfirmModalBulk] = useState<"selected" | "all" | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [reminding, setReminding] = useState(false);
   const [csvCopied, setCsvCopied] = useState(false);
-  const [confirmBlock, setConfirmBlock] = useState<ConfirmBlock>("all");
+  const [confirmBlock, setConfirmBlock] = useState<ConfirmBlock>("first");
   const [error, setError] = useState<string | null>(null);
   const [confirmedNotifs, setConfirmedNotifs] = useState<Notification[]>([]);
   const [notifUserIdToName, setNotifUserIdToName] = useState<Record<string, string>>({});
@@ -296,9 +300,8 @@ export default function AdminShiftGrid() {
   };
 
   const handleConfirm = async () => {
+    setConfirmModalBulk(null);
     const blockLabel = getConfirmBlockLabel(confirmBlock);
-    if (!confirm(`${year}年${month + 1}月の${blockLabel}のシフトを確定し、アルバイトへ通知を送りますか？`))
-      return;
     setConfirming(true);
     try {
       const affectedUserIds = await confirmShifts(year, month, confirmBlock);
@@ -327,6 +330,7 @@ export default function AdminShiftGrid() {
   };
 
   const handleConfirmOne = async (userId: string) => {
+    setConfirmModalUserId(null);
     setConfirmingUserId(userId);
     try {
       const hadEdited = shifts.some(
@@ -395,6 +399,37 @@ export default function AdminShiftGrid() {
     }
   };
 
+  const handleUnconfirm = async () => {
+    const uid = unconfirmingUserId;
+    if (!uid) return;
+    setConfirmingUserId(uid);
+    try {
+      const ok = await unconfirmShiftsForUser(uid, year, month, confirmBlock);
+      if (!ok) {
+        setUnconfirmingUserId(null);
+        setConfirmingUserId(null);
+        alert(`${getConfirmBlockLabel(confirmBlock)}に確定済みシフトがありません。`);
+        return;
+      }
+      const blockLabel = getConfirmBlockLabel(confirmBlock);
+      const message =
+        confirmBlock === "all"
+          ? `${month + 1}月のシフトの確定が取り消されました。内容を確認して再度提出してください。`
+          : confirmBlock === "first"
+            ? `${month + 1}月1～15日分のシフトの確定が取り消されました。内容を確認して再度提出してください。`
+            : `${month + 1}月16日～月末のシフトの確定が取り消されました。内容を確認して再度提出してください。`;
+      await createNotification(uid, "shift_unconfirmed", message);
+      setUnconfirmingUserId(null);
+      getMonthlyWorkSummary(year, month).then(setWorkSummary).catch(() => {});
+      alert(`${blockLabel}の確定を取り消しました。バイト側で再編集できます。`);
+    } catch (e) {
+      console.error(e);
+      alert("確定取り消しに失敗しました");
+    } finally {
+      setConfirmingUserId(null);
+    }
+  };
+
   /** 指定ユーザーが選択ブロック内にシフトを1件以上持つか */
   const hasShiftsInBlock = useCallback(
     (uid: string) => {
@@ -427,8 +462,8 @@ export default function AdminShiftGrid() {
       alert(`送信対象を選択してください（${hint}）。`);
       return;
     }
+    setConfirmModalBulk(null);
     const blockLabel = getConfirmBlockLabel(confirmBlock);
-    if (!confirm(`選択した ${ids.length} 名に${blockLabel}の確定通知を送りますか？`)) return;
     setConfirmingSelected(true);
     try {
       let sentCount = 0;
@@ -674,9 +709,9 @@ export default function AdminShiftGrid() {
                   fontSize: "0.875rem",
                 }}
               >
-                <option value="all">全月</option>
                 <option value="first">1～15日分</option>
                 <option value="second">16日～月末</option>
+                <option value="all">全月</option>
               </select>
             </label>
             <button
@@ -689,7 +724,17 @@ export default function AdminShiftGrid() {
             </button>
             <button
               className="btn btn-outline"
-              onClick={handleConfirmSelected}
+              onClick={() => {
+                const ids = Array.from(selectedUserIds).filter(
+                  (uid) => hasShiftsInMonth(uid) && !isBlockConfirmedForUser(uid) && hasUnconfirmedInBlock(uid)
+                );
+                if (ids.length === 0) {
+                  const hint = confirmBlock === "all" ? "シフトがあり、まだ確定していない人にチェックを入れてください" : `${getConfirmBlockLabel(confirmBlock)}に未確定シフトがある人にチェックを入れてください`;
+                  alert(`送信対象を選択してください（${hint}）。`);
+                  return;
+                }
+                setConfirmModalBulk("selected");
+              }}
               disabled={loading || confirming || confirmingSelected || selectedUserIds.size === 0}
               title={selectedUserIds.size === 0 ? `下の表で${getConfirmBlockLabel(confirmBlock)}を送りたい人にチェックを入れてください` : `選択した ${selectedUserIds.size} 名に${getConfirmBlockLabel(confirmBlock)}を送る`}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
@@ -698,7 +743,7 @@ export default function AdminShiftGrid() {
             </button>
             <button
               className="btn btn-primary"
-              onClick={handleConfirm}
+              onClick={() => hasShiftsToConfirm && setConfirmModalBulk("all")}
               disabled={loading || confirming || !hasShiftsToConfirm}
               title={!hasShiftsToConfirm ? `${getConfirmBlockLabel(confirmBlock)}は全員確定済みです` : undefined}
               style={isMobile ? { flex: 1, minWidth: "120px" } : undefined}
@@ -767,7 +812,21 @@ export default function AdminShiftGrid() {
                         <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }} title={`${getConfirmBlockLabel(confirmBlock)}にシフトがありません`}>—</p>
                       )}
                       {hasShiftsInMonth(user.id) && hasShiftsInBlock(user.id) && (isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id))) && (
-                        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 0.5rem 0" }}>{isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}</p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>{isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}</p>
+                          {isBlockConfirmedForUser(user.id) && !unconfirmingUserId && (
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                              disabled={!!confirmingUserId || !!rejectingUserId}
+                              onClick={() => setUnconfirmingUserId(user.id)}
+                              title="確定を取り消すとバイト側で再編集できます"
+                            >
+                              確定取り消し
+                            </button>
+                          )}
+                        </div>
                       )}
                       {hasShiftsInMonth(user.id) && hasShiftsInBlock(user.id) && !isBlockConfirmedForUser(user.id) && confirmingUserId !== user.id && !(confirmingSelected && selectedUserIds.has(user.id)) && !confirming && (
                         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
@@ -775,8 +834,8 @@ export default function AdminShiftGrid() {
                             type="button"
                             className="btn btn-outline"
                             style={{ fontSize: "0.8rem", padding: "0.35rem 0.6rem" }}
-                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
-                            onClick={() => handleConfirmOne(user.id)}
+                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId || !!unconfirmingUserId || !!confirmModalUserId || !!confirmModalBulk}
+                            onClick={() => setConfirmModalUserId(user.id)}
                           >
                             確定通知を送る
                           </button>
@@ -785,7 +844,7 @@ export default function AdminShiftGrid() {
                               type="button"
                               className="btn"
                               style={{ fontSize: "0.8rem", padding: "0.35rem 0.6rem", backgroundColor: "var(--destructive)", color: "white", border: "none" }}
-                              disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                              disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId || !!unconfirmingUserId || !!confirmModalUserId || !!confirmModalBulk}
                               onClick={() => { setRejectingUserId(user.id); setRejectComment(""); }}
                             >
                               却下
@@ -1042,8 +1101,22 @@ export default function AdminShiftGrid() {
                       ) : !hasShiftsInBlock(user.id) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title={`${getConfirmBlockLabel(confirmBlock)}にシフトがありません`}>—</span>
                       ) : isBlockConfirmedForUser(user.id) || confirmingUserId === user.id || (confirmingSelected && selectedUserIds.has(user.id)) || (confirming && !isBlockConfirmedForUser(user.id)) ? (
-                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title={isFullyConfirmed(user.id) ? "全月確定済みです" : `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです`}>
-                          {isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}
+                        <span style={{ display: "flex", gap: "0.35rem", justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
+                          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title={isFullyConfirmed(user.id) ? "全月確定済みです" : `${getConfirmBlockLabel(confirmBlock)}はすでに確定済みです`}>
+                            {isFullyConfirmed(user.id) ? "確定済み" : `${getConfirmBlockLabel(confirmBlock)}済`}
+                          </span>
+                          {isBlockConfirmedForUser(user.id) && !unconfirmingUserId && (
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              style={{ fontSize: "0.7rem", padding: "0.2rem 0.4rem" }}
+                              disabled={!!confirmingUserId || !!rejectingUserId}
+                              onClick={() => setUnconfirmingUserId(user.id)}
+                              title="確定を取り消すとバイト側で再編集できます"
+                            >
+                              取り消し
+                            </button>
+                          )}
                         </span>
                       ) : (
                         <span style={{ display: "flex", gap: "0.35rem", justifyContent: "center", flexWrap: "wrap" }}>
@@ -1051,8 +1124,8 @@ export default function AdminShiftGrid() {
                             type="button"
                             className="btn btn-outline"
                             style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
-                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
-                            onClick={() => handleConfirmOne(user.id)}
+                            disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId || !!unconfirmingUserId || !!confirmModalUserId || !!confirmModalBulk}
+                            onClick={() => setConfirmModalUserId(user.id)}
                             title={`${user.name}さんに確定通知を送る`}
                           >
                             {confirmingUserId === user.id ? "送信中..." : "送る"}
@@ -1062,7 +1135,7 @@ export default function AdminShiftGrid() {
                               type="button"
                               className="btn"
                               style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem", backgroundColor: "var(--destructive)", color: "white", border: "none" }}
-                              disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId}
+                              disabled={!!confirmingUserId || confirming || confirmingSelected || !!rejectingUserId || !!unconfirmingUserId || !!confirmModalUserId || !!confirmModalBulk}
                               onClick={() => { setRejectingUserId(user.id); setRejectComment(""); }}
                               title={`${user.name}さんの提出シフトを却下する（理由必須）`}
                             >
@@ -1200,6 +1273,168 @@ export default function AdminShiftGrid() {
                 onClick={handleRejectSubmit}
               >
                 {confirmingUserId === rejectingUserId ? "送信中..." : "却下して通知"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 確定確認モーダル */}
+      {confirmModalUserId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => { if (!confirmingUserId) setConfirmModalUserId(null); }}
+        >
+          <div
+            className="card"
+            style={{ minWidth: "320px", maxWidth: "90%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem", color: "var(--text-main)" }}>
+              確定通知を送る
+            </h3>
+            <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem", color: "var(--text-main)" }}>
+              <strong>確定範囲:</strong> {getConfirmBlockLabel(confirmBlock)}
+            </p>
+            <p style={{ fontSize: "0.95rem", marginBottom: "0.75rem", color: "var(--text-main)" }}>
+              {staffList.find((s) => s.id === confirmModalUserId)?.name ?? confirmModalUserId} さんに送信します。よろしいですか？
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={!!confirmingUserId}
+                onClick={() => setConfirmModalUserId(null)}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!!confirmingUserId}
+                onClick={() => confirmModalUserId && handleConfirmOne(confirmModalUserId)}
+              >
+                {confirmingUserId === confirmModalUserId ? "送信中..." : "確定する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 一括確定確認モーダル（選択して確定 / 全員確定） */}
+      {confirmModalBulk && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => { if (!confirming && !confirmingSelected) setConfirmModalBulk(null); }}
+        >
+          <div
+            className="card"
+            style={{ minWidth: "320px", maxWidth: "90%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem", color: "var(--text-main)" }}>
+              確定通知を送る
+            </h3>
+            <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem", color: "var(--text-main)" }}>
+              <strong>確定範囲:</strong> {getConfirmBlockLabel(confirmBlock)}
+            </p>
+            <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem", color: "var(--text-main)" }}>
+              {confirmModalBulk === "selected"
+                ? `選択した ${Array.from(selectedUserIds).filter((uid) => hasShiftsInMonth(uid) && !isBlockConfirmedForUser(uid) && hasUnconfirmedInBlock(uid)).length} 名に送信`
+                : `${year}年${month + 1}月のシフトを全員に送信`}
+            </p>
+            <p style={{ fontSize: "0.95rem", marginBottom: "1rem", color: "var(--text-main)" }}>
+              よろしいですか？
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={confirming || confirmingSelected}
+                onClick={() => setConfirmModalBulk(null)}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={confirming || confirmingSelected}
+                onClick={() => {
+                  if (confirmModalBulk === "selected") handleConfirmSelected();
+                  else if (confirmModalBulk === "all") handleConfirm();
+                }}
+              >
+                {confirming || confirmingSelected ? "処理中..." : "確定する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 確定取り消しモーダル */}
+      {unconfirmingUserId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+          }}
+          onClick={() => { if (!confirmingUserId) setUnconfirmingUserId(null); }}
+        >
+          <div
+            className="card"
+            style={{ minWidth: "320px", maxWidth: "90%" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.75rem", color: "var(--text-main)" }}>
+              確定を取り消し
+            </h3>
+            <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem", color: "var(--text-main)" }}>
+              <strong>取り消し範囲:</strong> {getConfirmBlockLabel(confirmBlock)}
+            </p>
+            <p style={{ fontSize: "0.95rem", marginBottom: "0.75rem", color: "var(--text-main)" }}>
+              {staffList.find((s) => s.id === unconfirmingUserId)?.name ?? unconfirmingUserId} さん
+            </p>
+            <p style={{ fontSize: "0.95rem", marginBottom: "1rem", color: "var(--text-main)" }}>
+              確定を取り消しますか？
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={!!confirmingUserId}
+                onClick={() => setUnconfirmingUserId(null)}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ backgroundColor: "var(--primary)", color: "white", border: "none" }}
+                disabled={!!confirmingUserId}
+                onClick={handleUnconfirm}
+              >
+                {confirmingUserId === unconfirmingUserId ? "処理中..." : "取り消す"}
               </button>
             </div>
           </div>
