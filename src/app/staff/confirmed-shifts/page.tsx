@@ -296,7 +296,7 @@ export default function StaffConfirmedShiftsPage() {
                   {s ? (
                     <div style={{ marginBottom: "1rem" }}>
                       <div style={{ fontSize: "0.875rem", color: s.status === "confirmed" ? "var(--text-muted)" : "#B45309", marginBottom: "0.25rem" }}>
-                        {s.status === "confirmed" ? "確定シフト" : "提出済み（未確定）"}
+                        {s.status === "confirmed" ? "確定シフト" : s.wasUnconfirmed ? "取り消し済み（未確定）" : "提出済み（未確定）"}
                       </div>
                       <div style={{ fontSize: "1.1rem", fontWeight: 600, marginBottom: "0.25rem" }}>
                         {s.startTime === "00:00" && s.endTime === "00:00" ? "OFF" : `${s.startTime} ～ ${s.endTime}`}

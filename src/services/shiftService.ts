@@ -1,6 +1,6 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, deleteDoc, query, where, Timestamp, onSnapshot, writeBatch } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, Timestamp, onSnapshot, writeBatch, getDocsFromServer } from "firebase/firestore";
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import { isPastSubmitDeadlineForDateAsync } from "@/services/settingsService";
@@ -20,6 +20,8 @@ export interface Shift {
     editedAfterDeadline?: boolean;
     /** 確定済みのシフトを管理者が編集した場合 true（再通知が必要） */
     editedAfterConfirmed?: boolean;
+    /** 確定を取り消された場合 true（バイト画面で「取り消し済み」表示） */
+    wasUnconfirmed?: boolean;
     /** 在宅勤務の場合 true（後方互換。workType があれば workType を優先） */
     isRemote?: boolean;
     /** 勤務形態: 出社 / 在宅 / 当欠。未設定時は isRemote から判定 */
@@ -54,6 +56,32 @@ export function getWageForWorkType(
 
 export type SaveShiftOptions = { byAdmin?: boolean };
 
+/** スタッフがシフトを保存（updateDoc で wasUnconfirmed を絶対に上書きしない） */
+export const saveShiftByStaff = async (shift: Shift): Promise<string> => {
+    const docId = `${shift.userId}_${shift.date}`;
+    const shiftRef = doc(db, "shifts", docId);
+    const workType = shift.workType ?? (shift.isRemote ? "remote" : "office");
+    const updateData = {
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        status: shift.status,
+        workType,
+        isRemote: workType === "remote",
+        updatedAt: Timestamp.now(),
+    };
+    try {
+        await updateDoc(shiftRef, updateData);
+    } catch (e) {
+        const code = (e as { code?: string })?.code;
+        if (code === "not-found") {
+            await setDoc(shiftRef, { userId: shift.userId, date: shift.date, ...updateData }, { merge: true });
+        } else {
+            throw e;
+        }
+    }
+    return docId;
+};
+
 export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promise<string> => {
     const docId = `${shift.userId}_${shift.date}`;
     const shiftRef = doc(db, "shifts", docId);
@@ -69,7 +97,7 @@ export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promi
         editedAfterDeadline = await isPastSubmitDeadlineForDateAsync(shift.date);
     }
 
-    const { hourlyWage: _skip, ...shiftRest } = shift;
+    const { hourlyWage: _skip, wasUnconfirmed: _wu, ...shiftRest } = shift;
     const workType = shift.workType ?? (shift.isRemote ? "remote" : "office");
     const data = {
         ...shiftRest,
@@ -78,6 +106,8 @@ export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promi
         ...(hourlyWage != null && { hourlyWage }),
         updatedAt: Timestamp.now(),
         ...(editedAfterDeadline !== undefined && { editedAfterDeadline }),
+        // スタッフ保存時は wasUnconfirmed を触らない（確定取り消しの「取り消し済み」表示を維持）
+        ...(options?.byAdmin && { wasUnconfirmed: false }),
     };
 
     try {
@@ -113,6 +143,56 @@ export const getUserShifts = async (userId: string, year: number, month: number)
         shifts.push({ id: doc.id, ...doc.data() } as Shift);
     });
     return shifts;
+};
+
+/** 指定ユーザーのシフトをサーバーから取得（キャッシュを無視して最新を取得。更新ボタン用） */
+export const getUserShiftsFromServer = async (userId: string, year: number, month: number): Promise<Shift[]> => {
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}`;
+
+    const q = query(
+        collection(db, "shifts"),
+        where("userId", "==", userId),
+        where("date", ">=", startStr),
+        where("date", "<=", endStr)
+    );
+
+    const querySnapshot = await getDocsFromServer(q);
+    const shifts: Shift[] = [];
+    querySnapshot.forEach((docSnap) => {
+        shifts.push({ id: docSnap.id, ...docSnap.data() } as Shift);
+    });
+    return shifts;
+};
+
+/** 指定ユーザーのシフトをリアルタイム購読（確定取り消し等の反映に必要） */
+export const subscribeUserShifts = (
+    userId: string,
+    year: number,
+    month: number,
+    callback: (shifts: Shift[]) => void
+) => {
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}`;
+
+    const q = query(
+        collection(db, "shifts"),
+        where("userId", "==", userId),
+        where("date", ">=", startStr),
+        where("date", "<=", endStr)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+        const shifts: Shift[] = [];
+        snapshot.forEach((doc) => {
+            shifts.push({ id: doc.id, ...doc.data() } as Shift);
+        });
+        callback(shifts);
+    }, (error) => {
+        console.warn("User shift subscription error:", error);
+    });
 };
 
 export const getAllShifts = async (year: number, month: number) => {
@@ -219,7 +299,7 @@ export const confirmShifts = async (year: number, month: number, block: ConfirmB
         const shiftRef = doc(db, "shifts", docId);
         const profile = uidToProfile.get(shift.userId) ?? null;
         const wage = getWageForWorkType(profile, getShiftWorkType(shift));
-        return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage }, { merge: true });
+        return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage, wasUnconfirmed: false }, { merge: true });
     });
 
     await Promise.all(promises);
@@ -241,7 +321,7 @@ export const confirmShiftsForUser = async (userId: string, year: number, month: 
             const docId = `${shift.userId}_${shift.date}`;
             const shiftRef = doc(db, "shifts", docId);
             const wage = getWageForWorkType(profile, getShiftWorkType(shift));
-            return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage }, { merge: true });
+            return setDoc(shiftRef, { status: "confirmed", hourlyWage: wage, wasUnconfirmed: false }, { merge: true });
         })
     );
     // 確定通知を送ったので editedAfterConfirmed をクリア（再通知不要に）
@@ -271,7 +351,7 @@ export const unconfirmShiftsForUser = async (
     filtered.map((shift) => {
       const docId = `${shift.userId}_${shift.date}`;
       const shiftRef = doc(db, "shifts", docId);
-      return setDoc(shiftRef, { status: "submitted", editedAfterConfirmed: false }, { merge: true });
+      return updateDoc(shiftRef, { status: "submitted", editedAfterConfirmed: false, wasUnconfirmed: true });
     })
   );
   return true;
