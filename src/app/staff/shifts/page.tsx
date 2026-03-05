@@ -574,7 +574,7 @@ export default function ShiftCalendar() {
                 </div>
             )}
             {(() => {
-                if (monthIsPastDeadline || !settings || !hasUnconfirmedShifts) return null;
+                if (monthIsPastDeadline || !settings || (!hasUnconfirmedShifts && Object.keys(shifts).length > 0)) return null;
                 const hasSubmittedOrConfirmed = Object.values(submittedByDay).some(Boolean) || Object.values(confirmedByDay).some(Boolean);
                 if (hasSubmittedOrConfirmed) return null;
                 const firstDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-01`, settings);
@@ -732,7 +732,7 @@ export default function ShiftCalendar() {
                 </div>
             )}
 
-            {hasUnconfirmedShifts && !monthIsPastDeadline && (
+            {(hasUnconfirmedShifts || Object.keys(shifts).length === 0) && !monthIsPastDeadline && (
                 <div
                     style={{
                         marginBottom: "1rem",
@@ -817,7 +817,7 @@ export default function ShiftCalendar() {
                     </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
-                    {!monthIsPastDeadline && (
+                    {!monthIsPastDeadline && (hasUnconfirmedShifts || Object.keys(shifts).length === 0) && (
                     <div style={{ alignSelf: "stretch", maxWidth: "400px" }}>
                         <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-muted)" }}>
                             申請時のコメント（任意）・管理者に伝えたいことがあれば記入
