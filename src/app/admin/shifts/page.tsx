@@ -105,6 +105,7 @@ export default function AdminShiftGrid() {
   const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [unconfirmingUserId, setUnconfirmingUserId] = useState<string | null>(null);
+  const [unconfirmBlock, setUnconfirmBlock] = useState<ConfirmBlock>("first");
   const [confirmModalUserId, setConfirmModalUserId] = useState<string | null>(null);
   const [confirmModalBulk, setConfirmModalBulk] = useState<"selected" | "all" | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
@@ -251,6 +252,23 @@ export default function AdminShiftGrid() {
     },
     []
   );
+
+  /** 指定ユーザーが指定ブロック内に確定済みシフトを1件以上持つか（取り消し可能か） */
+  const hasConfirmedShiftsInBlock = useCallback(
+    (uid: string, block: ConfirmBlock) => {
+      const userShifts = shifts.filter((s) => s.userId === uid && s.status !== "draft");
+      const inBlock = block === "all" ? userShifts : userShifts.filter((s) => isInBlock(s.date, block));
+      return inBlock.some((s) => s.status === "confirmed");
+    },
+    [shifts, isInBlock]
+  );
+
+  useEffect(() => {
+    if (!unconfirmingUserId) return;
+    const blocks: ConfirmBlock[] = ["first", "second", "all"];
+    const firstAvailable = blocks.find((b) => hasConfirmedShiftsInBlock(unconfirmingUserId, b));
+    setUnconfirmBlock(firstAvailable ?? "first");
+  }, [unconfirmingUserId, hasConfirmedShiftsInBlock]);
 
   /** 選択中の確定ブロックがこのユーザーに対してすでに確定済みか（ブロック内のシフトがすべて確定＆編集なし） */
   const isBlockConfirmedForUser = useCallback(
@@ -404,18 +422,18 @@ export default function AdminShiftGrid() {
     if (!uid) return;
     setConfirmingUserId(uid);
     try {
-      const ok = await unconfirmShiftsForUser(uid, year, month, confirmBlock);
+      const ok = await unconfirmShiftsForUser(uid, year, month, unconfirmBlock);
       if (!ok) {
         setUnconfirmingUserId(null);
         setConfirmingUserId(null);
-        alert(`${getConfirmBlockLabel(confirmBlock)}に確定済みシフトがありません。`);
+        alert(`${getConfirmBlockLabel(unconfirmBlock)}に確定済みシフトがありません。`);
         return;
       }
-      const blockLabel = getConfirmBlockLabel(confirmBlock);
+      const blockLabel = getConfirmBlockLabel(unconfirmBlock);
       const message =
-        confirmBlock === "all"
+        unconfirmBlock === "all"
           ? `${month + 1}月のシフトの確定が取り消されました。内容を確認して再度提出してください。`
-          : confirmBlock === "first"
+          : unconfirmBlock === "first"
             ? `${month + 1}月1～15日分のシフトの確定が取り消されました。内容を確認して再度提出してください。`
             : `${month + 1}月16日～月末のシフトの確定が取り消されました。内容を確認して再度提出してください。`;
       await createNotification(uid, "shift_unconfirmed", message);
@@ -1410,11 +1428,32 @@ export default function AdminShiftGrid() {
               確定を取り消し
             </h3>
             <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem", color: "var(--text-main)" }}>
-              <strong>取り消し範囲:</strong> {getConfirmBlockLabel(confirmBlock)}
-            </p>
-            <p style={{ fontSize: "0.95rem", marginBottom: "0.75rem", color: "var(--text-main)" }}>
               {staffList.find((s) => s.id === unconfirmingUserId)?.name ?? unconfirmingUserId} さん
             </p>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem", fontSize: "0.95rem", color: "var(--text-main)" }}>
+              <strong>取り消し範囲:</strong>
+              <select
+                value={unconfirmBlock}
+                onChange={(e) => setUnconfirmBlock(e.target.value as ConfirmBlock)}
+                style={{
+                  padding: "0.35rem 0.5rem",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "var(--surface)",
+                  fontSize: "0.875rem",
+                }}
+              >
+                <option value="first" disabled={!unconfirmingUserId || !hasConfirmedShiftsInBlock(unconfirmingUserId, "first")}>
+                  {unconfirmingUserId && !hasConfirmedShiftsInBlock(unconfirmingUserId, "first") ? "1～15日分（取り消し済み）" : "1～15日分"}
+                </option>
+                <option value="second" disabled={!unconfirmingUserId || !hasConfirmedShiftsInBlock(unconfirmingUserId, "second")}>
+                  {unconfirmingUserId && !hasConfirmedShiftsInBlock(unconfirmingUserId, "second") ? "16日～月末（取り消し済み）" : "16日～月末"}
+                </option>
+                <option value="all" disabled={!unconfirmingUserId || !hasConfirmedShiftsInBlock(unconfirmingUserId, "all")}>
+                  {unconfirmingUserId && !hasConfirmedShiftsInBlock(unconfirmingUserId, "all") ? "全月（取り消し済み）" : "全月"}
+                </option>
+              </select>
+            </label>
             <p style={{ fontSize: "0.95rem", marginBottom: "1rem", color: "var(--text-main)" }}>
               確定を取り消しますか？
             </p>
@@ -1431,7 +1470,7 @@ export default function AdminShiftGrid() {
                 type="button"
                 className="btn"
                 style={{ backgroundColor: "var(--primary)", color: "white", border: "none" }}
-                disabled={!!confirmingUserId}
+                disabled={!!confirmingUserId || !(unconfirmingUserId && hasConfirmedShiftsInBlock(unconfirmingUserId, unconfirmBlock))}
                 onClick={handleUnconfirm}
               >
                 {confirmingUserId === unconfirmingUserId ? "処理中..." : "取り消す"}

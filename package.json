@@ -9,7 +9,8 @@
     "lint": "eslint",
     "chatwork-notify": "node scripts/chatwork-notify.js",
     "delete-user-shifts": "node scripts/delete-user-shifts.js",
-    "migrate-hourly-wage": "node scripts/migrate-hourly-wage-1000-to-1226.js"
+    "migrate-hourly-wage": "node scripts/migrate-hourly-wage-1000-to-1226.js",
+    "deploy": "npm run build && firebase deploy --only hosting"
   },
   "dependencies": {
     "firebase": "^12.8.0",
