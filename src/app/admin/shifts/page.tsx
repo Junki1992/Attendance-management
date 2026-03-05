@@ -114,6 +114,7 @@ export default function AdminShiftGrid() {
   const [confirmBlock, setConfirmBlock] = useState<ConfirmBlock>("first");
   const [error, setError] = useState<string | null>(null);
   const [confirmedNotifs, setConfirmedNotifs] = useState<Notification[]>([]);
+  const [confirmedNotifsPage, setConfirmedNotifsPage] = useState(1);
   const [notifUserIdToName, setNotifUserIdToName] = useState<Record<string, string>>({});
   const [workSummary, setWorkSummary] = useState<{ userId: string; name: string; totalHours: number; hourlyWage: number; salary: number }[]>([]);
   const [editingCell, setEditingCell] = useState<{ userId: string; day: number } | null>(null);
@@ -168,6 +169,7 @@ export default function AdminShiftGrid() {
   }, [year, month]);
 
   useEffect(() => {
+    setConfirmedNotifsPage(1);
     getShiftConfirmedNotifications(30).then(setConfirmedNotifs).catch(() => {});
   }, [year, month]);
 
@@ -1185,34 +1187,63 @@ export default function AdminShiftGrid() {
         {confirmedNotifs.length === 0 ? (
           <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>確定通知はまだありません</p>
         ) : (
-          <div style={isMobile ? { overflowX: "auto", WebkitOverflowScrolling: "touch" } : undefined}>
-          <table style={{ width: "100%", minWidth: isMobile ? "280px" : undefined, fontSize: "0.8rem", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>アルバイト</th>
-                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>既読</th>
-                <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>通知日時</th>
-              </tr>
-            </thead>
-            <tbody>
-              {confirmedNotifs.map((n) => (
-                <tr key={n.id}>
-                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)" }}>
-                    {notifUserIdToName[n.userId] || staffList.find((s) => s.id === n.userId)?.name || n.userId}
-                  </td>
-                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>
-                    <span style={{ color: n.read ? "var(--secondary)" : "var(--destructive)", fontWeight: 500 }}>
-                      {n.read ? "既読" : "未読"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "0.5rem", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
-                    {n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString("ja-JP") : "—"}
-                  </td>
+          <>
+            <div style={isMobile ? { overflowX: "auto", WebkitOverflowScrolling: "touch" } : undefined}>
+            <table style={{ width: "100%", minWidth: isMobile ? "280px" : undefined, fontSize: "0.8rem", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>アルバイト</th>
+                  <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>既読</th>
+                  <th style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "left" }}>通知日時</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
+              </thead>
+              <tbody>
+                {confirmedNotifs
+                  .slice((confirmedNotifsPage - 1) * 20, confirmedNotifsPage * 20)
+                  .map((n) => (
+                  <tr key={n.id}>
+                    <td style={{ padding: "0.5rem", border: "1px solid var(--border)" }}>
+                      {notifUserIdToName[n.userId] || staffList.find((s) => s.id === n.userId)?.name || n.userId}
+                    </td>
+                    <td style={{ padding: "0.5rem", border: "1px solid var(--border)", textAlign: "center" }}>
+                      <span style={{ color: n.read ? "var(--secondary)" : "var(--destructive)", fontWeight: 500 }}>
+                        {n.read ? "既読" : "未読"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "0.5rem", border: "1px solid var(--border)", color: "var(--text-muted)" }}>
+                      {n.createdAt?.toDate ? n.createdAt.toDate().toLocaleString("ja-JP") : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+            {confirmedNotifs.length > 20 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", marginTop: "0.75rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                  disabled={confirmedNotifsPage <= 1}
+                  onClick={() => setConfirmedNotifsPage((p) => Math.max(1, p - 1))}
+                >
+                  ‹ 前へ
+                </button>
+                <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                  {confirmedNotifsPage} / {Math.ceil(confirmedNotifs.length / 20)}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
+                  disabled={confirmedNotifsPage >= Math.ceil(confirmedNotifs.length / 20)}
+                  onClick={() => setConfirmedNotifsPage((p) => Math.min(Math.ceil(confirmedNotifs.length / 20), p + 1))}
+                >
+                  次へ ›
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
