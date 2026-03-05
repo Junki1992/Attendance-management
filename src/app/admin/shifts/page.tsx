@@ -1010,7 +1010,12 @@ export default function AdminShiftGrid() {
                 const weeklyWarning = isWeeklyOver(user.id);
 
                 return (
-                  <tr key={user.id}>
+                  <tr
+                    key={user.id}
+                    style={{
+                      backgroundColor: selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.1)" : undefined,
+                    }}
+                  >
                     <td
                       style={{
                         padding: "0.5rem",
@@ -1018,7 +1023,7 @@ export default function AdminShiftGrid() {
                         fontWeight: 500,
                         position: "sticky",
                         left: 0,
-                        backgroundColor: "var(--surface)",
+                        backgroundColor: selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.1)" : "var(--surface)",
                         display: "flex",
                         alignItems: "center",
                         gap: "0.5rem",
@@ -1073,15 +1078,16 @@ export default function AdminShiftGrid() {
                             : isWeekend
                               ? "rgba(191, 219, 254, 0.8)"
                               : "var(--surface-hover)";
+                      const cellBg = selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.12)" : baseCellBg;
                       return (
                         <td
                           key={d}
                           onClick={() => setEditingCell({ userId: user.id, day: d })}
                           style={{
                             border: "1px solid var(--border)",
-                            borderLeft: isConfirmed ? "3px solid rgba(34, 197, 94, 0.7)" : undefined,
+                            borderLeft: selectedUserIds.has(user.id) ? "3px solid rgba(79, 70, 229, 0.5)" : isConfirmed ? "3px solid rgba(34, 197, 94, 0.7)" : undefined,
                             textAlign: "center",
-                            backgroundColor: baseCellBg,
+                            backgroundColor: cellBg,
                             color: isOver || isEditedLate ? "#B91C1C" : "inherit",
                             cursor: "pointer",
                           }}
@@ -1102,6 +1108,7 @@ export default function AdminShiftGrid() {
                           ? "var(--destructive)"
                           : "inherit",
                         textAlign: "center",
+                        backgroundColor: selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.1)" : undefined,
                       }}
                     >
                       {totalHours}
@@ -1112,6 +1119,7 @@ export default function AdminShiftGrid() {
                         border: "1px solid var(--border)",
                         textAlign: "center",
                         verticalAlign: "middle",
+                        backgroundColor: selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.1)" : undefined,
                       }}
                     >
                       {!hasShiftsInMonth(user.id) ? (
