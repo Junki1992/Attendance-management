@@ -6,7 +6,7 @@ import { subscribeUserShifts, getUserShiftsFromServer, saveShiftByStaff, deleteS
 import { getUserProfile, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
 import { saveShiftSubmitComment } from "@/services/shiftSubmitCommentService";
-import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, type AppSettings } from "@/services/settingsService";
+import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, DEFAULT_SETTINGS, type AppSettings } from "@/services/settingsService";
 import { isJapaneseHoliday } from "@/lib/japaneseHolidays";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 
@@ -61,6 +61,11 @@ export default function ShiftCalendar() {
     const dragStartDayRef = useRef<number | null>(null);
     const hasMovedRef = useRef(false);
     const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+    const lastSavedShiftsRef = useRef<{ [key: number]: string }>({});
+    const skipMergeRef = useRef(false);
+    const hasChangesRef = useRef(false);
+    const lastRefetchAtRef = useRef(0);
+    const daysToPreserveRef = useRef<Set<number>>(new Set());
 
     const daysInMonth = getDaysInMonth(year, month);
     const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -72,30 +77,28 @@ export default function ShiftCalendar() {
         return unsub;
     }, []);
 
+    const effectiveSettings = settings ?? DEFAULT_SETTINGS;
+
     /** 指定日が提出締切を過ぎているか（設定の日付+時刻を参照） */
     const isDayPastDeadline = useCallback(
-        (day: number) => {
-            if (!settings) return false;
-            return isPastSubmitDeadlineForDateWithSettings(
+        (day: number) =>
+            isPastSubmitDeadlineForDateWithSettings(
                 `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-                settings
-            );
-        },
-        [year, month, settings]
+                effectiveSettings
+            ),
+        [year, month, effectiveSettings]
     );
 
     /** 表示中の月が提出期限を過ぎているか（月末日分の締切が過ぎていれば月全体をグレーアウト） */
     const monthIsPastDeadline = useMemo(() => {
-        if (!settings) return false;
         const lastDay = getDaysInMonth(year, month);
         return isPastSubmitDeadlineForDateWithSettings(
             `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`,
-            settings
+            effectiveSettings
         );
-    }, [year, month, settings]);
+    }, [year, month, effectiveSettings]);
 
     const applyShiftsToState = useCallback((data: Shift[]) => {
-        console.log("[staff/shifts] applyShiftsToState", { count: data.length, byStatus: data.map((s) => ({ date: s.date, status: s.status, wasUnconfirmed: s.wasUnconfirmed })) });
         const shiftMap: { [key: number]: string } = {};
         const shiftsByDayMap: { [key: number]: Shift } = {};
         const remoteMap: { [key: number]: boolean } = {};
@@ -118,15 +121,48 @@ export default function ShiftCalendar() {
             if (s.status === "submitted" && !!s.wasUnconfirmed) unconfirmedMap[day] = true;
             if (s.status === "submitted" || (s.status !== "draft" && s.status !== "confirmed")) submittedMap[day] = true;
         });
-        setShifts(shiftMap);
+        const skipMerge = skipMergeRef.current;
+        if (skipMerge) skipMergeRef.current = false;
+        daysToPreserveRef.current = new Set<number>();
+        setShifts((prev) => {
+            if (skipMerge) return shiftMap;
+            const merged = { ...shiftMap };
+            for (const dayStr of Object.keys(prev)) {
+                const d = parseInt(dayStr, 10);
+                if (merged[d] === undefined && lastSavedShiftsRef.current[d] === undefined) {
+                    merged[d] = prev[d];
+                    daysToPreserveRef.current.add(d);
+                }
+            }
+            return merged;
+        });
         setShiftsByDay(shiftsByDayMap);
-        setRemoteByDay(remoteMap);
-        setWorkTypeByDay(workTypeMap);
+        setRemoteByDay((prev) => {
+            if (skipMerge) return remoteMap;
+            const merged = { ...remoteMap };
+            const toPreserve = daysToPreserveRef.current;
+            for (const dayStr of Object.keys(prev)) {
+                const d = parseInt(dayStr, 10);
+                if (toPreserve.has(d)) merged[d] = prev[d];
+            }
+            return merged;
+        });
+        setWorkTypeByDay((prev) => {
+            if (skipMerge) return workTypeMap;
+            const merged = { ...workTypeMap };
+            const toPreserve = daysToPreserveRef.current;
+            for (const dayStr of Object.keys(prev)) {
+                const d = parseInt(dayStr, 10);
+                if (toPreserve.has(d)) merged[d] = prev[d];
+            }
+            return merged;
+        });
         setConfirmedByDay(confirmedMap);
         setSubmittedByDay(submittedMap);
         setUnconfirmedByDay(unconfirmedMap);
         setLastSavedShifts(shiftMap);
         setLastSavedRemoteByDay(remoteMap);
+        lastSavedShiftsRef.current = shiftMap;
         setBulkSelectedDays([]);
     }, []);
 
@@ -168,22 +204,25 @@ export default function ShiftCalendar() {
             .finally(() => setRefreshing(false));
     }, [user, year, month, applyShiftsToState]);
 
-    /** タブ復帰・ウィンドウフォーカス時に再取得（管理側の確定・取り消しを確実に反映） */
+    /** タブ復帰・ウィンドウフォーカス時に再取得（管理側の確定・取り消しを確実に反映）。未保存編集中はスキップ、デバウンス500ms */
     useEffect(() => {
         if (!user) return;
-        const handleVisibilityChange = () => {
-            if (document.visibilityState === "visible") {
-                getUserShiftsFromServer(user.uid, year, month).then(applyShiftsToState).catch(() => {});
-            }
-        };
-        const handleFocus = () => {
+        const DEBOUNCE_MS = 500;
+        const doRefetch = () => {
+            if (hasChangesRef.current) return;
+            const now = Date.now();
+            if (now - lastRefetchAtRef.current < DEBOUNCE_MS) return;
+            lastRefetchAtRef.current = now;
             getUserShiftsFromServer(user.uid, year, month).then(applyShiftsToState).catch(() => {});
         };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") doRefetch();
+        };
         document.addEventListener("visibilitychange", handleVisibilityChange);
-        window.addEventListener("focus", handleFocus);
+        window.addEventListener("focus", doRefetch);
         return () => {
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            window.removeEventListener("focus", handleFocus);
+            window.removeEventListener("focus", doRefetch);
         };
     }, [user, year, month, applyShiftsToState]);
 
@@ -329,6 +368,7 @@ export default function ShiftCalendar() {
             return;
         }
         if (!confirm(`${targetDays.length}日分の下書きを削除しますか？`)) return;
+        skipMergeRef.current = true;
         setLoading(true);
         try {
             await Promise.all(
@@ -355,6 +395,7 @@ export default function ShiftCalendar() {
             setLastSavedShifts((prev) => {
                 const next = { ...prev };
                 targetDays.forEach((d) => delete next[d]);
+                lastSavedShiftsRef.current = next;
                 return next;
             });
             setLastSavedRemoteByDay((prev) => {
@@ -413,7 +454,7 @@ export default function ShiftCalendar() {
             .filter(([dayStr]) => {
                 const d = parseInt(dayStr, 10);
                 const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                return !confirmedByDay[d] && !isPastDate(year, month, d) && (!settings || !isPastSubmitDeadlineForDateWithSettings(dateStr, settings));
+                return !confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDateWithSettings(dateStr, effectiveSettings);
             })
             .map(async ([dayStr, label]) => {
                 const day = parseInt(dayStr, 10);
@@ -441,7 +482,9 @@ export default function ShiftCalendar() {
                 return saveShiftByStaff(shiftData);
             });
         await Promise.all(promises);
-        setLastSavedShifts({ ...shifts });
+        const saved = { ...shifts };
+        setLastSavedShifts(saved);
+        lastSavedShiftsRef.current = saved;
         setLastSavedRemoteByDay({ ...remoteByDay });
         if (status === "submitted") {
             setSubmittedByDay((prev) => {
@@ -449,7 +492,7 @@ export default function ShiftCalendar() {
                 Object.keys(shifts).forEach((dayStr) => {
                     const d = parseInt(dayStr, 10);
                     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    if (!confirmedByDay[d] && !isPastDate(year, month, d) && (!settings || !isPastSubmitDeadlineForDateWithSettings(dateStr, settings))) next[d] = true;
+                    if (!confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDateWithSettings(dateStr, effectiveSettings)) next[d] = true;
                 });
                 return next;
             });
@@ -514,6 +557,7 @@ export default function ShiftCalendar() {
         }
         return false;
     })();
+    hasChangesRef.current = hasChanges;
 
     /** 36協定アラート用: 1日8時間超・週40時間超の該当をリスト化 */
     const alert36 = useMemo(() => {
@@ -592,17 +636,17 @@ export default function ShiftCalendar() {
                 </div>
             )}
             {(() => {
-                if (monthIsPastDeadline || !settings || (!hasUnconfirmedShifts && Object.keys(shifts).length > 0)) return null;
+                if (monthIsPastDeadline || (!hasUnconfirmedShifts && Object.keys(shifts).length > 0)) return null;
                 const hasSubmittedOrConfirmed = Object.values(submittedByDay).some(Boolean) || Object.values(confirmedByDay).some(Boolean);
                 if (hasSubmittedOrConfirmed) return null;
-                const firstDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-01`, settings);
-                const secondDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-16`, settings);
+                const firstDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-01`, effectiveSettings);
+                const secondDeadline = getDeadlineForDateWithSettings(`${year}-${String(month + 1).padStart(2, "0")}-16`, effectiveSettings);
                 const now = Date.now();
                 const ms3days = 3 * 24 * 60 * 60 * 1000;
                 const firstImminent = firstDeadline.getTime() > now && firstDeadline.getTime() - now <= ms3days;
                 const secondImminent = secondDeadline.getTime() > now && secondDeadline.getTime() - now <= ms3days;
                 if (!firstImminent && !secondImminent) return null;
-                const l = getDeadlineLabelsForMonthWithSettings(year, month, settings);
+                const l = getDeadlineLabelsForMonthWithSettings(year, month, effectiveSettings);
                 return (
                     <div
                         style={{
@@ -672,12 +716,10 @@ export default function ShiftCalendar() {
                     }}
                 >
                     締切を過ぎた日は編集できません。
-                    {settings
-                        ? (() => {
-                            const l = getDeadlineLabelsForMonthWithSettings(year, month, settings);
-                            return `1～15日分: ${l.firstBlock}まで、16日～月末: ${l.secondBlock}までに提出してください。`;
-                          })()
-                        : "1～15日分は前月25日、16日～月末分は当月10日までに提出してください。"}
+                    {(() => {
+                        const l = getDeadlineLabelsForMonthWithSettings(year, month, effectiveSettings);
+                        return `1～15日分: ${l.firstBlock}まで、16日～月末: ${l.secondBlock}までに提出してください。`;
+                    })()}
                 </div>
             )}
 
@@ -832,6 +874,9 @@ export default function ShiftCalendar() {
                     <h3 style={{ fontSize: "1.25rem", minWidth: "120px", textAlign: "center" }}>{year}年 {month + 1}月</h3>
                     <button type="button" onClick={() => changeMonth(1)} style={{ border: "1px solid var(--border)", background: "var(--surface)", borderRadius: "var(--radius-md)", padding: "0.35rem 0.6rem", cursor: "pointer", fontSize: "1rem", color: "var(--text-main)", lineHeight: 1 }}>
                         ▶
+                    </button>
+                    <button type="button" className="btn btn-outline" onClick={refetchShifts} disabled={refreshing} style={{ marginLeft: "0.5rem", fontSize: "0.8rem" }} title="最新の状態を取得">
+                        {refreshing ? "取得中..." : "更新"}
                     </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>

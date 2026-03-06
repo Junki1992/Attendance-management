@@ -189,15 +189,6 @@ export const subscribeUserShifts = (
         snapshot.forEach((doc) => {
             shifts.push({ id: doc.id, ...doc.data() } as Shift);
         });
-        const fromCache = snapshot.metadata?.fromCache ?? "?";
-        console.log("[subscribeUserShifts]", {
-            userId,
-            year,
-            month: month + 1,
-            fromCache,
-            count: shifts.length,
-            shifts: shifts.map((s) => ({ date: s.date, status: s.status, wasUnconfirmed: s.wasUnconfirmed })),
-        });
         callback(shifts);
     }, (error) => {
         console.warn("[subscribeUserShifts] error:", { userId, year, month: month + 1, error });

@@ -31,6 +31,9 @@ const DEFAULTS: AppSettings = {
 
 const SETTINGS_DOC_ID = "app";
 
+/** settings が null のときのフォールバック用 */
+export const DEFAULT_SETTINGS: AppSettings = { ...DEFAULTS };
+
 /** Firestore の既存データにないフィールドを DEFAULTS で埋める */
 function mergeWithDefaults(data: Record<string, unknown>): AppSettings {
   return {

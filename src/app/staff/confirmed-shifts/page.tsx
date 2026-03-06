@@ -107,6 +107,24 @@ export default function StaffConfirmedShiftsPage() {
     };
   }, [user, year, month]);
 
+  /** タブ復帰・フォーカス時に再取得（確定・取り消しの反映） */
+  useEffect(() => {
+    if (!user) return;
+    const applyShifts = (data: Shift[]) => {
+      setShifts(data.filter((s) => s.status === "confirmed" || s.status === "submitted"));
+    };
+    const doRefetch = () => getUserShiftsFromServer(user.uid, year, month).then(applyShifts).catch(() => {});
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") doRefetch();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", doRefetch);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", doRefetch);
+    };
+  }, [user, year, month]);
+
   const shiftByDay: Record<number, Shift> = {};
   const confirmedByDay: Record<number, boolean> = {};
   const submittedByDay: Record<number, boolean> = {};
@@ -282,7 +300,7 @@ export default function StaffConfirmedShiftsPage() {
           >
             <h3 style={{ marginBottom: "1rem" }}>
               {month + 1}月{detailModalDay}日
-              {dayOfWeek[new Date(year, month, detailModalDay - 1).getDay()]}のシフト
+              {dayOfWeek[new Date(year, month, detailModalDay).getDay()]}のシフト
             </h3>
             {(() => {
               const s = shiftByDay[detailModalDay];

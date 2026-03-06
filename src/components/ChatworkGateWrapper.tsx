@@ -1,21 +1,10 @@
 "use client";
 
-import { useAuth } from "@/context/AuthContext";
-import ChatworkRegisterGate from "./ChatworkRegisterGate";
-
 /**
- * ログイン済みかつ Google ログインで Chatwork ID 未設定のときだけ
- * ChatworkRegisterGate を表示し、それ以外は children を表示する。
+ * 以前は Google ログインで Chatwork ID 未設定のユーザーをブロックしていたが、
+ * シフト編集・設定などは Chatwork 不要のためブロックを解除。
+ * Chatwork ID は通知メンション用。設定画面で登録を促す。
  */
 export default function ChatworkGateWrapper({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
-  const needsChatwork =
-    user &&
-    user.isGoogleUser &&
-    !String(user.chatworkAccountId ?? "").trim();
-
-  if (needsChatwork) {
-    return <ChatworkRegisterGate />;
-  }
   return <>{children}</>;
 }
