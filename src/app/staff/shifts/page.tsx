@@ -95,6 +95,7 @@ export default function ShiftCalendar() {
     }, [year, month, settings]);
 
     const applyShiftsToState = useCallback((data: Shift[]) => {
+        console.log("[staff/shifts] applyShiftsToState", { count: data.length, byStatus: data.map((s) => ({ date: s.date, status: s.status, wasUnconfirmed: s.wasUnconfirmed })) });
         const shiftMap: { [key: number]: string } = {};
         const shiftsByDayMap: { [key: number]: Shift } = {};
         const remoteMap: { [key: number]: boolean } = {};
@@ -134,8 +135,25 @@ export default function ShiftCalendar() {
         getUserProfile(user.uid).then((profile) => {
             if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
         }).catch(() => {});
-        const unsub = subscribeUserShifts(user.uid, year, month, applyShiftsToState);
-        return () => unsub();
+
+        let unsub: (() => void) | null = null;
+        let cancelled = false;
+        getUserShiftsFromServer(user.uid, year, month)
+            .then((data) => {
+                if (cancelled) return;
+                applyShiftsToState(data);
+                unsub = subscribeUserShifts(user.uid, year, month, applyShiftsToState);
+            })
+            .catch((e) => {
+                if (cancelled) return;
+                console.error("[staff/shifts] 初回取得失敗、購読のみ開始:", e);
+                unsub = subscribeUserShifts(user.uid, year, month, applyShiftsToState);
+            });
+
+        return () => {
+            cancelled = true;
+            unsub?.();
+        };
     }, [user, year, month, applyShiftsToState]);
 
     const refetchShifts = useCallback(() => {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getUserShifts, getShiftWorkType, getShiftWorkTypeLabel, getWageForWorkType, Shift } from "@/services/shiftService";
+import { subscribeUserShifts, getUserShiftsFromServer, getShiftWorkType, getShiftWorkTypeLabel, getWageForWorkType, Shift } from "@/services/shiftService";
 import { getUserProfile, getAdminIds, UserProfile } from "@/services/userService";
 import {
   createShiftChangeRequest,
@@ -64,25 +64,47 @@ export default function StaffConfirmedShiftsPage() {
 
   useEffect(() => {
     if (!user) return;
-    const load = async () => {
-      setLoading(true);
+    setLoading(true);
+    const loadProfileAndRequests = async () => {
       try {
-        const [profile, data, reqs] = await Promise.all([
+        const [profile, reqs] = await Promise.all([
           getUserProfile(user.uid),
-          getUserShifts(user.uid, year, month),
           getMyShiftChangeRequests(user.uid),
         ]);
         setProfile(profile ?? null);
         if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
-        setShifts(data.filter((s) => s.status === "confirmed" || s.status === "submitted"));
         setMyRequests(reqs);
       } catch (e) {
         console.error(e);
-      } finally {
-        setLoading(false);
       }
     };
-    load();
+    loadProfileAndRequests();
+
+    const applyShifts = (data: Shift[]) => {
+      const filtered = data.filter((s) => s.status === "confirmed" || s.status === "submitted");
+      setShifts(filtered);
+      setLoading(false);
+    };
+
+    let unsub: (() => void) | null = null;
+    let cancelled = false;
+    getUserShiftsFromServer(user.uid, year, month)
+      .then((data) => {
+        if (cancelled) return;
+        applyShifts(data);
+        unsub = subscribeUserShifts(user.uid, year, month, applyShifts);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        console.error(e);
+        setLoading(false);
+        unsub = subscribeUserShifts(user.uid, year, month, applyShifts);
+      });
+
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
   }, [user, year, month]);
 
   const shiftByDay: Record<number, Shift> = {};

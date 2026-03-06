@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { getSettings, getDeadlineLabelsForMonthWithSettings } from "@/services/settingsService";
-import { getUserShifts } from "@/services/shiftService";
+import { subscribeUserShifts } from "@/services/shiftService";
 
 export default function StaffDashboard() {
     const { user } = useAuth();
@@ -24,14 +24,13 @@ export default function StaffDashboard() {
 
     useEffect(() => {
         if (!user) return;
-        const load = async () => {
-            const now = new Date();
-            const data = await getUserShifts(user.uid, now.getFullYear(), now.getMonth());
+        const now = new Date();
+        const unsub = subscribeUserShifts(user.uid, now.getFullYear(), now.getMonth(), (data) => {
             const nonDraft = data.filter((s) => s.status !== "draft");
             const allConfirmed = nonDraft.length > 0 && nonDraft.every((s) => s.status === "confirmed");
             setMonthIsConfirmed(allConfirmed);
-        };
-        load();
+        });
+        return () => unsub();
     }, [user]);
 
     return (
