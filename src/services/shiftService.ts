@@ -185,6 +185,7 @@ export const subscribeUserShifts = (
     );
 
     return onSnapshot(q, (snapshot) => {
+        // キャッシュ・サーバー両方とも反映する（キャッシュのみスキップすると別デバイスで管理側の変更が届かず取り消しが反映されない）
         const shifts: Shift[] = [];
         snapshot.forEach((doc) => {
             shifts.push({ id: doc.id, ...doc.data() } as Shift);

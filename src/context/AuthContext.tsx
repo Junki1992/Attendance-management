@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/firebase";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
-import { getUserProfile, createUser } from "@/services/userService";
+import { getUserProfile, getUserProfileFromServer, createUser } from "@/services/userService";
 
 export type UserRole = "admin" | "staff";
 
@@ -55,9 +55,9 @@ export interface User {
     name: string;
     role: UserRole;
     photoURL?: string;
-    /** Chatwork アカウントID（数字）。通知のメンション用。Googleログイン時は未設定になり、登録必須のゲートを表示 */
+    /** Chatwork アカウントID（数字）。通知のメンション用。メール登録時は必須、Googleログイン時は設定画面で登録 */
     chatworkAccountId?: string;
-    /** Googleログインで入ったか（Chatwork ID 未登録時はゲートでブロック） */
+    /** Googleログインで入ったか（設定画面での案内用。メールユーザーは false） */
     isGoogleUser?: boolean;
 }
 
@@ -134,8 +134,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     }
 
                     const tProfile0 = nowMs();
-                    let profile = await getUserProfileDeduped(firebaseUser.uid);
-                    devInfo("[Auth] onAuthStateChanged: getUserProfile", {
+                    // キャッシュではなくサーバーから取得し、ユーザー間で表示ブレが起きないようにする
+                    let profile = await getUserProfileFromServer(firebaseUser.uid);
+                    devInfo("[Auth] onAuthStateChanged: getUserProfileFromServer", {
                         uid: firebaseUser.uid,
                         ms: Math.round(nowMs() - tProfile0),
                         found: !!profile,
@@ -147,7 +148,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         for (let i = 0; i < 10 && !profile; i++) {
                             await new Promise((r) => setTimeout(r, 200));
                             const tTry = nowMs();
-                            profile = await getUserProfileDeduped(firebaseUser.uid);
+                            profile = await getUserProfileFromServer(firebaseUser.uid);
                             devInfo("[Auth] onAuthStateChanged: retry getUserProfile", {
                                 uid: firebaseUser.uid,
                                 try: i + 1,
@@ -177,7 +178,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                 hourlyWage: DEFAULT_HOURLY_WAGE,
                                 photoURL: firebaseUser.photoURL ?? undefined,
                             });
-                            profile = await getUserProfileDeduped(firebaseUser.uid);
+                            profile = await getUserProfileFromServer(firebaseUser.uid);
                             devInfo("[Auth] onAuthStateChanged: created profile for Google user", { uid: firebaseUser.uid, role });
                         } catch (err) {
                             devError("[Auth] onAuthStateChanged: createUser for Google failed", err);
@@ -278,7 +279,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const tProfile0 = nowMs();
             let profile: UserProfileOrNull = null;
             try {
-                profile = await getUserProfileDeduped(firebaseUser.uid);
+                profile = await getUserProfileFromServer(firebaseUser.uid);
             } catch (err: unknown) {
                 const code = (err as { code?: string })?.code ?? "";
                 const message = (err as { message?: string })?.message ?? "";
@@ -439,7 +440,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const firebaseUser = auth.currentUser;
         if (!firebaseUser || userRef.current?.uid !== firebaseUser.uid) return;
         try {
-            const profile = await getUserProfile(firebaseUser.uid);
+            const profile = await getUserProfileFromServer(firebaseUser.uid);
             if (profile && (profile.role === "admin" || profile.role === "staff")) {
                 const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                 const u: User = {

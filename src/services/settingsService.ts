@@ -52,11 +52,17 @@ export const getSettings = async (): Promise<AppSettings> => {
   return { ...DEFAULTS };
 };
 
-/** 設定の変更をリアルタイム購読（締切変更が即時反映される） */
+/** 設定の変更をリアルタイム購読。サーバー確定スナップを優先し、未取得時のみキャッシュを採用（表示ブレ防止） */
 export const subscribeSettings = (callback: (s: AppSettings) => void): (() => void) => {
   const ref = doc(db, "settings", SETTINGS_DOC_ID);
-  return onSnapshot(ref, (snap) => {
+  let hasServerSnapshot = false;
+  return onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
     const s = snap.exists() ? mergeWithDefaults(snap.data() as Record<string, unknown>) : { ...DEFAULTS };
+    if (snap.metadata.fromCache) {
+      if (!hasServerSnapshot) callback(s);
+      return;
+    }
+    hasServerSnapshot = true;
     callback(s);
   });
 };

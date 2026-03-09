@@ -16,6 +16,22 @@ export interface UserProfile {
     chatworkAccountId?: string; // Chatwork のアカウントID（数字。通知の [To:xxx] メンション用）
 }
 
+/** Firestore の users ドキュメント data を UserProfile に正規化（role の大文字・欠損を吸収） */
+function parseUserProfileDoc(uid: string, data: Record<string, unknown>): UserProfile {
+    const roleRaw = (data.role as string)?.toString().toLowerCase();
+    const role: "admin" | "staff" = roleRaw === "admin" ? "admin" : "staff";
+    return {
+        uid,
+        email: (data.email as string) || "",
+        name: (data.name as string) || "（名前なし）",
+        role,
+        hourlyWage: (data.hourlyWage as number) ?? DEFAULT_HOURLY_WAGE,
+        hourlyWageRemote: data.hourlyWageRemote as number | undefined,
+        photoURL: (data.photoURL as string) ?? undefined,
+        chatworkAccountId: (data.chatworkAccountId as string) ?? undefined,
+    };
+}
+
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
     const docRef = doc(db, "users", uid);
     // サーバーが激遅い/不安定な環境だと getDoc(=server 優先) が極端に待たされることがある。
@@ -36,16 +52,26 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
     })();
 
     if (docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-            ...data,
-            uid: docRef.id,
-            hourlyWage: data?.hourlyWage ?? DEFAULT_HOURLY_WAGE,
-            hourlyWageRemote: data?.hourlyWageRemote as number | undefined,
-        } as UserProfile;
+        const data = docSnap.data() as Record<string, unknown>;
+        return parseUserProfileDoc(docRef.id, data);
     } else {
         return null;
     }
+};
+
+/**
+ * プロフィールをサーバーから取得（キャッシュを使わない）。
+ * 認証直後・プロフィール更新後の表示ブレを防ぐため、login/refreshUserProfile で使用。
+ */
+export const getUserProfileFromServer = async (uid: string): Promise<UserProfile | null> => {
+    const docRef = doc(db, "users", uid);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+        const data = docSnap.data() as Record<string, unknown>;
+        return parseUserProfileDoc(docRef.id, data);
+    }
+    return null;
 };
 
 export interface CreateUserParams {

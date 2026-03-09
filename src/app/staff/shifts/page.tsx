@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { subscribeUserShifts, getUserShiftsFromServer, saveShiftByStaff, deleteShift, getShiftWorkType, getWorkTypeLabel, Shift, type ShiftWorkType } from "@/services/shiftService";
-import { getUserProfile, getAdminIds } from "@/services/userService";
+import { getUserProfileFromServer, getAdminIds } from "@/services/userService";
 import { createNotification } from "@/services/notificationService";
 import { saveShiftSubmitComment } from "@/services/shiftSubmitCommentService";
 import { subscribeSettings, isPastSubmitDeadlineForDateWithSettings, getDeadlineForDateWithSettings, getDeadlineLabelsForMonthWithSettings, DEFAULT_SETTINGS, type AppSettings } from "@/services/settingsService";
@@ -168,7 +168,7 @@ export default function ShiftCalendar() {
 
     useEffect(() => {
         if (!user) return;
-        getUserProfile(user.uid).then((profile) => {
+        getUserProfileFromServer(user.uid).then((profile) => {
             if (profile?.hourlyWage) setHourlyWage(profile.hourlyWage);
         }).catch(() => {});
 
