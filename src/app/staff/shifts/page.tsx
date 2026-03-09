@@ -46,7 +46,6 @@ export default function ShiftCalendar() {
     const [unconfirmedByDay, setUnconfirmedByDay] = useState<{ [key: number]: boolean }>({});
     const [shiftsByDay, setShiftsByDay] = useState<{ [key: number]: Shift }>({});
     const [loading, setLoading] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
     const [hourlyWage, setHourlyWage] = useState(DEFAULT_HOURLY_WAGE);
     const [bulkStart, setBulkStart] = useState("09:00");
     const [bulkEnd, setBulkEnd] = useState("18:00");
@@ -190,18 +189,6 @@ export default function ShiftCalendar() {
             cancelled = true;
             unsub?.();
         };
-    }, [user, year, month, applyShiftsToState]);
-
-    const refetchShifts = useCallback(() => {
-        if (!user) return;
-        setRefreshing(true);
-        getUserShiftsFromServer(user.uid, year, month)
-            .then(applyShiftsToState)
-            .catch((e) => {
-                console.error("[staff/shifts] 更新失敗:", e);
-                alert("更新に失敗しました。通信を確認してください。");
-            })
-            .finally(() => setRefreshing(false));
     }, [user, year, month, applyShiftsToState]);
 
     /** タブ復帰・ウィンドウフォーカス時に再取得（管理側の確定・取り消しを確実に反映）。未保存編集中はスキップ、デバウンス500ms */
@@ -874,9 +861,6 @@ export default function ShiftCalendar() {
                     <h3 style={{ fontSize: "1.25rem", minWidth: "120px", textAlign: "center" }}>{year}年 {month + 1}月</h3>
                     <button type="button" onClick={() => changeMonth(1)} style={{ border: "1px solid var(--border)", background: "var(--surface)", borderRadius: "var(--radius-md)", padding: "0.35rem 0.6rem", cursor: "pointer", fontSize: "1rem", color: "var(--text-main)", lineHeight: 1 }}>
                         ▶
-                    </button>
-                    <button type="button" className="btn btn-outline" onClick={refetchShifts} disabled={refreshing} style={{ marginLeft: "0.5rem", fontSize: "0.8rem" }} title="最新の状態を取得">
-                        {refreshing ? "取得中..." : "更新"}
                     </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
