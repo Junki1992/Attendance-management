@@ -216,14 +216,33 @@ export const getAllShifts = async (year: number, month: number) => {
     return shifts;
 };
 
-export const subscribeAllShifts = (
-    year: number, 
-    month: number, 
-    callback: (shifts: Shift[]) => void
-) => {
-    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+/** 当月シフトをサーバーから取得（キャッシュを使わない。確定状態を正しく表示するために管理画面の初回表示で使用） */
+export const getAllShiftsFromServer = async (year: number, month: number): Promise<Shift[]> => {
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
     const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+    const q = query(
+        collection(db, "shifts"),
+        where("date", ">=", startStr),
+        where("date", "<=", endStr)
+    );
+    const snapshot = await getDocsFromServer(q);
+    const shifts: Shift[] = [];
+    snapshot.forEach((doc) => {
+        shifts.push({ id: doc.id, ...doc.data() } as Shift);
+    });
+    return shifts;
+};
+
+/** callback の第2引数: fromCache が true のときはキャッシュ由来（管理画面ではサーバー反映後に上書きしないために参照する） */
+export const subscribeAllShifts = (
+    year: number,
+    month: number,
+    callback: (shifts: Shift[], meta?: { fromCache: boolean }) => void
+) => {
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}`;
 
     const q = query(
         collection(db, "shifts"),
@@ -236,7 +255,7 @@ export const subscribeAllShifts = (
         snapshot.forEach((doc) => {
             shifts.push({ id: doc.id, ...doc.data() } as Shift);
         });
-        callback(shifts);
+        callback(shifts, { fromCache: snapshot.metadata.fromCache });
     }, (error) => {
         console.warn("Shift subscription error:", error);
     });
