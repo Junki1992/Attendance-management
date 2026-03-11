@@ -141,10 +141,8 @@ async function main() {
 
   let firstRoomIdForError = null;
   let lastError = null;
+  let sentCount = 0;
   for (const dest of destinations) {
-    if (dest.type === "personal" && entries.length === 0) {
-      continue;
-    }
     let targetRoomId;
     if (dest.type === "personal") {
       try {
@@ -197,14 +195,21 @@ async function main() {
       const errText = await res.text();
       lastError = `Chatwork API ${res.status}: ${errText}`;
       console.error("[chatwork-notify] Send error to", targetRoomId, res.status, errText);
+    } else {
+      sentCount++;
     }
   }
   if (lastError && firstRoomIdForError) {
     await sendErrorToChatwork(token, firstRoomIdForError, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, lastError);
   }
   if (lastError) process.exit(1);
-  await db.doc("settings/chatwork").set({ lastNotificationDate: dateStr }, { merge: true });
-  console.log("[chatwork-notify] Sent OK:", dateStr, "entries:", entries.length);
+  // 実際に1件以上送信したときだけ「送信済み」を記録（全宛先スキップで lastNotificationDate を更新しない）
+  if (sentCount > 0) {
+    await db.doc("settings/chatwork").set({ lastNotificationDate: dateStr }, { merge: true });
+    console.log("[chatwork-notify] Sent OK:", dateStr, "entries:", entries.length, "destinations:", sentCount);
+  } else {
+    console.log("[chatwork-notify] No message sent (all destinations skipped or failed). Not updating lastNotificationDate.");
+  }
 }
 
 main().catch(async (e) => {

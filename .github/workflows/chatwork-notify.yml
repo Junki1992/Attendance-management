@@ -1,17 +1,21 @@
+# スケジュールは UTC。18:00 JST = 9:00 UTC。実行一覧の「9:00」= 18:00 JST。
+# 5分ごとに動かし、スクリプト側で「通知時刻の30分ウィンドウ」だけ送信。デフォルトブランチにないと schedule は動かない。
 name: Chatwork 翌日出勤通知
 on:
   schedule:
-    # 5分ごとに実行。設定された時刻（時:分）に一致したときのみ通知送信（21:00, 21:05, 21:10...）
     - cron: "*/5 * * * *"
   workflow_dispatch:
 jobs:
   notify:
     runs-on: ubuntu-latest
+    env:
+      # Node.js 20 非推奨対応: 2026年6月以降のデフォルトに先行してオプトイン
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
       - run: npm ci
       - run: node scripts/chatwork-notify.js
