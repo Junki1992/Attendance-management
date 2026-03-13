@@ -97,12 +97,13 @@ async function main() {
     const jstMinute = now.getUTCMinutes();
     const configuredMin = notifyHour * 60 + notifyMinute;
     const currentMin = jstHour * 60 + jstMinute;
-    const windowEnd = (configuredMin + 30) % 1440;
-    const inWindow = configuredMin + 30 <= 1440
-      ? currentMin >= configuredMin && currentMin < configuredMin + 30
+    const windowMinutes = 60;
+    const windowEnd = (configuredMin + windowMinutes) % 1440;
+    const inWindow = configuredMin + windowMinutes <= 1440
+      ? currentMin >= configuredMin && currentMin < configuredMin + windowMinutes
       : currentMin >= configuredMin || currentMin < windowEnd;
     if (!inWindow) {
-      console.log("[chatwork-notify] Skip: JST", jstHour + ":" + String(jstMinute).padStart(2, "0"), "not in window", notifyHour + ":" + String(notifyMinute).padStart(2, "0"), "+30min");
+      console.log("[chatwork-notify] Skip: JST", jstHour + ":" + String(jstMinute).padStart(2, "0"), "not in window", notifyHour + ":" + String(notifyMinute).padStart(2, "0"), "+" + windowMinutes + "min");
       process.exit(0);
     }
     const lastSent = cfgData?.lastNotificationDate;

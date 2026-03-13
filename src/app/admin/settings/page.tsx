@@ -118,20 +118,19 @@ export default function AdminSettingsPage() {
     if (!deleteConfirmTarget) return;
     const { uid } = deleteConfirmTarget;
     setDeletingUserId(uid);
-    setDeleteConfirmTarget(null);
     try {
       await deleteAllUserData(uid);
+      setDeleteConfirmTarget(null);
+      setSelectedUser(null);
+      alert("削除しました");
     } catch (err) {
       console.error(err);
       setSelectedUser(null);
-      setDeletingUserId(null);
       const msg = err instanceof Error ? err.message : String(err);
       alert(`削除に失敗しました\n${msg}`);
-      return;
+    } finally {
+      setDeletingUserId(null);
     }
-    setDeletingUserId(null);
-    setSelectedUser(null);
-    alert("削除しました");
   };
 
   const handleRoleChange = async (uid: string, newRole: "admin" | "staff") => {
