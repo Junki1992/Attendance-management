@@ -21,7 +21,7 @@ function wrapStep<T>(stepName: string, fn: () => Promise<T>): Promise<T> {
     });
 }
 
-/** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。関連データは並列削除で即座に完了させる */
+/** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。全ステップを並列実行して短時間で完了させる */
 export const deleteAllUserData = async (uid: string): Promise<void> => {
     await Promise.all([
         wrapStep("notifications", () => deleteNotificationsByUserId(uid)),
@@ -31,6 +31,6 @@ export const deleteAllUserData = async (uid: string): Promise<void> => {
         wrapStep("wageHistory", () => deleteWageHistoryByUserId(uid)),
         wrapStep("shifts", () => deleteShiftsByUserId(uid)),
         wrapStep("profileImage", () => deleteProfileImageFromStorage(uid)),
+        wrapStep("userDocument", () => deleteUserDocument(uid)),
     ]);
-    await wrapStep("userDocument", () => deleteUserDocument(uid));
 };

@@ -592,8 +592,7 @@ export default function AdminSettingsPage() {
               <strong>{deleteConfirmTarget.name}</strong> をユーザー一覧から削除しますか？
             </p>
             <p style={{ margin: "0 0 1rem 0", color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5 }}>
-              シフト・通知・チャット・時給履歴など、DB 上の全関連データが削除されます。<br />
-              Firebase Authentication の削除は Firebase コンソールで別途行ってください。
+              シフト・通知・チャット・時給履歴など、DB 上の全関連データが削除されます。
             </p>
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
               <button
