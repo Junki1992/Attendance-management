@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { getSettings, saveSettings, type AppSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, updateUserWages, UserProfile } from "@/services/userService";
@@ -592,7 +593,7 @@ export default function AdminSettingsPage() {
               <strong>{deleteConfirmTarget.name}</strong> をユーザー一覧から削除しますか？
             </p>
             <p style={{ margin: "0 0 1rem 0", color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5 }}>
-              シフト・通知・チャット・時給履歴など、DB 上の全関連データが削除されます。
+              このユーザーのシフトは、削除前に<strong>退職シフト</strong>（設定の「退職者のシフト」）へコピーされます。その後、現役のシフト表・通知・チャット・時給履歴など、DB 上の関連データは削除されます。
             </p>
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
               <button
@@ -780,6 +781,17 @@ export default function AdminSettingsPage() {
           </div>
         )}
       </div>
+
+      <div id="shift-archive" className="card" style={{ maxWidth: "560px" }}>
+        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>退職者のシフト</h2>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.55 }}>
+          退職・削除済みスタッフのシフトを手動で登録したり、一覧・月別で確認します。現役のシフト表とは別のデータです。
+        </p>
+        <Link href="/admin/shift-archive/" className="btn btn-outline">
+          退職シフトを開く
+        </Link>
+      </div>
+
       {selectedUser && (
       <div
         role="dialog"

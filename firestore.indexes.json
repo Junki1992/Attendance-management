@@ -99,6 +99,14 @@
         { "fieldPath": "year", "order": "ASCENDING" },
         { "fieldPath": "month", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "shiftArchives",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

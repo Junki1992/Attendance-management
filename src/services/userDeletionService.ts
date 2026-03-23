@@ -12,6 +12,7 @@ import {
     deleteProfileImageFromStorage,
     deleteUserDocument,
 } from "@/services/userService";
+import { archiveShiftsBeforeUserDeletion } from "@/services/shiftArchiveService";
 
 function wrapStep<T>(stepName: string, fn: () => Promise<T>): Promise<T> {
     return fn().catch((e: unknown) => {
@@ -21,8 +22,9 @@ function wrapStep<T>(stepName: string, fn: () => Promise<T>): Promise<T> {
     });
 }
 
-/** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。全ステップを並列実行して短時間で完了させる */
+/** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。先にシフトをアーカイブしてから並列削除 */
 export const deleteAllUserData = async (uid: string): Promise<void> => {
+    await wrapStep("shiftArchive", () => archiveShiftsBeforeUserDeletion(uid));
     await Promise.all([
         wrapStep("notifications", () => deleteNotificationsByUserId(uid)),
         wrapStep("shiftChangeRequests", () => deleteShiftChangeRequestsByUserId(uid)),
