@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getSettings, saveSettings, type AppSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, updateUserWages, UserProfile } from "@/services/userService";
-import { deleteAllUserData } from "@/services/userDeletionService";
+import { deleteAllUserData, type DeleteAllUserDataPhase } from "@/services/userDeletionService";
 import { getWageChangeLog, recordWageChange, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { subscribePresence } from "@/services/presenceService";
@@ -32,6 +32,9 @@ export default function AdminSettingsPage() {
   const [chatworkSending, setChatworkSending] = useState(false);
   const [chatworkNotifyModalOpen, setChatworkNotifyModalOpen] = useState(false);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ uid: string; name: string; role: "admin" | "staff" } | null>(null);
+  /** バックグラウンド削除中の進捗表示用（モーダル外のバナー） */
+  const [deleteRunPhase, setDeleteRunPhase] = useState<DeleteAllUserDataPhase | null>(null);
+  const [backgroundDeleteName, setBackgroundDeleteName] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [editingHourlyWage, setEditingHourlyWage] = useState<number>(DEFAULT_HOURLY_WAGE);
   const [editingHourlyWageRemote, setEditingHourlyWageRemote] = useState<number | "">("");
@@ -105,6 +108,10 @@ export default function AdminSettingsPage() {
   }, [currentUser?.role, users]);
 
   const openDeleteConfirm = (uid: string, name: string, role: "admin" | "staff") => {
+    if (deletingUserId) {
+      alert("別のユーザーの削除処理が進行中です。完了のお知らせが出るまでお待ちください。");
+      return;
+    }
     if (role === "admin") {
       const adminCount = users.filter((u) => u.role === "admin").length;
       if (adminCount <= 1) {
@@ -112,26 +119,36 @@ export default function AdminSettingsPage() {
         return;
       }
     }
+    setDeleteRunPhase(null);
     setDeleteConfirmTarget({ uid, name, role });
   };
 
-  const executeDeleteUser = async () => {
+  /** 確認後すぐモーダルを閉じ、削除はバックグラウンドで実行（長時間でも画面がフリーズしたように見えない） */
+  const executeDeleteUser = () => {
     if (!deleteConfirmTarget) return;
-    const { uid } = deleteConfirmTarget;
-    setDeletingUserId(uid);
-    try {
-      await deleteAllUserData(uid);
-      setDeleteConfirmTarget(null);
+    const { uid, name } = deleteConfirmTarget;
+    setDeleteConfirmTarget(null);
+    setDeleteRunPhase("archiving");
+    if (selectedUser?.uid === uid) {
       setSelectedUser(null);
-      alert("削除しました");
-    } catch (err) {
-      console.error(err);
-      setSelectedUser(null);
-      const msg = err instanceof Error ? err.message : String(err);
-      alert(`削除に失敗しました\n${msg}`);
-    } finally {
-      setDeletingUserId(null);
     }
+    setBackgroundDeleteName(name);
+    setDeletingUserId(uid);
+
+    void (async () => {
+      try {
+        await deleteAllUserData(uid, (phase) => setDeleteRunPhase(phase));
+        alert(`「${name}」を削除しました。`);
+      } catch (err) {
+        console.error(err);
+        const msg = err instanceof Error ? err.message : String(err);
+        alert(`「${name}」の削除に失敗しました\n${msg}`);
+      } finally {
+        setDeletingUserId(null);
+        setDeleteRunPhase(null);
+        setBackgroundDeleteName(null);
+      }
+    })();
   };
 
   const handleRoleChange = async (uid: string, newRole: "admin" | "staff") => {
@@ -223,7 +240,49 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "2rem",
+        paddingBottom: deletingUserId ? "6rem" : undefined,
+      }}
+    >
+      {deletingUserId && backgroundDeleteName && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 400,
+            padding: "0.85rem 1rem",
+            backgroundColor: "var(--surface)",
+            borderTop: "2px solid var(--primary)",
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+            fontSize: "0.875rem",
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+            <strong style={{ color: "var(--text-main)" }}>バックグラウンドで削除処理中</strong>
+            <span style={{ color: "var(--text-muted)", marginLeft: "0.35rem" }}>
+              （{backgroundDeleteName}）
+            </span>
+            <div style={{ color: "var(--text-muted)", marginTop: "0.35rem", fontSize: "0.8125rem" }}>
+              {deleteRunPhase === "archiving" && "退職者シフトへシフトをコピーしています…"}
+              {deleteRunPhase === "purging" && "通知・チャット・シフトなど関連データを削除しています…"}
+              {deleteRunPhase == null && "処理を終了しています…"}
+            </div>
+            <div style={{ color: "var(--text-muted)", marginTop: "0.25rem", fontSize: "0.75rem" }}>
+              この画面のほかの操作はできますが、<strong>タブを閉じたりページを離れると失敗することがあります</strong>。完了までお待ちください。
+            </div>
+          </div>
+        </div>
+      )}
       {currentUser && (
         <div className="card" style={{ maxWidth: "400px" }}>
           <h2 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>自分のプロフィール</h2>
@@ -585,23 +644,36 @@ export default function AdminSettingsPage() {
             zIndex: 300,
             padding: "1rem",
           }}
-          onClick={() => !deletingUserId && setDeleteConfirmTarget(null)}
+          onClick={() => setDeleteConfirmTarget(null)}
         >
-          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, padding: "1.25rem" }}>
+          <div
+            className="card"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 420, padding: "1.25rem" }}
+          >
             <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.1rem", color: "var(--destructive)" }}>ユーザーを削除</h3>
             <p style={{ margin: "0 0 1rem 0", color: "var(--text-main)", fontSize: "0.95rem" }}>
               <strong>{deleteConfirmTarget.name}</strong> をユーザー一覧から削除しますか？
             </p>
-            <p style={{ margin: "0 0 1rem 0", color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5 }}>
-              このユーザーのシフトは、削除前に<strong>退職シフト</strong>（設定の「退職者のシフト」）へコピーされます。その後、現役のシフト表・通知・チャット・時給履歴など、DB 上の関連データは削除されます。
+            <p style={{ margin: "0 0 0.75rem 0", color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5 }}>
+              このユーザーのシフトは、削除前に<strong>退職者シフト</strong>へコピーされます。その後、現役のシフト表・通知・チャット・時給履歴など、DB 上の関連データは削除されます。
             </p>
-            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setDeleteConfirmTarget(null)}
-                disabled={!!deletingUserId}
-              >
+            <p
+              style={{
+                margin: "0 0 1rem 0",
+                padding: "0.65rem 0.75rem",
+                backgroundColor: "var(--bg-secondary)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "0.8125rem",
+                lineHeight: 1.55,
+                color: "var(--text-main)",
+              }}
+            >
+              <strong>「削除する」</strong>を押すとこの画面はすぐ閉じ、<strong>画面下のバー</strong>で進捗を表示しながらバックグラウンドで削除します。
+              <span style={{ color: "var(--text-muted)" }}> やめる場合は「キャンセル」か外側をクリック。</span>
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setDeleteConfirmTarget(null)}>
                 キャンセル
               </button>
               <button
@@ -609,9 +681,8 @@ export default function AdminSettingsPage() {
                 className="btn btn-outline"
                 style={{ color: "var(--destructive)", borderColor: "var(--destructive)" }}
                 onClick={executeDeleteUser}
-                disabled={!!deletingUserId}
               >
-                {deletingUserId ? "削除中..." : "削除する"}
+                削除する
               </button>
             </div>
           </div>
@@ -783,12 +854,12 @@ export default function AdminSettingsPage() {
       </div>
 
       <div id="shift-archive" className="card" style={{ maxWidth: "560px" }}>
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>退職者のシフト</h2>
+        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>退職者シフト</h2>
         <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.55 }}>
           退職・削除済みスタッフのシフトを手動で登録したり、一覧・月別で確認します。現役のシフト表とは別のデータです。
         </p>
         <Link href="/admin/shift-archive/" className="btn btn-outline">
-          退職シフトを開く
+          退職者シフトを開く
         </Link>
       </div>
 

@@ -49,7 +49,7 @@ export default function AdminDashboard() {
                 <div className="card">
                     <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>設定</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>
-                        締切日・Chatwork・ユーザー管理、<strong>退職者のシフト</strong>へのリンクなど。
+                        締切日・Chatwork・ユーザー管理、<strong>退職者シフト</strong>へのリンクなど。
                     </p>
                     <Link href="/admin/settings" className="btn btn-outline">
                         設定を開く

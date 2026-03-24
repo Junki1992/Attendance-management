@@ -18,6 +18,11 @@ import { getDoc } from "@/lib/firebase/firestoreHelpers";
 import { getUserProfile } from "@/services/userService";
 import type { Shift, ShiftWorkType } from "@/services/shiftService";
 import type { ParsedSheetCell } from "@/lib/shiftSheetTsv";
+import {
+    canonicalUserIdForShiftDoc,
+    resolveShiftDateString,
+    shiftDocumentInCalendarMonth,
+} from "@/lib/shiftDateNormalize";
 
 export const SHIFT_ARCHIVES_COLLECTION = "shiftArchives";
 export const SHIFT_ARCHIVE_USERS_COLLECTION = "shiftArchiveUsers";
@@ -87,7 +92,7 @@ export async function archiveShiftsBeforeUserDeletion(uid: string): Promise<{ ar
     return { archivedCount };
 }
 
-/** 退職シフト一覧のユーザー（アーカイブ日が新しい順） */
+/** 退職者シフト一覧のユーザー（アーカイブ日が新しい順） */
 export async function listArchivedShiftUsers(): Promise<ShiftArchiveUserMeta[]> {
     const snapshot = await getDocs(collection(db, SHIFT_ARCHIVE_USERS_COLLECTION));
     const list: ShiftArchiveUserMeta[] = [];
@@ -106,10 +111,15 @@ export async function listArchivedShiftUsers(): Promise<ShiftArchiveUserMeta[]> 
 }
 
 function docDataToShift(id: string, data: Record<string, unknown>): Shift {
+    const uid = canonicalUserIdForShiftDoc(id, String(data.userId ?? ""));
+    const dateNorm = resolveShiftDateString(data.date, id, uid) || String(data.date ?? "");
+    const archivedUserName =
+        typeof data.archivedUserName === "string" ? data.archivedUserName.trim() : undefined;
     return {
         id,
-        userId: String(data.userId ?? ""),
-        date: String(data.date ?? ""),
+        userId: uid,
+        date: dateNorm,
+        ...(archivedUserName ? { archivedUserName } : {}),
         startTime: String(data.startTime ?? "00:00"),
         endTime: String(data.endTime ?? "00:00"),
         status: (data.status as Shift["status"]) ?? "draft",
@@ -122,52 +132,38 @@ function docDataToShift(id: string, data: Record<string, unknown>): Shift {
     };
 }
 
-/** 指定ユーザー・指定月の退職シフト（日付昇順） */
+/** 指定ユーザー・指定月の退職者シフト（日付昇順）。日付は全件読み取り＋正規化で月判定（範囲クエリの取りこぼし防止） */
 export async function getArchivedShiftsForUserMonth(
     userId: string,
     year: number,
     month: number
 ): Promise<Shift[]> {
-    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-
-    const q = query(
-        collection(db, SHIFT_ARCHIVES_COLLECTION),
-        where("userId", "==", userId),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
+    const q = query(collection(db, SHIFT_ARCHIVES_COLLECTION), where("userId", "==", userId));
     const snapshot = await getDocs(q);
     const shifts: Shift[] = [];
     snapshot.forEach((d) => {
-        shifts.push(docDataToShift(d.id, d.data() as Record<string, unknown>));
+        const data = d.data() as Record<string, unknown>;
+        if (!shiftDocumentInCalendarMonth(data.date, d.id, String(data.userId ?? ""), year, month)) return;
+        shifts.push(docDataToShift(d.id, data));
     });
     shifts.sort((a, b) => a.date.localeCompare(b.date));
     return shifts;
 }
 
-/** 指定月の退職シフトを全ユーザー分まとめて取得（日付・ユーザーでソート） */
+/** 指定月の退職者シフトを全ユーザー分まとめて取得（日付・ユーザーでソート） */
 export async function getAllArchivedShiftsForMonth(year: number, month: number): Promise<Shift[]> {
-    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-
-    const q = query(
-        collection(db, SHIFT_ARCHIVES_COLLECTION),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
-    const snapshot = await getDocs(q);
+    const snapshot = await getDocs(collection(db, SHIFT_ARCHIVES_COLLECTION));
     const shifts: Shift[] = [];
     snapshot.forEach((d) => {
-        shifts.push(docDataToShift(d.id, d.data() as Record<string, unknown>));
+        const data = d.data() as Record<string, unknown>;
+        if (!shiftDocumentInCalendarMonth(data.date, d.id, String(data.userId ?? ""), year, month)) return;
+        shifts.push(docDataToShift(d.id, data));
     });
     shifts.sort((a, b) => a.userId.localeCompare(b.userId) || a.date.localeCompare(b.date));
     return shifts;
 }
 
-/** 手動入力または取り込み用の行から退職シフトへ書き込み */
+/** 手動入力または取り込み用の行から退職者シフトへ書き込み */
 export async function commitShiftArchiveTsvImport(args: {
     targetUserId: string;
     archivedUserName: string;
@@ -242,7 +238,26 @@ export async function commitShiftArchiveTsvImport(args: {
     return { written: toWrite.length };
 }
 
-/** 1人分の退職シフトをすべて削除（shiftArchives の該当 userId ＋ shiftArchiveUsers のメタ） */
+/** 一覧外 UID に対し shiftArchiveUsers に保存された退職時氏名を取得（管理シフト表の名前照合用） */
+export async function getArchivedUserNamesForIds(uids: string[]): Promise<Record<string, string>> {
+    const uniq = [...new Set(uids.filter(Boolean))];
+    const out: Record<string, string> = {};
+    await Promise.all(
+        uniq.map(async (uid) => {
+            try {
+                const snap = await getDoc(doc(db, SHIFT_ARCHIVE_USERS_COLLECTION, uid));
+                if (!snap.exists()) return;
+                const n = String((snap.data() as { archivedUserName?: string }).archivedUserName ?? "").trim();
+                if (n) out[uid] = n;
+            } catch {
+                /* ignore */
+            }
+        })
+    );
+    return out;
+}
+
+/** 1人分の退職者シフトをすべて削除（shiftArchives の該当 userId ＋ shiftArchiveUsers のメタ） */
 export async function deleteArchivedShiftsTableForUser(archiveUserId: string): Promise<{ deletedShiftDocs: number }> {
     const uid = archiveUserId.trim();
     if (!uid) {

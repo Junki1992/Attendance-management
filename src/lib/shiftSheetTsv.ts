@@ -449,7 +449,7 @@ export type DerivedImportDefaults = {
     /** 0〜11 */
     monthIndex: number;
     staffColumnIndex: number;
-    /** 列見出し（退職シフトの表示名の初期値） */
+    /** 列見出し（退職者シフトの表示名の初期値） */
     archiveName: string;
 };
 

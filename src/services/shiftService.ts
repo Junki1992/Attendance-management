@@ -1,9 +1,145 @@
 import { db } from "@/lib/firebase/firebase";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
-import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, Timestamp, onSnapshot, writeBatch, getDocsFromServer } from "firebase/firestore";
+import {
+    collection,
+    doc,
+    setDoc,
+    updateDoc,
+    deleteDoc,
+    query,
+    where,
+    Timestamp,
+    onSnapshot,
+    writeBatch,
+    getDocsFromServer,
+    documentId,
+    type QuerySnapshot,
+} from "firebase/firestore";
 import { getAllStaff, StaffItem, getUserProfile } from "@/services/userService";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
 import { isPastSubmitDeadlineForDateAsync } from "@/services/settingsService";
+import {
+    canonicalUserIdForShiftDoc,
+    resolveShiftDateString,
+    shiftDocumentInCalendarMonth,
+    shiftModelInCalendarMonth,
+} from "@/lib/shiftDateNormalize";
+import {
+    getAllArchivedShiftsForMonth,
+    getArchivedShiftsForUserMonth,
+    getArchivedUserNamesForIds,
+} from "@/services/shiftArchiveService";
+import { displayNameFromArchiveUserKey } from "@/lib/archiveUserKey";
+import { shiftBelongsToStaffRow } from "@/lib/adminShiftRowMatch";
+
+/** Firestore `in` は最大 30 要素 */
+const SHIFT_DOC_ID_IN_CHUNK = 30;
+
+/** 当月カレンダーの各日に対応する shifts のドキュメントID（アプリ標準: `${userId}_YYYY-MM-DD`） */
+function shiftDocumentIdsForUserMonth(userId: string, year: number, month0: number): string[] {
+    const lastDay = new Date(year, month0 + 1, 0).getDate();
+    const ids: string[] = [];
+    for (let d = 1; d <= lastDay; d++) {
+        const ds = `${year}-${String(month0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+        ids.push(`${userId}_${ds}`);
+    }
+    return ids;
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+
+function shiftsFromUserIdFieldQuery(snapshot: QuerySnapshot, year: number, month0: number): Shift[] {
+    const shifts: Shift[] = [];
+    snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, unknown>;
+        if (!shiftDocumentInCalendarMonth(data.date, docSnap.id, String(data.userId ?? ""), year, month0)) return;
+        shifts.push(shiftFromFirestoreDoc(docSnap.id, data));
+    });
+    return shifts;
+}
+
+/** documentId() in で取ったドキュメントは当月スロット固定のため月判定をスキップ（本文 userId 欠損でも表示する） */
+function shiftsFromDocIdInQuery(snapshot: QuerySnapshot): Shift[] {
+    const shifts: Shift[] = [];
+    snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, unknown>;
+        shifts.push(shiftFromFirestoreDoc(docSnap.id, data));
+    });
+    return shifts;
+}
+
+async function fetchLiveShiftsByDocumentIdsForMonth(
+    userId: string,
+    year: number,
+    month0: number,
+    fetchDocs: typeof getDocs
+): Promise<Shift[]> {
+    const parts = chunkArray(shiftDocumentIdsForUserMonth(userId, year, month0), SHIFT_DOC_ID_IN_CHUNK);
+    if (parts.length === 0) return [];
+    const snaps = await Promise.all(
+        parts.map((ids) => fetchDocs(query(collection(db, "shifts"), where(documentId(), "in", ids))))
+    );
+    const out: Shift[] = [];
+    for (const s of snaps) out.push(...shiftsFromDocIdInQuery(s));
+    return out;
+}
+
+/** shifts に無く shiftArchives にだけ残っている分も月次表示に含める（同一 userId+日は live を優先） */
+function mergeLiveAndArchivedShifts(live: Shift[], archived: Shift[]): Shift[] {
+    const map = new Map<string, Shift>();
+    const withNormDate = (s: Shift): Shift => {
+        const id = s.id ?? "";
+        const uid = canonicalUserIdForShiftDoc(id, s.userId);
+        const d = resolveShiftDateString(s.date, id, uid);
+        return { ...s, userId: uid, date: d || s.date };
+    };
+    for (const s of archived) {
+        const n = withNormDate(s);
+        map.set(`${n.userId}_${n.date}`, n);
+    }
+    for (const s of live) {
+        const n = withNormDate(s);
+        map.set(`${n.userId}_${n.date}`, n);
+    }
+    return Array.from(map.values()).sort((a, b) => a.userId.localeCompare(b.userId) || a.date.localeCompare(b.date));
+}
+
+async function safeArchivedForMonth(year: number, month: number): Promise<Shift[]> {
+    try {
+        return await getAllArchivedShiftsForMonth(year, month);
+    } catch (e) {
+        console.warn("[shiftService] getAllArchivedShiftsForMonth failed:", e);
+        return [];
+    }
+}
+
+async function safeArchivedForUserMonth(userId: string, year: number, month: number): Promise<Shift[]> {
+    try {
+        return await getArchivedShiftsForUserMonth(userId, year, month);
+    } catch (e) {
+        console.warn("[shiftService] getArchivedShiftsForUserMonth failed:", e);
+        return [];
+    }
+}
+
+/** Firestore の date（欠損・型ゆれ含む）を YYYY-MM-DD に揃えて Shift 化。ドキュメント ID を正として userId も復元 */
+function shiftFromFirestoreDoc(id: string, raw: Record<string, unknown>): Shift {
+    const canonicalUid = canonicalUserIdForShiftDoc(id, String(raw.userId ?? ""));
+    const dateStr = resolveShiftDateString(raw.date, id, canonicalUid);
+    const archivedUserName =
+        typeof raw.archivedUserName === "string" ? raw.archivedUserName.trim() : undefined;
+    return {
+        id,
+        ...raw,
+        userId: canonicalUid,
+        date: dateStr,
+        ...(archivedUserName ? { archivedUserName } : {}),
+    } as Shift;
+}
 
 /** 勤務形態（出社・在宅・当欠）。給与計算で参照する想定 */
 export type ShiftWorkType = "office" | "remote" | "absence";
@@ -11,6 +147,8 @@ export type ShiftWorkType = "office" | "remote" | "absence";
 export interface Shift {
     id?: string;
     userId: string;
+    /** 退職アーカイブ時の氏名（旧UIDのシフトを現行スタッフ行に表示する照合に使用） */
+    archivedUserName?: string;
     date: string; // YYYY-MM-DD
     startTime: string; // HH:mm
     endTime: string; // HH:mm
@@ -120,118 +258,126 @@ export const saveShift = async (shift: Shift, options?: SaveShiftOptions): Promi
 };
 
 export const getUserShifts = async (userId: string, year: number, month: number) => {
-    // Month is 0-indexed in JS Date, but let's store standard YYYY-MM-DD strings.
-    // Querying by string prefix is possible or just filtering client side if data is small.
-    // For scalability, where('date', '>=', start) and where('date', '<=', end) is best.
-
-    // Construct range
-    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    // End date logic: get last day of month
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
-
-    const q = query(
-        collection(db, "shifts"),
-        where("userId", "==", userId),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
-
-    const querySnapshot = await getDocs(q);
-    const shifts: Shift[] = [];
-    querySnapshot.forEach((doc) => {
-        shifts.push({ id: doc.id, ...doc.data() } as Shift);
-    });
-    return shifts;
+    const q = query(collection(db, "shifts"), where("userId", "==", userId));
+    const [querySnapshot, byDocId, archived] = await Promise.all([
+        getDocs(q),
+        fetchLiveShiftsByDocumentIdsForMonth(userId, year, month, getDocs),
+        safeArchivedForUserMonth(userId, year, month),
+    ]);
+    const fromField = shiftsFromUserIdFieldQuery(querySnapshot, year, month);
+    const map = new Map<string, Shift>();
+    for (const s of fromField) map.set(s.id!, s);
+    for (const s of byDocId) map.set(s.id!, s);
+    return mergeLiveAndArchivedShifts([...map.values()], archived);
 };
 
 /** 指定ユーザーのシフトをサーバーから取得（キャッシュを無視して最新を取得。更新ボタン用） */
 export const getUserShiftsFromServer = async (userId: string, year: number, month: number): Promise<Shift[]> => {
-    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}`;
-
-    const q = query(
-        collection(db, "shifts"),
-        where("userId", "==", userId),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
-
-    const querySnapshot = await getDocsFromServer(q);
-    const shifts: Shift[] = [];
-    querySnapshot.forEach((docSnap) => {
-        shifts.push({ id: docSnap.id, ...docSnap.data() } as Shift);
-    });
-    return shifts;
+    const q = query(collection(db, "shifts"), where("userId", "==", userId));
+    const [querySnapshot, byDocId, archived] = await Promise.all([
+        getDocsFromServer(q),
+        fetchLiveShiftsByDocumentIdsForMonth(userId, year, month, getDocsFromServer),
+        safeArchivedForUserMonth(userId, year, month),
+    ]);
+    const fromField = shiftsFromUserIdFieldQuery(querySnapshot, year, month);
+    const map = new Map<string, Shift>();
+    for (const s of fromField) map.set(s.id!, s);
+    for (const s of byDocId) map.set(s.id!, s);
+    return mergeLiveAndArchivedShifts([...map.values()], archived);
 };
 
-/** 指定ユーザーのシフトをリアルタイム購読（確定取り消し等の反映に必要） */
+/**
+ * 指定ユーザーのシフトをリアルタイム購読。
+ * `where("userId")` だけだと本文 userId 欠損・誤りのドキュメントが取りこぼれるため、
+ * 当月の `documentId in (uid_yyyy-mm-dd, …)` も併用してマージする。
+ */
 export const subscribeUserShifts = (
     userId: string,
     year: number,
     month: number,
     callback: (shifts: Shift[]) => void
 ) => {
-    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}`;
+    const archivedPromise = safeArchivedForUserMonth(userId, year, month);
+    const idChunks = chunkArray(shiftDocumentIdsForUserMonth(userId, year, month), SHIFT_DOC_ID_IN_CHUNK);
 
-    const q = query(
-        collection(db, "shifts"),
-        where("userId", "==", userId),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
+    let fromField: Shift[] = [];
+    const fromDocChunks: Shift[][] = idChunks.map(() => []);
+
+    const emit = async () => {
+        const map = new Map<string, Shift>();
+        for (const s of fromField) map.set(s.id!, s);
+        for (const s of fromDocChunks.flat()) map.set(s.id!, s);
+        const archived = await archivedPromise;
+        callback(mergeLiveAndArchivedShifts([...map.values()], archived));
+    };
+
+    const unsubs: Array<() => void> = [];
+    const qField = query(collection(db, "shifts"), where("userId", "==", userId));
+    unsubs.push(
+        onSnapshot(
+            qField,
+            (snapshot) => {
+                if (snapshot.metadata.fromCache && snapshot.empty) return;
+                fromField = shiftsFromUserIdFieldQuery(snapshot, year, month);
+                void emit();
+            },
+            (error) => {
+                console.warn("[subscribeUserShifts] userId query error:", { userId, year, month: month + 1, error });
+            }
+        )
     );
 
-    return onSnapshot(q, (snapshot) => {
-        // キャッシュ・サーバー両方とも反映する（キャッシュのみスキップすると別デバイスで管理側の変更が届かず取り消しが反映されない）
-        const shifts: Shift[] = [];
-        snapshot.forEach((doc) => {
-            shifts.push({ id: doc.id, ...doc.data() } as Shift);
-        });
-        callback(shifts);
-    }, (error) => {
-        console.warn("[subscribeUserShifts] error:", { userId, year, month: month + 1, error });
+    idChunks.forEach((ids, idx) => {
+        const qd = query(collection(db, "shifts"), where(documentId(), "in", ids));
+        unsubs.push(
+            onSnapshot(
+                qd,
+                (snapshot) => {
+                    fromDocChunks[idx] = shiftsFromDocIdInQuery(snapshot);
+                    void emit();
+                },
+                (error) => {
+                    console.warn("[subscribeUserShifts] documentId query error:", {
+                        userId,
+                        year,
+                        month: month + 1,
+                        chunk: idx,
+                        error,
+                    });
+                }
+            )
+        );
     });
+
+    return () => {
+        unsubs.forEach((u) => u());
+    };
 };
 
 export const getAllShifts = async (year: number, month: number) => {
-    // ... existing implementation
-    const startStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
-
-    const q = query(
-        collection(db, "shifts"),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
-
-    const querySnapshot = await getDocs(q);
+    const [snapshot, archived] = await Promise.all([getDocs(collection(db, "shifts")), safeArchivedForMonth(year, month)]);
     const shifts: Shift[] = [];
-    querySnapshot.forEach((doc) => {
-        shifts.push({ id: doc.id, ...doc.data() } as Shift);
+    snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, unknown>;
+        if (!shiftDocumentInCalendarMonth(data.date, docSnap.id, String(data.userId ?? ""), year, month)) return;
+        shifts.push(shiftFromFirestoreDoc(docSnap.id, data));
     });
-    return shifts;
+    return mergeLiveAndArchivedShifts(shifts, archived);
 };
 
 /** 当月シフトをサーバーから取得（キャッシュを使わない。確定状態を正しく表示するために管理画面の初回表示で使用） */
 export const getAllShiftsFromServer = async (year: number, month: number): Promise<Shift[]> => {
-    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-    const q = query(
-        collection(db, "shifts"),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
-    const snapshot = await getDocsFromServer(q);
+    const [snapshot, archived] = await Promise.all([
+        getDocsFromServer(collection(db, "shifts")),
+        safeArchivedForMonth(year, month),
+    ]);
     const shifts: Shift[] = [];
-    snapshot.forEach((doc) => {
-        shifts.push({ id: doc.id, ...doc.data() } as Shift);
+    snapshot.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, unknown>;
+        if (!shiftDocumentInCalendarMonth(data.date, docSnap.id, String(data.userId ?? ""), year, month)) return;
+        shifts.push(shiftFromFirestoreDoc(docSnap.id, data));
     });
-    return shifts;
+    return mergeLiveAndArchivedShifts(shifts, archived);
 };
 
 /** callback の第2引数: fromCache が true のときはキャッシュ由来（管理画面ではサーバー反映後に上書きしないために参照する） */
@@ -240,22 +386,19 @@ export const subscribeAllShifts = (
     month: number,
     callback: (shifts: Shift[], meta?: { fromCache: boolean }) => void
 ) => {
-    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${lastDay}`;
+    const archivedPromise = safeArchivedForMonth(year, month);
+    const col = collection(db, "shifts");
 
-    const q = query(
-        collection(db, "shifts"),
-        where("date", ">=", startStr),
-        where("date", "<=", endStr)
-    );
-
-    return onSnapshot(q, (snapshot) => {
-        const shifts: Shift[] = [];
-        snapshot.forEach((doc) => {
-            shifts.push({ id: doc.id, ...doc.data() } as Shift);
+    return onSnapshot(col, async (snapshot) => {
+        const live: Shift[] = [];
+        snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as Record<string, unknown>;
+            if (!shiftDocumentInCalendarMonth(data.date, docSnap.id, String(data.userId ?? ""), year, month)) return;
+            live.push(shiftFromFirestoreDoc(docSnap.id, data));
         });
-        callback(shifts, { fromCache: snapshot.metadata.fromCache });
+        if (snapshot.metadata.fromCache && snapshot.empty) return;
+        const archived = await archivedPromise;
+        callback(mergeLiveAndArchivedShifts(live, archived), { fromCache: snapshot.metadata.fromCache });
     }, (error) => {
         console.warn("Shift subscription error:", error);
     });
@@ -413,7 +556,8 @@ export interface MonthlyWorkSummaryRow {
 
 /** 確定シフトベースの月別・アルバイト別 勤務時間と給与（シフトごとの時給スナップショットで計算） */
 export const getMonthlyWorkSummary = async (year: number, month: number): Promise<MonthlyWorkSummaryRow[]> => {
-    const shifts = await getAllShifts(year, month);
+    const [shifts, staffList] = await Promise.all([getAllShifts(year, month), getAllStaff()]);
+    const nameByStaffId = new Map(staffList.map((s) => [s.id, s.name] as const));
     const confirmed = shifts.filter((s) => s.status === "confirmed");
     const uids = [...new Set(confirmed.map((s) => s.userId))];
 
@@ -436,9 +580,12 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
         const salary = Math.floor(salaryExact);
         const displayWage = totalHours > 0 ? Math.round(salary / totalHours) : fallbackWage;
 
+        const fromList = nameByStaffId.get(uid);
+        const profName = profile?.name?.trim();
+        const fromArchiveKey = displayNameFromArchiveUserKey(uid)?.trim();
         rows.push({
             userId: uid,
-            name: profile?.name ?? uid,
+            name: fromList || profName || fromArchiveKey || uid,
             totalHours,
             hourlyWage: displayWage,
             salary,
@@ -448,7 +595,7 @@ export const getMonthlyWorkSummary = async (year: number, month: number): Promis
     return rows;
 };
 
-/** 対象月に submitted/confirmed のシフトが1件もないアルバイトを返す（提出ボタンを押していない＝未提出者） */
+/** 対象月に submitted/confirmed のシフトが1件もないアルバイトを返す（管理表・名前紐づけと同じ基準） */
 export const getUnsubmittedStaff = async (
     year: number,
     month: number
@@ -457,11 +604,28 @@ export const getUnsubmittedStaff = async (
         getAllStaff(),
         getAllShifts(year, month),
     ]);
-    const submitted = new Set<string>();
+    const staffIdSet = new Set(staffList.map((s) => s.id));
+
+    const orphanUids = [...new Set(shifts.map((s) => s.userId).filter((uid) => !staffIdSet.has(uid)))];
+    let orphanUidToArchivedName: Record<string, string> = {};
+    if (orphanUids.length > 0) {
+        orphanUidToArchivedName = await getArchivedUserNamesForIds(orphanUids);
+    }
     shifts.forEach((s) => {
-        if (s.status === "submitted" || s.status === "confirmed") {
-            submitted.add(s.userId);
-        }
+        if (staffIdSet.has(s.userId)) return;
+        const an = typeof s.archivedUserName === "string" ? s.archivedUserName.trim() : "";
+        if (an) orphanUidToArchivedName[s.userId] = orphanUidToArchivedName[s.userId] || an;
     });
-    return staffList.filter((s) => !submitted.has(s.id));
+
+    const staffIdToName = Object.fromEntries(staffList.map((x) => [x.id, x.name] as const));
+
+    return staffList.filter((staff) => {
+        const has = shifts.some(
+            (s) =>
+                (s.status === "submitted" || s.status === "confirmed") &&
+                shiftModelInCalendarMonth(s, year, month) &&
+                shiftBelongsToStaffRow(s, staff.id, staff.name, staffIdSet, orphanUidToArchivedName, staffIdToName, staffList)
+        );
+        return !has;
+    });
 };

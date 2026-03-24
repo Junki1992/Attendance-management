@@ -142,7 +142,7 @@ service cloud.firestore {
       allow delete: if request.auth != null && (isAdmin() || resource.data.userId == request.auth.uid);
     }
 
-    // 退職・削除済みスタッフのシフトアーカイブ（管理者のみ読み書き）
+    // 退職者シフト（退職・削除済みスタッフ）のデータ（管理者のみ読み書き）
     match /shiftArchives/{docId} {
       allow read, write: if isAdmin();
     }

@@ -3,6 +3,13 @@ const admin = require('firebase-admin');
 const express = require('express');
 const cors = require('cors');
 
+/** チャット・催促等から除外（ルートの notification-excluded-uids.json と同期すること） */
+const NOTIFICATION_EXCLUDED_UIDS = new Set([
+  '04jkQsgMZIbQnuCwRUHbKdqf0dH2',
+  '79ePGF45wKd7d0RDc9MCMOWOhUI3',
+  'LfNtQQrIrxgUvLWeJ2lNVw3zigx2',
+]);
+
 admin.initializeApp();
 
 const app = express();
@@ -122,7 +129,7 @@ exports.scheduledRemindSubmit = functions.pubsub
         });
         const promises = [];
         staff.forEach((s) => {
-          if (!submitted.has(s.id)) {
+          if (!submitted.has(s.id) && !NOTIFICATION_EXCLUDED_UIDS.has(s.id)) {
             promises.push(
               db.collection('notifications').add({
                 userId: s.id,

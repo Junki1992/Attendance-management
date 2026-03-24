@@ -9,6 +9,16 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 
+function loadNotificationExcludedUids() {
+  try {
+    const p = path.join(__dirname, "..", "notification-excluded-uids.json");
+    const arr = JSON.parse(fs.readFileSync(p, "utf8"));
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
 async function sendErrorToChatwork(token, roomId, accountId, errorMessage) {
   if (!accountId?.trim()) return;
   try {
@@ -114,10 +124,13 @@ async function main() {
   }
 
   console.log("[chatwork-notify] Sending for date:", dateStr, "destinations:", destinations.length);
+  const excludedUids = loadNotificationExcludedUids();
   const shiftsSnap = await db.collection("shifts").where("date", "==", dateStr).where("status", "==", "confirmed").get();
   const entries = [];
   for (const d of shiftsSnap.docs) {
     const data = d.data();
+    const uid = data.userId != null ? String(data.userId).trim() : "";
+    if (uid && excludedUids.has(uid)) continue;
     const start = (data.startTime || "").trim();
     const end = (data.endTime || "").trim();
     if (!start || !end || (start === "00:00" && end === "00:00")) continue;

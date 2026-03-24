@@ -1,4 +1,5 @@
 import { db } from "@/lib/firebase/firebase";
+import { isNotificationExcludedUserId } from "@/lib/notificationExclusions";
 import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { doc, setDoc, collection, query, where } from "firebase/firestore";
 
@@ -133,6 +134,8 @@ export const sendNextDayAttendanceToChatwork = async (): Promise<{ ok: boolean; 
   const entries: { name: string; start: string; end: string; chatworkAccountId?: string }[] = [];
   for (const d of shiftsSnap.docs) {
     const data = d.data();
+    const uid = String(data.userId ?? "").trim();
+    if (uid && isNotificationExcludedUserId(uid)) continue;
     const start = (data.startTime || "").trim();
     const end = (data.endTime || "").trim();
     if (!start || !end || (start === "00:00" && end === "00:00")) continue;

@@ -420,7 +420,7 @@ export default function AdminShiftArchivePage() {
                 archivedUserName,
                 rows: built.data,
             });
-            setSaveNotice(`${written} 件を退職シフトに保存しました。`);
+            setSaveNotice(`${written} 件を退職者シフトに保存しました。`);
             loadUsers();
             setYear(manualYear);
             setMonth(manualMonth);
@@ -478,7 +478,7 @@ export default function AdminShiftArchivePage() {
     return (
         <div className={styles.page}>
             <header className={styles.pageHeader}>
-                <h1 className={styles.pageTitle}>退職シフト</h1>
+                <h1 className={styles.pageTitle}>退職者シフト</h1>
                 <p className={styles.pageLead}>
                     退職・削除済みのスタッフのシフトを閲覧します（現役のシフト表とは別データ）。
                     <strong>設定画面からユーザーを削除</strong>したとき、その人のシフトは自動でここにコピーされます。
@@ -490,12 +490,12 @@ export default function AdminShiftArchivePage() {
                 <div className={styles.sectionHeader}>
                     <h2 id="manual-heading" className={styles.sectionTitle}>
                         <span className={styles.sectionTitleBadge}>登録</span>
-                        手動で退職シフトを登録
+                        手動で退職者シフトを登録
                     </h2>
                 </div>
                 <div className={styles.sectionBody}>
                     <div className={styles.hint}>
-                        まず<strong>スタッフ名</strong>は、削除済み・退職シフト一覧にいる人を<strong>プルダウンで選択</strong>します（設定から削除された人もここに出ます）。
+                        まず<strong>スタッフ名</strong>は、削除済み・退職者シフト一覧にいる人を<strong>プルダウンで選択</strong>します（設定から削除された人もここに出ます）。
                         管理者の<strong>シフト表と同じく</strong>、月のカレンダー上の<strong>日をクリック</strong>して OFF / 出社・在宅・当欠と時間を入力します。
                         <strong>複数選択</strong>をオンにすると日をタップして複数選び、<strong>一括で設定</strong>できます。
                         未入力の日は保存されません。月を変えると入力中の内容はクリアされます。
@@ -538,7 +538,7 @@ export default function AdminShiftArchivePage() {
                             )}
                             {!loadingList && users.length === 0 && (
                                 <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", margin: "0.35rem 0 0", lineHeight: 1.45 }}>
-                                    まだ退職シフト一覧に誰もいません。設定からユーザーを削除すると自動で追加されます。「一覧にない」から名前だけ登録することもできます。
+                                    まだ退職者シフト一覧に誰もいません。設定からユーザーを削除すると自動で追加されます。「一覧にない」から名前だけ登録することもできます。
                                 </p>
                             )}
                         </div>
@@ -812,7 +812,7 @@ export default function AdminShiftArchivePage() {
                             disabled={savingManual || !canSubmitManualStaff}
                             onClick={handleManualSave}
                         >
-                            {savingManual ? "保存中…" : "退職シフトに保存"}
+                            {savingManual ? "保存中…" : "退職者シフトに保存"}
                         </button>
                     </div>
                 </div>
@@ -973,14 +973,14 @@ export default function AdminShiftArchivePage() {
             <section className={styles.section} aria-labelledby="archive-grid-heading">
                 <div className={styles.sectionHeader}>
                     <h2 id="archive-grid-heading" className={styles.sectionTitle}>
-                        退職シフト一覧
+                        退職者シフト一覧
                     </h2>
                 </div>
                 <div className={styles.sectionBody}>
                     {loadingList ? (
                         <p className={styles.loadingText}>読み込み中…</p>
                     ) : users.length === 0 ? (
-                        <p className={styles.emptyState}>まだ退職シフトのデータがありません。</p>
+                        <p className={styles.emptyState}>まだ退職者シフトのデータがありません。</p>
                     ) : (
                         <>
                             <div className={styles.detailHeader}>

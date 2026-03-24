@@ -62,6 +62,8 @@ export default function ShiftCalendar() {
     const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
     const lastSavedShiftsRef = useRef<{ [key: number]: string }>({});
     const skipMergeRef = useRef(false);
+    /** 直前に apply した年月。月が変わった直後は前月の「同じ日」セルをマージしない（4月→5月で予定がコピーされる不具合対策） */
+    const lastAppliedCalendarKeyRef = useRef<string | null>(null);
     const hasChangesRef = useRef(false);
     const lastRefetchAtRef = useRef(0);
     const daysToPreserveRef = useRef<Set<number>>(new Set());
@@ -97,7 +99,34 @@ export default function ShiftCalendar() {
         );
     }, [year, month, effectiveSettings]);
 
-    const applyShiftsToState = useCallback((data: Shift[]) => {
+    /**
+     * セル表示の「未入力 確定」と一致させる。ドキュメントが無くても、前半または後半ブロックに確定日があれば
+     * 空セルは確定扱い（編集・一括選択不可）。
+     */
+    const effectiveConfirmedByDay = useMemo(() => {
+        const firstBlockConfirmed = Array.from({ length: Math.min(15, daysInMonth) }, (_, i) => i + 1).some(
+            (d) => confirmedByDay[d]
+        );
+        const secondBlockConfirmed = Array.from({ length: Math.max(0, daysInMonth - 15) }, (_, i) => i + 16).some(
+            (d) => confirmedByDay[d]
+        );
+        const map: { [key: number]: boolean } = {};
+        for (let day = 1; day <= daysInMonth; day++) {
+            const hasDoc = shifts[day] !== undefined;
+            if (hasDoc) {
+                map[day] = !!confirmedByDay[day];
+            } else {
+                map[day] = (day <= 15 && firstBlockConfirmed) || (day >= 16 && secondBlockConfirmed);
+            }
+        }
+        return map;
+    }, [daysInMonth, confirmedByDay, shifts]);
+
+    const applyShiftsToState = useCallback((data: Shift[], viewYear: number, viewMonth: number) => {
+        const viewKey = `${viewYear}-${viewMonth}`;
+        const mergeFromPrev = lastAppliedCalendarKeyRef.current === viewKey;
+        lastAppliedCalendarKeyRef.current = viewKey;
+
         const shiftMap: { [key: number]: string } = {};
         const shiftsByDayMap: { [key: number]: Shift } = {};
         const remoteMap: { [key: number]: boolean } = {};
@@ -122,9 +151,10 @@ export default function ShiftCalendar() {
         });
         const skipMerge = skipMergeRef.current;
         if (skipMerge) skipMergeRef.current = false;
+        const noMerge = skipMerge || !mergeFromPrev;
         daysToPreserveRef.current = new Set<number>();
         setShifts((prev) => {
-            if (skipMerge) return shiftMap;
+            if (noMerge) return shiftMap;
             const merged = { ...shiftMap };
             for (const dayStr of Object.keys(prev)) {
                 const d = parseInt(dayStr, 10);
@@ -137,7 +167,7 @@ export default function ShiftCalendar() {
         });
         setShiftsByDay(shiftsByDayMap);
         setRemoteByDay((prev) => {
-            if (skipMerge) return remoteMap;
+            if (noMerge) return remoteMap;
             const merged = { ...remoteMap };
             const toPreserve = daysToPreserveRef.current;
             for (const dayStr of Object.keys(prev)) {
@@ -147,7 +177,7 @@ export default function ShiftCalendar() {
             return merged;
         });
         setWorkTypeByDay((prev) => {
-            if (skipMerge) return workTypeMap;
+            if (noMerge) return workTypeMap;
             const merged = { ...workTypeMap };
             const toPreserve = daysToPreserveRef.current;
             for (const dayStr of Object.keys(prev)) {
@@ -173,16 +203,17 @@ export default function ShiftCalendar() {
 
         let unsub: (() => void) | null = null;
         let cancelled = false;
+        const onShifts = (data: Shift[]) => applyShiftsToState(data, year, month);
         getUserShiftsFromServer(user.uid, year, month)
             .then((data) => {
                 if (cancelled) return;
-                applyShiftsToState(data);
-                unsub = subscribeUserShifts(user.uid, year, month, applyShiftsToState);
+                onShifts(data);
+                unsub = subscribeUserShifts(user.uid, year, month, onShifts);
             })
             .catch((e) => {
                 if (cancelled) return;
                 console.error("[staff/shifts] 初回取得失敗、購読のみ開始:", e);
-                unsub = subscribeUserShifts(user.uid, year, month, applyShiftsToState);
+                unsub = subscribeUserShifts(user.uid, year, month, onShifts);
             });
 
         return () => {
@@ -200,7 +231,9 @@ export default function ShiftCalendar() {
             const now = Date.now();
             if (now - lastRefetchAtRef.current < DEBOUNCE_MS) return;
             lastRefetchAtRef.current = now;
-            getUserShiftsFromServer(user.uid, year, month).then(applyShiftsToState).catch(() => {});
+            getUserShiftsFromServer(user.uid, year, month)
+                .then((data) => applyShiftsToState(data, year, month))
+                .catch(() => {});
         };
         const handleVisibilityChange = () => {
             if (document.visibilityState === "visible") doRefetch();
@@ -221,8 +254,11 @@ export default function ShiftCalendar() {
     const monthHasAnyConfirmed = Object.keys(confirmedByDay).length > 0;
     /** 編集可能な日が1件以上あるか（取り消しされた日は編集可能） */
     const hasEditableDays = useMemo(
-        () => Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => !isDayPastDeadline(d) && !confirmedByDay[d] && !isPastDate(year, month, d)),
-        [daysInMonth, month, year, confirmedByDay, isDayPastDeadline]
+        () =>
+            Array.from({ length: daysInMonth }, (_, i) => i + 1).some(
+                (d) => !isDayPastDeadline(d) && !effectiveConfirmedByDay[d] && !isPastDate(year, month, d)
+            ),
+        [daysInMonth, month, year, effectiveConfirmedByDay, isDayPastDeadline]
     );
     /** 未確定のシフトが1件以上あるか（シフトがある日で、確定していない日。全月確定なら false） */
     const hasUnconfirmedShifts = useMemo(
@@ -231,6 +267,25 @@ export default function ShiftCalendar() {
             return !confirmedByDay[d] && !isDayPastDeadline(d) && !isPastDate(year, month, d);
         }),
         [shifts, confirmedByDay, year, month, isDayPastDeadline]
+    );
+
+    /** 締切前・未確定だがまだ shifts に無い日がある（例: 1～15 だけ確定で後半が空）→ 一括設定を出す */
+    const hasEditableDayWithoutShift = useMemo(() => {
+        for (let d = 1; d <= daysInMonth; d++) {
+            if (isDayPastDeadline(d) || effectiveConfirmedByDay[d] || isPastDate(year, month, d)) continue;
+            const v = shifts[d];
+            if (v === undefined || v === "") return true;
+        }
+        return false;
+    }, [daysInMonth, shifts, effectiveConfirmedByDay, year, month, isDayPastDeadline]);
+
+    /** 一括設定・コメント欄を出すか（前半だけ確定でも後半の入力が必要なとき true） */
+    const showShiftEntryAssist = useMemo(
+        () =>
+            !monthIsPastDeadline &&
+            hasEditableDays &&
+            (hasUnconfirmedShifts || Object.keys(shifts).length === 0 || hasEditableDayWithoutShift),
+        [monthIsPastDeadline, hasEditableDays, hasUnconfirmedShifts, hasEditableDayWithoutShift, shifts]
     );
 
     const getRangeDays = useCallback((from: number, to: number) => {
@@ -262,7 +317,7 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             if (dayStr) {
                 const day = parseInt(dayStr, 10);
-                const range = getRangeDays(start, day).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d));
+                const range = getRangeDays(start, day).filter((d) => !effectiveConfirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d));
                 if (range.length > 1) {
                     setBulkSelectedDays(range);
                 } else if (range.length === 1) {
@@ -280,7 +335,7 @@ export default function ShiftCalendar() {
             const dayStr = dayEl?.getAttribute("data-day");
             const day = dayStr ? parseInt(dayStr, 10) : null;
             if (!hasMovedRef.current && day !== null) {
-                if (confirmedByDay[day]) {
+                if (effectiveConfirmedByDay[day]) {
                     setDetailModalDay(day);
                 } else if (hasEditableDays && !isDayPastDeadline(day) && !isPastDate(year, month, day)) {
                     setBulkSelectedDays((prev) =>
@@ -299,7 +354,7 @@ export default function ShiftCalendar() {
             document.removeEventListener("pointerup", handlePointerUp);
             document.removeEventListener("pointercancel", handlePointerUp);
         };
-    }, [hasEditableDays, getRangeDays, confirmedByDay, year, month, isDayPastDeadline]);
+    }, [hasEditableDays, getRangeDays, effectiveConfirmedByDay, year, month, isDayPastDeadline]);
 
     const changeMonth = (delta: number) => {
         let m = month + delta;
@@ -324,18 +379,23 @@ export default function ShiftCalendar() {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const date = new Date(year, month, d);
             const dow = date.getDay();
-            return dow >= 1 && dow <= 5 && !isJapaneseHoliday(date) && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
+            return dow >= 1 && dow <= 5 && !isJapaneseHoliday(date) && !effectiveConfirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
         });
         setBulkSelectedDays(days);
     };
     const bulkSelectWeekends = () => {
         const days = Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => {
             const dow = new Date(year, month, d).getDay();
-            return (dow === 0 || dow === 6) && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
+            return (dow === 0 || dow === 6) && !effectiveConfirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d);
         });
         setBulkSelectedDays(days);
     };
-    const bulkSelectAll = () => setBulkSelectedDays(Array.from({ length: daysInMonth }, (_, i) => i + 1).filter((d) => !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d)));
+    const bulkSelectAll = () =>
+        setBulkSelectedDays(
+            Array.from({ length: daysInMonth }, (_, i) => i + 1).filter(
+                (d) => !effectiveConfirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d)
+            )
+        );
     const bulkClearSelection = () => setBulkSelectedDays([]);
 
     const bulkDeleteDrafts = async () => {
@@ -344,7 +404,7 @@ export default function ShiftCalendar() {
             (d) =>
                 d >= 1 &&
                 d <= daysInMonth &&
-                !confirmedByDay[d] &&
+                !effectiveConfirmedByDay[d] &&
                 !submittedByDay[d] &&
                 !isPastDate(year, month, d) &&
                 !isDayPastDeadline(d) &&
@@ -402,7 +462,9 @@ export default function ShiftCalendar() {
 
     const applyBulkShift = () => {
         if (!hasEditableDays) return;
-        const targetDays = bulkSelectedDays.filter((d) => d >= 1 && d <= daysInMonth && !confirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d));
+        const targetDays = bulkSelectedDays.filter(
+            (d) => d >= 1 && d <= daysInMonth && !effectiveConfirmedByDay[d] && !isPastDate(year, month, d) && !isDayPastDeadline(d)
+        );
         if (targetDays.length === 0) {
             alert("適用する日を1日以上選択してください。");
             return;
@@ -435,62 +497,122 @@ export default function ShiftCalendar() {
         alert(`${targetDays.length}日分を一括で設定しました。内容を確認して「保存」または「提出」してください。`);
     };
 
-    const saveShiftsToFirestore = async (status: "draft" | "submitted") => {
-        if (!user || !hasEditableDays) return;
-        const promises = Object.entries(shifts)
-            .filter(([dayStr]) => {
-                const d = parseInt(dayStr, 10);
-                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                return !confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDateWithSettings(dateStr, effectiveSettings);
-            })
-            .map(async ([dayStr, label]) => {
-                const day = parseInt(dayStr, 10);
-                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                let start = "",
-                    end = "";
-                if (label === "OFF") {
-                    start = "00:00";
-                    end = "00:00";
-                } else if (label.includes(" - ")) {
-                    const parts = label.split(" - ");
-                    start = parts[0] ?? "";
-                    end = parts[1] ?? "";
-                } else {
-                    return deleteShift(user.uid, dateStr);
-                }
-                const shiftData: Shift = {
-                    userId: user.uid,
-                    date: dateStr,
-                    startTime: start,
-                    endTime: end,
-                    status,
-                    isRemote: remoteByDay[day] ?? false,
-                };
-                return saveShiftByStaff(shiftData);
-            });
-        await Promise.all(promises);
-        const saved = { ...shifts };
-        setLastSavedShifts(saved);
-        lastSavedShiftsRef.current = saved;
-        setLastSavedRemoteByDay({ ...remoteByDay });
+    /** 返り値: Firestore に送った処理件数（保存+削除）。0 なら実質何も書いていない */
+    const saveShiftsToFirestore = async (status: "draft" | "submitted"): Promise<number> => {
+        if (!user || !hasEditableDays) return 0;
+
+        const isEligibleForWrite = (d: number): boolean => {
+            const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+            return (
+                !effectiveConfirmedByDay[d] &&
+                !isPastDate(year, month, d) &&
+                !isPastSubmitDeadlineForDateWithSettings(dateStr, effectiveSettings)
+            );
+        };
+
+        /** 提出時: 締切前・編集可能な全日を書き込み、画面上の未入力は OFF として保存する */
+        let dayLabelPairs: [number, string][];
         if (status === "submitted") {
+            dayLabelPairs = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+                if (!isEligibleForWrite(d)) continue;
+                const raw = shifts[d];
+                /** 未入力・空白・OFF 以外で時刻形式でないものはすべて OFF（提出でドキュメント削除しない） */
+                let label: string;
+                if (raw === undefined || raw === null || String(raw).trim() === "") {
+                    label = "OFF";
+                } else if (raw === "OFF") {
+                    label = "OFF";
+                } else if (String(raw).includes(" - ")) {
+                    label = raw;
+                } else {
+                    label = "OFF";
+                }
+                dayLabelPairs.push([d, label]);
+            }
+        } else {
+            dayLabelPairs = Object.entries(shifts)
+                .map(([ds, lab]) => [parseInt(ds, 10), lab] as [number, string])
+                .filter(([d]) => isEligibleForWrite(d));
+        }
+
+        const promises = dayLabelPairs.map(async ([day, label]) => {
+            const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            let start = "",
+                end = "";
+            if (label === "OFF") {
+                start = "00:00";
+                end = "00:00";
+            } else if (label.includes(" - ")) {
+                const parts = label.split(" - ");
+                start = parts[0] ?? "";
+                end = parts[1] ?? "";
+            } else {
+                return deleteShift(user.uid, dateStr);
+            }
+            const shiftData: Shift = {
+                userId: user.uid,
+                date: dateStr,
+                startTime: start,
+                endTime: end,
+                status,
+                isRemote: remoteByDay[day] ?? false,
+            };
+            return saveShiftByStaff(shiftData);
+        });
+        await Promise.all(promises);
+
+        const mergedShifts = { ...shifts };
+        if (status === "submitted") {
+            for (const [d, label] of dayLabelPairs) {
+                mergedShifts[d] = label;
+            }
+        }
+        setLastSavedShifts(mergedShifts);
+        lastSavedShiftsRef.current = mergedShifts;
+
+        if (status === "submitted") {
+            setShifts(mergedShifts);
+            const mergedRemote = { ...remoteByDay };
+            const mergedWorkType = { ...workTypeByDay };
+            for (const [d] of dayLabelPairs) {
+                if (mergedRemote[d] === undefined) mergedRemote[d] = false;
+                if (mergedWorkType[d] === undefined) mergedWorkType[d] = "office";
+            }
+            setRemoteByDay(mergedRemote);
+            setWorkTypeByDay(mergedWorkType);
+            setLastSavedRemoteByDay(mergedRemote);
             setSubmittedByDay((prev) => {
                 const next = { ...prev };
-                Object.keys(shifts).forEach((dayStr) => {
-                    const d = parseInt(dayStr, 10);
-                    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    if (!confirmedByDay[d] && !isPastDate(year, month, d) && !isPastSubmitDeadlineForDateWithSettings(dateStr, effectiveSettings)) next[d] = true;
-                });
+                for (const [d] of dayLabelPairs) {
+                    next[d] = true;
+                }
                 return next;
             });
+        } else {
+            setLastSavedRemoteByDay({ ...remoteByDay });
         }
+
+        return promises.length;
     };
 
     const handleSave = async () => {
-        if (!user || !hasEditableDays) return;
+        if (!user) return;
+        if (!hasEditableDays) {
+            alert(
+                "この月は保存できません。確定済み・提出締切後・過去日のみの月です。変更が必要なときは管理者に確定の取り消しなどを依頼してください。"
+            );
+            return;
+        }
         setLoading(true);
         try {
-            await saveShiftsToFirestore("draft");
+            const n = await saveShiftsToFirestore("draft");
+            if (n === 0) {
+                alert(
+                    "保存できる日のシフトがありません（締切済み・確定済みの日だけを表示している可能性があります）。カレンダーで日付を選択し、勤務時間を入力してからお試しください。"
+                );
+                return;
+            }
             alert("下書きを保存しました");
         } catch (error) {
             console.error("Error saving:", error);
@@ -501,12 +623,30 @@ export default function ShiftCalendar() {
     };
 
     const handleSubmit = async () => {
-        if (!user || !hasEditableDays) return;
+        if (!user) return;
+        if (!hasEditableDays) {
+            alert(
+                "この月は提出できません。確定済み・提出締切後・過去日のみの月です。管理者にご相談ください。"
+            );
+            return;
+        }
         setLoading(true);
         try {
-            await saveShiftsToFirestore("submitted");
+            const n = await saveShiftsToFirestore("submitted");
+            if (n === 0) {
+                alert(
+                    "提出できる日がありません（全日が確定済み・締切後・過去日のみなど）。管理者にご相談ください。"
+                );
+                return;
+            }
+            let commentFailed = false;
             if (submitComment.trim()) {
-                await saveShiftSubmitComment(user.uid, year, month + 1, submitComment.trim());
+                try {
+                    await saveShiftSubmitComment(user.uid, year, month + 1, submitComment.trim());
+                } catch (commentErr) {
+                    console.error("[staff/shifts] 提出コメント保存失敗（シフトは保存済み）", commentErr);
+                    commentFailed = true;
+                }
             }
             try {
                 const adminIds = await getAdminIds();
@@ -516,22 +656,36 @@ export default function ShiftCalendar() {
                 console.warn("[staff/shifts] 管理者への通知作成に失敗", notifErr);
             }
             setSubmitComment("");
-            alert("シフトを提出しました！");
+            alert(
+                commentFailed
+                    ? "シフトは提出しました。申請コメントだけ保存できませんでした。必要なら管理者に直接お伝えください。"
+                    : "シフトを提出しました！"
+            );
         } catch (error) {
             console.error("Error submitting:", error);
-            alert("提出に失敗しました");
+            alert("提出に失敗しました（ネットワークや権限をご確認ください）");
         } finally {
             setLoading(false);
         }
     };
 
     /** 編集可能な日（締切前・未確定・未来または今日） */
-    const isEditableDay = (d: number) => !isDayPastDeadline(d) && !confirmedByDay[d] && !isPastDate(year, month, d);
+    const isEditableDay = (d: number) => !isDayPastDeadline(d) && !effectiveConfirmedByDay[d] && !isPastDate(year, month, d);
 
     const hasShiftsToSave = Object.keys(shifts).some((dayStr) => {
         const d = parseInt(dayStr, 10);
         return isEditableDay(d);
     });
+
+    /** 編集可能な日のうち、まだ提出済みとして扱われていない日がある（未入力だけでも「提出」で全日OFF化できる） */
+    const hasEditableUnsubmittedDay = useMemo(
+        () =>
+            Array.from({ length: daysInMonth }, (_, i) => i + 1).some((d) => {
+                if (isDayPastDeadline(d) || effectiveConfirmedByDay[d] || isPastDate(year, month, d)) return false;
+                return !submittedByDay[d];
+            }),
+        [daysInMonth, isDayPastDeadline, effectiveConfirmedByDay, year, month, submittedByDay]
+    );
 
     const hasChanges = (() => {
         for (let d = 1; d <= daysInMonth; d++) {
@@ -545,6 +699,42 @@ export default function ShiftCalendar() {
         return false;
     })();
     hasChangesRef.current = hasChanges;
+
+    const saveDisabled = loading || !hasEditableDays || !hasShiftsToSave || !hasChanges;
+    const submitDisabled = loading || !hasEditableDays || (!hasChanges && !hasEditableUnsubmittedDay);
+
+    /** 保存・提出が押せないときの説明（ツールチップ＆本文下に表示） */
+    const saveDisabledHint = useMemo(() => {
+        if (loading) return null;
+        if (!hasEditableDays) {
+            return "この月は提出できません（締切後・全日が確定済み・過去のみなど）。変更が必要なときは管理者に確定の取り消しや期限の相談をしてください。";
+        }
+        if (!hasShiftsToSave) {
+            return null;
+        }
+        if (!hasChanges) {
+            return "画面と最後に保存した内容に差がありません。勤務時間を変更するか、一度「保存」したあとに中身を変えてから保存してください。";
+        }
+        return null;
+    }, [loading, hasEditableDays, hasShiftsToSave, hasChanges]);
+
+    const submitDisabledHint = useMemo(() => {
+        if (loading) return null;
+        if (!hasEditableDays) {
+            return "この月は提出できません（締切後・全日が確定済み・過去のみなど）。変更が必要なときは管理者に確定の取り消しや期限の相談をしてください。";
+        }
+        if (!hasChanges && !hasEditableUnsubmittedDay) {
+            return "編集可能な日はすべて提出済みで、画面にも変更がありません。";
+        }
+        return null;
+    }, [loading, hasEditableDays, hasChanges, hasEditableUnsubmittedDay]);
+
+    const footerHintBelowButtons =
+        submitDisabled && submitDisabledHint
+            ? submitDisabledHint
+            : saveDisabled && saveDisabledHint
+              ? saveDisabledHint
+              : null;
 
     /** 36協定アラート用: 1日8時間超・週40時間超の該当をリスト化 */
     const alert36 = useMemo(() => {
@@ -592,7 +782,7 @@ export default function ShiftCalendar() {
 
     return (
         <div className="card" style={{ overflow: "visible", maxWidth: "100%", minWidth: 0 }}>
-            {monthHasAnyConfirmed && !hasUnconfirmedShifts && (
+            {monthHasAnyConfirmed && !hasUnconfirmedShifts && !hasEditableDays && (
                 <div
                     style={{
                         padding: "0.75rem 1rem",
@@ -735,10 +925,13 @@ export default function ShiftCalendar() {
                         {(() => {
                             const label = shifts[detailModalDay];
                             const isConfirmed = confirmedByDay[detailModalDay];
+                            const isEffectivelyConfirmed = effectiveConfirmedByDay[detailModalDay];
                             if (!label) {
                                 return (
                                     <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>
-                                        この日のシフトは未入力です
+                                        {isEffectivelyConfirmed
+                                            ? "この期間は管理者が確定済みのため、入力は不要です（表示は「未入力 確定」）。"
+                                            : "この日のシフトは未入力です"}
                                     </p>
                                 );
                             }
@@ -779,7 +972,7 @@ export default function ShiftCalendar() {
                 </div>
             )}
 
-            {(hasUnconfirmedShifts || Object.keys(shifts).length === 0) && !monthIsPastDeadline && (
+            {showShiftEntryAssist && (
                 <div
                     style={{
                         marginBottom: "1rem",
@@ -810,7 +1003,7 @@ export default function ShiftCalendar() {
                             type="button"
                             className="btn btn-outline"
                             onClick={bulkDeleteDrafts}
-                            disabled={loading || bulkSelectedDays.length === 0 || !bulkSelectedDays.some((d) => shifts[d] && !confirmedByDay[d] && !submittedByDay[d])}
+                            disabled={loading || bulkSelectedDays.length === 0 || !bulkSelectedDays.some((d) => shifts[d] && !effectiveConfirmedByDay[d] && !submittedByDay[d])}
                             style={{ fontSize: "0.75rem", color: "var(--destructive)", borderColor: "var(--destructive)" }}
                             title="選択した日の下書きを削除（確定・提出済みは除く）"
                         >
@@ -864,7 +1057,7 @@ export default function ShiftCalendar() {
                     </button>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.5rem" }}>
-                    {!monthIsPastDeadline && (hasUnconfirmedShifts || Object.keys(shifts).length === 0) && (
+                    {showShiftEntryAssist && (
                     <div style={{ alignSelf: "stretch", maxWidth: "400px" }}>
                         <label style={{ display: "block", fontSize: "0.875rem", marginBottom: "0.25rem", color: "var(--text-muted)" }}>
                             申請時のコメント（任意）・管理者に伝えたいことがあれば記入
@@ -882,17 +1075,41 @@ export default function ShiftCalendar() {
                     <div style={{ fontSize: "0.9rem", color: "var(--text-muted)" }}>
                         概算給与: <span style={{ fontWeight: "bold", color: "var(--primary)" }}>¥{calculateSalary().toLocaleString()}</span> (時給 ¥{hourlyWage})
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                        <button className="btn btn-outline" onClick={handleSave} disabled={loading || !hasEditableDays || !hasShiftsToSave || !hasChanges}>
-                            {loading ? "処理中..." : "保存"}
-                        </button>
-                        <button
-                            className="btn btn-primary"
-                            onClick={handleSubmit}
-                            disabled={loading || !hasEditableDays || !hasShiftsToSave || !hasChanges}
-                        >
-                            {loading ? "処理中..." : !hasEditableDays ? "確定済" : "提出"}
-                        </button>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={handleSave}
+                                disabled={saveDisabled}
+                                title={saveDisabled ? (saveDisabledHint ?? undefined) : undefined}
+                            >
+                                {loading ? "処理中..." : "保存"}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleSubmit}
+                                disabled={submitDisabled}
+                                title={submitDisabled ? (submitDisabledHint ?? undefined) : undefined}
+                            >
+                                {loading ? "処理中..." : !hasEditableDays ? "提出不可" : "提出"}
+                            </button>
+                        </div>
+                        {footerHintBelowButtons ? (
+                            <p
+                                style={{
+                                    fontSize: "0.78rem",
+                                    color: "var(--text-muted)",
+                                    maxWidth: "min(22rem, 100%)",
+                                    margin: 0,
+                                    lineHeight: 1.45,
+                                    textAlign: "right",
+                                }}
+                            >
+                                {footerHintBelowButtons}
+                            </p>
+                        ) : null}
                     </div>
                 </div>
             </div>
@@ -945,11 +1162,12 @@ export default function ShiftCalendar() {
                         const isHoliday = isJapaneseHoliday(date);
                         const isSpecialDay = isWeekend || isHoliday;
                         const isConfirmed = confirmedByDay[day];
+                        const isEffectivelyConfirmed = effectiveConfirmedByDay[day];
                         const isPast = isPastDate(year, month, day);
                         const isBulkSelected = bulkSelectedDays.includes(day);
                         const cellBg = isBulkSelected ? "rgba(79, 70, 229, 0.2)" : "var(--surface)";
                         const cellBorder = isBulkSelected ? "2px solid var(--primary)" : undefined;
-                        const isEditable = !isDayPastDeadline(day) && !isConfirmed && !isPast;
+                        const isEditable = !isDayPastDeadline(day) && !isEffectivelyConfirmed && !isPast;
                         const grayedOut = monthIsPastDeadline;
                         const isToday = (() => {
                             const t = new Date();
@@ -969,15 +1187,15 @@ export default function ShiftCalendar() {
                                 role="button"
                                 tabIndex={0}
                                 data-day={day}
-                                title={grayedOut ? "この月の提出期限は過ぎています" : isPast ? "過去の日付は編集できません" : isConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : isDayPastDeadline(day) ? "締切を過ぎたため編集できません" : undefined}
+                                title={grayedOut ? "この月の提出期限は過ぎています" : isPast ? "過去の日付は編集できません" : isEffectivelyConfirmed ? "クリックで詳細表示" : isEditable ? "クリックで選択・解除" : isDayPastDeadline(day) ? "締切を過ぎたため編集できません" : undefined}
                                 onPointerDown={(e) => handleDayPointerDown(e, day)}
-                                onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null && confirmedByDay[day]) { e.preventDefault(); setDetailModalDay(day); } }}
+                                onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && day !== null && effectiveConfirmedByDay[day]) { e.preventDefault(); setDetailModalDay(day); } }}
                                 style={{
                                     backgroundColor: effectiveBg,
                                     opacity: grayedOut ? 0.5 : (isPast ? 0.7 : 1),
                                     minHeight: "80px",
                                     padding: "0.4rem 0.25rem",
-                                    cursor: grayedOut ? "default" : (isEditable || isConfirmed ? "pointer" : (isPast ? "default" : "default")),
+                                    cursor: grayedOut ? "default" : (isEditable || isEffectivelyConfirmed ? "pointer" : (isPast ? "default" : "default")),
                                     position: "relative",
                                     transition: "background-color 0.15s",
                                     border: cellBorder,
@@ -988,22 +1206,32 @@ export default function ShiftCalendar() {
                             >
                                 <div style={{ fontWeight: isSpecialDay ? "bold" : 500, fontSize: "0.85rem", marginBottom: "0.25rem", color: grayedOut ? "var(--text-muted)" : (isHoliday ? "#EA580C" : isWeekend ? "#2563EB" : "var(--text-main)") }}>{day}</div>
                                 {(() => {
-                                    const displayLabel = shifts[day] ?? (!hasEditableDays && monthHasAnyConfirmed ? "OFF" : null);
-                                    if (!displayLabel) return null;
-                                    const hasDoc = shifts[day] !== undefined;
                                     const firstBlockConfirmed = Array.from({ length: Math.min(15, daysInMonth) }, (_, i) => i + 1).some((d) => confirmedByDay[d]);
                                     const secondBlockConfirmed = Array.from({ length: Math.max(0, daysInMonth - 15) }, (_, i) => i + 16).some((d) => confirmedByDay[d]);
                                     const hasSubmittedInSecondBlock = Array.from({ length: Math.max(0, daysInMonth - 15) }, (_, i) => i + 16).some((d) => submittedByDay[d]);
                                     const rawShift = shiftsByDay[day];
+                                    /** Firestore に無い日を「OFF」と見せない（未入力と休みの誤認防止） */
+                                    const displayLabel = shifts[day] ?? null;
+                                    const inferredBlockConfirmed =
+                                        displayLabel == null &&
+                                        ((day <= 15 && firstBlockConfirmed) || (day >= 16 && secondBlockConfirmed));
+                                    const inferredSubmittedSecond =
+                                        displayLabel == null &&
+                                        !inferredBlockConfirmed &&
+                                        day >= 16 &&
+                                        !secondBlockConfirmed &&
+                                        hasSubmittedInSecondBlock;
+                                    if (displayLabel == null && !inferredBlockConfirmed && !inferredSubmittedSecond) return null;
+                                    const hasDoc = shifts[day] !== undefined;
                                     const isUnconfirmed = rawShift?.status === "submitted" && (!!rawShift?.wasUnconfirmed || unconfirmedByDay[day]);
                                     const statusLabel = hasDoc
                                         ? (isConfirmed ? " 確定" : isUnconfirmed ? " 取り消し済み" : submittedByDay[day] ? " 提出済み" : " 下書き")
-                                        : (day <= 15 && firstBlockConfirmed) || (day >= 16 && secondBlockConfirmed)
+                                        : inferredBlockConfirmed
                                             ? " 確定"
-                                            : day >= 16 && !secondBlockConfirmed && hasSubmittedInSecondBlock
+                                            : inferredSubmittedSecond
                                                 ? " 提出済み"
                                                 : "";
-                                    const effectiveConfirmed = hasDoc ? isConfirmed : (day <= 15 && firstBlockConfirmed) || (day >= 16 && secondBlockConfirmed);
+                                    const effectiveConfirmed = hasDoc ? isConfirmed : inferredBlockConfirmed;
                                     return (
                                         <div
                                             style={{
@@ -1020,7 +1248,9 @@ export default function ShiftCalendar() {
                                                 whiteSpace: "nowrap",
                                             }}
                                         >
-                                            {formatShiftLabel(displayLabel)}{(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}{statusLabel}
+                                            {displayLabel == null ? "未入力" : formatShiftLabel(displayLabel)}
+                                            {(workTypeByDay[day] && workTypeByDay[day] !== "office") ? ` ${getWorkTypeLabel(workTypeByDay[day])}` : ""}
+                                            {statusLabel}
                                         </div>
                                     );
                                 })()}

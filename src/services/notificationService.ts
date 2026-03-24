@@ -1,4 +1,5 @@
 import { db, auth } from "@/lib/firebase/firebase";
+import { shouldSuppressNotificationForUser } from "@/lib/notificationExclusions";
 import { getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, addDoc, updateDoc, doc, query, where, orderBy, limit, Timestamp, onSnapshot, writeBatch, getDocs as getDocsServer } from "firebase/firestore";
 
@@ -22,7 +23,10 @@ export const createNotification = async (
     senderId?: string,
     senderName?: string,
     roomId?: string
-) => {
+): Promise<string | undefined> => {
+    if (shouldSuppressNotificationForUser(userId, type)) {
+        return undefined;
+    }
     try {
         const data: any = {
             userId,
@@ -67,6 +71,9 @@ export const createNotification = async (
 /** Googleログイン等で Chatwork ID が未設定のスタッフに、1回だけ通知を作成する */
 export const ensureChatworkIdReminderNotification = async (userId: string): Promise<void> => {
     try {
+        if (shouldSuppressNotificationForUser(userId, "chatwork_id_required")) {
+            return;
+        }
         const q = query(
             collection(db, "notifications"),
             where("userId", "==", userId),

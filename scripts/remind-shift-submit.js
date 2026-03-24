@@ -12,6 +12,16 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 
+function loadNotificationExcludedUids() {
+  try {
+    const p = path.join(__dirname, "..", "notification-excluded-uids.json");
+    const arr = JSON.parse(fs.readFileSync(p, "utf8"));
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
 const DEFAULTS = {
   firstBlockDeadlineDay: 25,
   secondBlockDeadlineDay: 10,
@@ -119,6 +129,8 @@ async function main() {
     process.exit(0);
   }
 
+  const excludedUids = loadNotificationExcludedUids();
+
   let chatworkToken = null;
   const chatworkRooms = [];
   const chatworkSnap = await db.doc("settings/chatwork").get();
@@ -154,7 +166,7 @@ async function main() {
       }
     });
 
-    const unsubmitted = staff.filter((s) => !submitted.has(s.id));
+    const unsubmitted = staff.filter((s) => !submitted.has(s.id) && !excludedUids.has(s.id));
     const promises = [];
     let createdCount = 0;
     unsubmitted.forEach((s) => {

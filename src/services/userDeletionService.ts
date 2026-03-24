@@ -22,9 +22,16 @@ function wrapStep<T>(stepName: string, fn: () => Promise<T>): Promise<T> {
     });
 }
 
+export type DeleteAllUserDataPhase = "archiving" | "purging";
+
 /** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。先にシフトをアーカイブしてから並列削除 */
-export const deleteAllUserData = async (uid: string): Promise<void> => {
+export const deleteAllUserData = async (
+    uid: string,
+    onPhase?: (phase: DeleteAllUserDataPhase) => void
+): Promise<void> => {
+    onPhase?.("archiving");
     await wrapStep("shiftArchive", () => archiveShiftsBeforeUserDeletion(uid));
+    onPhase?.("purging");
     await Promise.all([
         wrapStep("notifications", () => deleteNotificationsByUserId(uid)),
         wrapStep("shiftChangeRequests", () => deleteShiftChangeRequestsByUserId(uid)),
