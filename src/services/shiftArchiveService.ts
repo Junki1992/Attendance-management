@@ -13,6 +13,8 @@ import {
     Timestamp,
     getCountFromServer,
     deleteDoc,
+    onSnapshot,
+    type QuerySnapshot,
 } from "firebase/firestore";
 import { getDoc } from "@/lib/firebase/firestoreHelpers";
 import { getUserProfile } from "@/services/userService";
@@ -92,9 +94,7 @@ export async function archiveShiftsBeforeUserDeletion(uid: string): Promise<{ ar
     return { archivedCount };
 }
 
-/** 退職者シフト一覧のユーザー（アーカイブ日が新しい順） */
-export async function listArchivedShiftUsers(): Promise<ShiftArchiveUserMeta[]> {
-    const snapshot = await getDocs(collection(db, SHIFT_ARCHIVE_USERS_COLLECTION));
+function shiftArchiveUsersSnapshotToList(snapshot: QuerySnapshot): ShiftArchiveUserMeta[] {
     const list: ShiftArchiveUserMeta[] = [];
     snapshot.forEach((d) => {
         const data = d.data();
@@ -108,6 +108,26 @@ export async function listArchivedShiftUsers(): Promise<ShiftArchiveUserMeta[]> 
     });
     list.sort((a, b) => b.archivedAt.toMillis() - a.archivedAt.toMillis());
     return list;
+}
+
+/** 退職者シフト一覧のユーザー（アーカイブ日が新しい順） */
+export async function listArchivedShiftUsers(): Promise<ShiftArchiveUserMeta[]> {
+    const snapshot = await getDocs(collection(db, SHIFT_ARCHIVE_USERS_COLLECTION));
+    return shiftArchiveUsersSnapshotToList(snapshot);
+}
+
+/**
+ * 削除・アーカイブで shiftArchiveUsers が更新されたら即反映（管理シフト表の下段に新規退職者を出す）
+ */
+export function subscribeArchivedShiftUsers(
+    onList: (list: ShiftArchiveUserMeta[]) => void,
+    onError?: (e: Error) => void
+): () => void {
+    return onSnapshot(
+        collection(db, SHIFT_ARCHIVE_USERS_COLLECTION),
+        (snap) => onList(shiftArchiveUsersSnapshotToList(snap)),
+        (err) => onError?.(err instanceof Error ? err : new Error(String(err)))
+    );
 }
 
 function docDataToShift(id: string, data: Record<string, unknown>): Shift {

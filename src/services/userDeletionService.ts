@@ -14,6 +14,13 @@ import {
 } from "@/services/userService";
 import { archiveShiftsBeforeUserDeletion } from "@/services/shiftArchiveService";
 
+/** 削除時に shiftArchives / shiftArchiveUsers へ載せず、シフトは消去のみ（退職者扱いにしない） */
+const SKIP_SHIFT_ARCHIVE_ON_DELETE = new Set<string>(["heg27Yh2OAQUJXKC6IaHWzgCSUZ2"]);
+
+export function skipsShiftArchiveOnDelete(uid: string): boolean {
+    return SKIP_SHIFT_ARCHIVE_ON_DELETE.has(uid);
+}
+
 function wrapStep<T>(stepName: string, fn: () => Promise<T>): Promise<T> {
     return fn().catch((e: unknown) => {
         const msg = e instanceof Error ? e.message : String(e);
@@ -24,22 +31,29 @@ function wrapStep<T>(stepName: string, fn: () => Promise<T>): Promise<T> {
 
 export type DeleteAllUserDataPhase = "archiving" | "purging";
 
-/** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。先にシフトをアーカイブしてから並列削除 */
+/** 指定ユーザーの全データを DB から削除（設定画面の削除時に呼ぶ）。通常は先にシフトをアーカイブしてから並列削除 */
 export const deleteAllUserData = async (
     uid: string,
     onPhase?: (phase: DeleteAllUserDataPhase) => void
 ): Promise<void> => {
+    const purge = () =>
+        Promise.all([
+            wrapStep("notifications", () => deleteNotificationsByUserId(uid)),
+            wrapStep("shiftChangeRequests", () => deleteShiftChangeRequestsByUserId(uid)),
+            wrapStep("shiftSubmitComments", () => deleteShiftSubmitCommentsByUserId(uid)),
+            wrapStep("messagesAndChatRooms", () => deleteMessagesAndChatRoomsByUserId(uid)),
+            wrapStep("wageHistory", () => deleteWageHistoryByUserId(uid)),
+            wrapStep("shifts", () => deleteShiftsByUserId(uid)),
+            wrapStep("profileImage", () => deleteProfileImageFromStorage(uid)),
+            wrapStep("userDocument", () => deleteUserDocument(uid)),
+        ]);
+    if (skipsShiftArchiveOnDelete(uid)) {
+        onPhase?.("purging");
+        await purge();
+        return;
+    }
     onPhase?.("archiving");
     await wrapStep("shiftArchive", () => archiveShiftsBeforeUserDeletion(uid));
     onPhase?.("purging");
-    await Promise.all([
-        wrapStep("notifications", () => deleteNotificationsByUserId(uid)),
-        wrapStep("shiftChangeRequests", () => deleteShiftChangeRequestsByUserId(uid)),
-        wrapStep("shiftSubmitComments", () => deleteShiftSubmitCommentsByUserId(uid)),
-        wrapStep("messagesAndChatRooms", () => deleteMessagesAndChatRoomsByUserId(uid)),
-        wrapStep("wageHistory", () => deleteWageHistoryByUserId(uid)),
-        wrapStep("shifts", () => deleteShiftsByUserId(uid)),
-        wrapStep("profileImage", () => deleteProfileImageFromStorage(uid)),
-        wrapStep("userDocument", () => deleteUserDocument(uid)),
-    ]);
+    await purge();
 };

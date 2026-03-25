@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { doc, getDocFromServer } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebase";
 import {
@@ -22,6 +22,8 @@ import {
 import {
   SHIFT_ARCHIVE_USERS_COLLECTION,
   getArchivedUserNamesForIds,
+  subscribeArchivedShiftUsers,
+  type ShiftArchiveUserMeta,
 } from "@/services/shiftArchiveService";
 import {
   canonicalUserIdForShiftDoc,
@@ -35,6 +37,7 @@ import {
   collectFirestoreOwnerIdsForStaffRow,
   computeOrphanUserIdsForTable,
   shiftCountsTowardUserIdRow,
+  normalizePersonNameForMatch,
 } from "@/lib/adminShiftRowMatch";
 import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
 import { isNotificationExcludedUserId } from "@/lib/notificationExclusions";
@@ -158,6 +161,35 @@ export default function AdminShiftGrid() {
   const [cellModalWasOff, setCellModalWasOff] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [submitComments, setSubmitComments] = useState<ShiftSubmitCommentItem[]>([]);
+  /** 退職者シフト一覧（shiftArchiveUsers）— 当月シフトが無い人も行として出す */
+  const [archivedShiftUsersList, setArchivedShiftUsersList] = useState<ShiftArchiveUserMeta[]>([]);
+  const archivedUserIdsRef = useRef<Set<string>>(new Set());
+  const archiveSnapshotPrimedRef = useRef(false);
+
+  useEffect(() => {
+    const unsub = subscribeArchivedShiftUsers(
+      (list) => {
+        setArchivedShiftUsersList(list);
+        const nextIds = new Set(list.map((a) => a.userId));
+        const prev = archivedUserIdsRef.current;
+        let hasNewArchiveUser = false;
+        if (archiveSnapshotPrimedRef.current) {
+          for (const id of nextIds) {
+            if (!prev.has(id)) {
+              hasNewArchiveUser = true;
+              break;
+            }
+          }
+        }
+        archivedUserIdsRef.current = nextIds;
+        archiveSnapshotPrimedRef.current = true;
+        // 設定から削除された直後など、shiftArchiveUsers に新規 UID が載ったら現役一覧を同期（下段に退職行だけ出す）
+        if (hasNewArchiveUser) getAllStaff().then(setStaffList);
+      },
+      () => setArchivedShiftUsersList([])
+    );
+    return unsub;
+  }, []);
 
   useEffect(() => {
     const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
@@ -222,6 +254,25 @@ export default function AdminShiftGrid() {
     [shifts, staffList, staffIdSet, year, month, orphanNamesResolved]
   );
 
+  /** 表示する退職（一覧外）行: 当月シフトのある orphan + shiftArchiveUsers にいるが現役でない UID */
+  const retiredRowUserIdsForDisplay = useMemo(() => {
+    const s = new Set<string>();
+    orphanUserIdsInMonth.forEach((id) => s.add(id));
+    archivedShiftUsersList.forEach((a) => {
+      if (!staffIdSet.has(a.userId)) s.add(a.userId);
+    });
+    return [...s];
+  }, [orphanUserIdsInMonth, archivedShiftUsersList, staffIdSet]);
+
+  const retiredNameFromArchiveList = useMemo(() => {
+    const m: Record<string, string> = {};
+    archivedShiftUsersList.forEach((a) => {
+      const nm = String(a.archivedUserName ?? "").trim() || "（名前なし）";
+      m[a.userId] = `${nm}（退職）`;
+    });
+    return m;
+  }, [archivedShiftUsersList]);
+
   useEffect(() => {
     if (orphanUserIdsInMonth.length === 0) {
       setOrphanStaffNames({});
@@ -237,7 +288,7 @@ export default function AdminShiftGrid() {
             const nm = snap.exists()
               ? String((snap.data() as { archivedUserName?: string }).archivedUserName ?? "").trim()
               : "";
-            next[uid] = nm ? `${nm}（一覧外ID）` : `ID: ${uid.slice(0, 10)}…`;
+            next[uid] = nm ? `${nm}（退職）` : `ID: ${uid.slice(0, 10)}…（退職）`;
           } catch {
             next[uid] = `ID: ${uid.slice(0, 10)}…`;
           }
@@ -250,14 +301,27 @@ export default function AdminShiftGrid() {
     };
   }, [orphanUserIdsInMonth]);
 
+  /** 現役を上段（氏名順）、退職（一覧外 UID）は下段（氏名順）。退職行は名前に「（退職）」を付与 */
   const displayStaffList = useMemo((): StaffItem[] => {
-    const extras: StaffItem[] = orphanUserIdsInMonth.map((id) => ({
+    const sortByDisplayName = (items: StaffItem[]) => {
+      const copy = [...items];
+      copy.sort((a, b) => {
+        const ka = normalizePersonNameForMatch(a.name) || (a.name.startsWith("名前取得中") ? "\uFF3F" : a.name);
+        const kb = normalizePersonNameForMatch(b.name) || (b.name.startsWith("名前取得中") ? "\uFF3F" : b.name);
+        const c = ka.localeCompare(kb, "ja");
+        if (c !== 0) return c;
+        return a.id.localeCompare(b.id);
+      });
+      return copy;
+    };
+    const extras: StaffItem[] = retiredRowUserIdsForDisplay.map((id) => ({
       id,
-      name: orphanStaffNames[id] ?? "名前取得中…",
+      name: orphanStaffNames[id] ?? retiredNameFromArchiveList[id] ?? "名前取得中…",
       photoURL: undefined,
     }));
-    return [...staffList, ...extras];
-  }, [staffList, orphanUserIdsInMonth, orphanStaffNames]);
+    // 現役を上段（氏名順）、退職済を下段（氏名順）に固定
+    return [...sortByDisplayName(staffList), ...sortByDisplayName(extras)];
+  }, [staffList, retiredRowUserIdsForDisplay, orphanStaffNames, retiredNameFromArchiveList]);
 
   useEffect(() => {
     if (!editingCell) {
@@ -1159,10 +1223,20 @@ export default function AdminShiftGrid() {
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
                 {displayStaffList.map((user) => {
+                  const rowIsRetired = !staffIdSet.has(user.id);
                   const totalHours = DAYS.reduce((acc, d) => acc + getShift(user.id, d), 0);
                   const weeklyWarning = isWeeklyOver(user.id);
                   return (
-                    <div key={user.id} className="card" style={{ padding: "0.75rem" }}>
+                    <div
+                      key={user.id}
+                      className="card"
+                      style={{
+                        padding: "0.75rem",
+                        ...(rowIsRetired
+                          ? { borderLeft: "3px solid #9CA3AF", backgroundColor: "rgba(249, 250, 251, 0.95)" }
+                          : {}),
+                      }}
+                    >
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", flexWrap: "wrap", gap: "0.25rem" }}>
                         <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>
                           {user.name}
@@ -1324,17 +1398,29 @@ export default function AdminShiftGrid() {
             </thead>
             <tbody>
               {displayStaffList.map((user) => {
+                const rowIsRetired = !staffIdSet.has(user.id);
                 const totalHours = DAYS.reduce(
                   (acc, d) => acc + getShift(user.id, d),
                   0
                 );
                 const weeklyWarning = isWeeklyOver(user.id);
+                const rowBg = selectedUserIds.has(user.id)
+                  ? "rgba(79, 70, 229, 0.1)"
+                  : rowIsRetired
+                    ? "rgba(249, 250, 251, 0.92)"
+                    : undefined;
+                const stickyBg = selectedUserIds.has(user.id)
+                  ? "rgba(79, 70, 229, 0.1)"
+                  : rowIsRetired
+                    ? "rgba(249, 250, 251, 0.98)"
+                    : "var(--surface)";
 
                 return (
                   <tr
                     key={user.id}
                     style={{
-                      backgroundColor: selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.1)" : undefined,
+                      backgroundColor: rowBg,
+                      ...(rowIsRetired ? { boxShadow: "inset 3px 0 0 #9CA3AF" } : {}),
                     }}
                   >
                     <td
@@ -1344,7 +1430,7 @@ export default function AdminShiftGrid() {
                         fontWeight: 500,
                         position: "sticky",
                         left: 0,
-                        backgroundColor: selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.1)" : "var(--surface)",
+                        backgroundColor: stickyBg,
                         display: "flex",
                         alignItems: "center",
                         gap: "0.5rem",

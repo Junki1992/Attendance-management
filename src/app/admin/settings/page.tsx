@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getSettings, saveSettings, type AppSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
 import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, updateUserWages, UserProfile } from "@/services/userService";
-import { deleteAllUserData, type DeleteAllUserDataPhase } from "@/services/userDeletionService";
+import { deleteAllUserData, skipsShiftArchiveOnDelete, type DeleteAllUserDataPhase } from "@/services/userDeletionService";
 import { getWageChangeLog, recordWageChange, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
 import { subscribePresence } from "@/services/presenceService";
@@ -16,6 +16,9 @@ import Avatar from "@/components/Avatar";
 
 /** 管理者昇格・降格機能を無効にする（一旦無効） */
 const ROLE_CHANGE_ENABLED = false;
+
+/** 設定画面の「退職者シフト」への導線を非表示（復活させるとき true に） */
+const SHOW_SHIFT_ARCHIVE_CARD_IN_SETTINGS = false;
 
 export default function AdminSettingsPage() {
   const { user: currentUser, refreshUserProfile } = useAuth();
@@ -128,7 +131,7 @@ export default function AdminSettingsPage() {
     if (!deleteConfirmTarget) return;
     const { uid, name } = deleteConfirmTarget;
     setDeleteConfirmTarget(null);
-    setDeleteRunPhase("archiving");
+    setDeleteRunPhase(skipsShiftArchiveOnDelete(uid) ? "purging" : "archiving");
     if (selectedUser?.uid === uid) {
       setSelectedUser(null);
     }
@@ -656,7 +659,15 @@ export default function AdminSettingsPage() {
               <strong>{deleteConfirmTarget.name}</strong> をユーザー一覧から削除しますか？
             </p>
             <p style={{ margin: "0 0 0.75rem 0", color: "var(--text-muted)", fontSize: "0.875rem", lineHeight: 1.5 }}>
-              このユーザーのシフトは、削除前に<strong>退職者シフト</strong>へコピーされます。その後、現役のシフト表・通知・チャット・時給履歴など、DB 上の関連データは削除されます。
+              {skipsShiftArchiveOnDelete(deleteConfirmTarget.uid) ? (
+                <>
+                  このアカウントは<strong>退職者シフトへはコピーされず</strong>、シフトを含む関連データはそのまま削除されます。
+                </>
+              ) : (
+                <>
+                  このユーザーのシフトは、削除前に<strong>退職者シフト</strong>へコピーされます。その後、現役のシフト表・通知・チャット・時給履歴など、DB 上の関連データは削除されます。
+                </>
+              )}
             </p>
             <p
               style={{
@@ -853,15 +864,17 @@ export default function AdminSettingsPage() {
         )}
       </div>
 
-      <div id="shift-archive" className="card" style={{ maxWidth: "560px" }}>
-        <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>退職者シフト</h2>
-        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.55 }}>
-          退職・削除済みスタッフのシフトを手動で登録したり、一覧・月別で確認します。現役のシフト表とは別のデータです。
-        </p>
-        <Link href="/admin/shift-archive/" className="btn btn-outline">
-          退職者シフトを開く
-        </Link>
-      </div>
+      {SHOW_SHIFT_ARCHIVE_CARD_IN_SETTINGS && (
+        <div id="shift-archive" className="card" style={{ maxWidth: "560px" }}>
+          <h2 style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}>退職者シフト</h2>
+          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.55 }}>
+            退職・削除済みスタッフのシフトを手動で登録したり、一覧・月別で確認します。現役のシフト表とは別のデータです。
+          </p>
+          <Link href="/admin/shift-archive/" className="btn btn-outline">
+            退職者シフトを開く
+          </Link>
+        </div>
+      )}
 
       {selectedUser && (
       <div

@@ -8,6 +8,7 @@ const NOTIFICATION_EXCLUDED_UIDS = new Set([
   '04jkQsgMZIbQnuCwRUHbKdqf0dH2',
   '79ePGF45wKd7d0RDc9MCMOWOhUI3',
   'LfNtQQrIrxgUvLWeJ2lNVw3zigx2',
+  'heg27Yh2OAQUJXKC6IaHWzgCSUZ2',
 ]);
 
 admin.initializeApp();
