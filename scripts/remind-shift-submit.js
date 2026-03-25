@@ -114,16 +114,20 @@ async function main() {
   }
 
   const usersSnap = await db.collection("users").where("role", "==", "staff").get();
-  const staff = usersSnap.docs.map((d) => {
-    const data = d.data() || {};
-    const raw = data.chatworkAccountId;
-    const chatworkAccountId = raw != null ? String(raw).trim() : "";
-    return {
-      id: d.id,
-      name: data.name || d.id,
-      chatworkAccountId: chatworkAccountId || undefined,
-    };
-  });
+  const staff = usersSnap.docs
+    .map((d) => {
+      const data = d.data() || {};
+      const emp = data.employmentStatus || "active";
+      if (emp === "suspended" || emp === "retired") return null;
+      const raw = data.chatworkAccountId;
+      const chatworkAccountId = raw != null ? String(raw).trim() : "";
+      return {
+        id: d.id,
+        name: data.name || d.id,
+        chatworkAccountId: chatworkAccountId || undefined,
+      };
+    })
+    .filter(Boolean);
   if (staff.length === 0) {
     console.log("[remind-shift-submit] no staff found");
     process.exit(0);

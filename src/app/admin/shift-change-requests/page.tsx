@@ -8,7 +8,7 @@ import {
   rejectShiftChangeRequest,
   ShiftChangeRequest,
 } from "@/services/shiftChangeRequestService";
-import { getAllStaff } from "@/services/userService";
+import { getAllStaff, getInactiveStaffForAdmin } from "@/services/userService";
 
 export default function AdminShiftChangeRequestsPage() {
   const { user } = useAuth();
@@ -18,10 +18,10 @@ export default function AdminShiftChangeRequestsPage() {
   const [processing, setProcessing] = useState<string | null>(null);
 
   const load = () => {
-    Promise.all([getPendingShiftChangeRequests(), getAllStaff()])
-      .then(([reqs, staff]) => {
+    Promise.all([getPendingShiftChangeRequests(), getAllStaff(), getInactiveStaffForAdmin()])
+      .then(([reqs, activeStaff, inactiveStaff]) => {
         setRequests(reqs);
-        setStaffList(staff);
+        setStaffList([...activeStaff, ...inactiveStaff]);
       })
       .catch(() => {})
       .finally(() => setLoading(false));

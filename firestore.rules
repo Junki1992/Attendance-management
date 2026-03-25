@@ -29,11 +29,12 @@ service cloud.firestore {
                           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
       
       // 更新：
-      // - 自分のドキュメント：name, email, hourlyWage のみ更新可（role は変更不可）
-      // - 管理者は他のユーザーの role も変更可能（管理者昇格・降格）
+      // - 自分のドキュメント：name, email, hourlyWage のみ更新可（role・employmentStatus は変更不可）
+      // - 管理者は他のユーザーの role・employmentStatus も変更可能
       allow update: if request.auth != null 
                     && ((request.auth.uid == userId 
-                         && request.resource.data.role == resource.data.role)
+                         && request.resource.data.role == resource.data.role
+                         && request.resource.data.get('employmentStatus', 'active') == resource.data.get('employmentStatus', 'active'))
                         || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
                             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
       

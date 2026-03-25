@@ -32,6 +32,7 @@ function authErrorToMessage(code: string): string {
         "firestore-permission-denied": "Firestore の権限エラーです。Firebase コンソール → Firestore Database → ルール タブで、プロジェクトルートの `firestore.rules` ファイルの内容をコピーして貼り付け「公開」をクリックしてください。",
         // プロフィールが見つからない
         "user-profile-not-found": "プロフィールが見つかりません。再登録するか管理者に連絡してください。",
+        "employment-blocked": "このアカウントは停職または退職のためログインできません。管理者に連絡してください。",
     };
     const known = m[code];
     if (known) return known;

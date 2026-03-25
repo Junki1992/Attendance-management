@@ -108,7 +108,14 @@ exports.scheduledRemindSubmit = functions.pubsub
       }
 
       const usersSnap = await db.collection('users').where('role', '==', 'staff').get();
-      const staff = usersSnap.docs.map((d) => ({ id: d.id, name: (d.data() && d.data().name) ? d.data().name : d.id }));
+      const staff = usersSnap.docs
+        .map((d) => {
+          const data = d.data() || {};
+          const emp = data.employmentStatus || 'active';
+          if (emp === 'suspended' || emp === 'retired') return null;
+          return { id: d.id, name: data.name ? data.name : d.id };
+        })
+        .filter(Boolean);
       if (staff.length === 0) {
         console.log('[scheduledRemindSubmit] no staff found');
         return null;

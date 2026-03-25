@@ -4,7 +4,17 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { getSettings, saveSettings, type AppSettings } from "@/services/settingsService";
 import { getChatworkConfig, getChatworkConfigRaw, saveChatworkConfig, sendNextDayAttendanceToChatwork, type NotificationDestination } from "@/services/chatworkService";
-import { getAllUsers, subscribeAllUsers, updateUserRole, updateUserHourlyWage, updateUserWages, UserProfile } from "@/services/userService";
+import {
+  getAllUsers,
+  subscribeAllUsers,
+  updateUserRole,
+  updateUserHourlyWage,
+  updateUserWages,
+  updateUserEmploymentStatus,
+  EMPLOYMENT_STATUS_LABELS,
+  type UserProfile,
+  type EmploymentStatus,
+} from "@/services/userService";
 import { deleteAllUserData, skipsShiftArchiveOnDelete, type DeleteAllUserDataPhase } from "@/services/userDeletionService";
 import { getWageChangeLog, recordWageChange, WageChangeLogEntry } from "@/services/wageChangeLogService";
 import { createNotification } from "@/services/notificationService";
@@ -26,6 +36,14 @@ export default function AdminSettingsPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [employmentUpdatingUid, setEmploymentUpdatingUid] = useState<string | null>(null);
+  /** 在籍状態変更の確認（誤操作防止） */
+  const [employmentChangeConfirm, setEmploymentChangeConfirm] = useState<{
+    uid: string;
+    name: string;
+    from: EmploymentStatus;
+    to: EmploymentStatus;
+  } | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [chatworkToken, setChatworkToken] = useState("");
   const [chatworkDestinations, setChatworkDestinations] = useState<NotificationDestination[]>([]);
@@ -106,7 +124,10 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     if (currentUser?.role !== "admin" || users.length === 0) return;
-    const staffIds = users.filter((u) => u.role === "staff").map((u) => u.uid).filter(Boolean);
+    const staffIds = users
+      .filter((u) => u.role === "staff" && u.employmentStatus === "active")
+      .map((u) => u.uid)
+      .filter(Boolean);
     return subscribePresence(staffIds, setOnlineStaffIds);
   }, [currentUser?.role, users]);
 
@@ -133,6 +154,7 @@ export default function AdminSettingsPage() {
     setDeleteConfirmTarget(null);
     setDeleteRunPhase(skipsShiftArchiveOnDelete(uid) ? "purging" : "archiving");
     if (selectedUser?.uid === uid) {
+      setEmploymentChangeConfirm(null);
       setSelectedUser(null);
     }
     setBackgroundDeleteName(name);
@@ -194,9 +216,17 @@ export default function AdminSettingsPage() {
   // 選択中のユーザーがDBから削除されたらモーダルを閉じる
   useEffect(() => {
     if (selectedUser && !users.some((u) => u.uid === selectedUser.uid)) {
+      setEmploymentChangeConfirm(null);
       setSelectedUser(null);
     }
   }, [users, selectedUser]);
+
+  // 詳細モーダルで別ユーザーを開いたときは在籍確認を破棄
+  useEffect(() => {
+    if (employmentChangeConfirm && selectedUser && employmentChangeConfirm.uid !== selectedUser.uid) {
+      setEmploymentChangeConfirm(null);
+    }
+  }, [selectedUser?.uid, employmentChangeConfirm?.uid]);
 
   const handleSaveHourlyWage = async () => {
     if (!selectedUser || !currentUser) return;
@@ -830,6 +860,21 @@ export default function AdminSettingsPage() {
                   >
                     {user.role === "admin" ? "管理者" : "アルバイト"}
                   </span>
+                  {user.role === "staff" && user.employmentStatus && user.employmentStatus !== "active" && (
+                    <span
+                      style={{
+                        padding: "0.2rem 0.45rem",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "0.7rem",
+                        fontWeight: 600,
+                        backgroundColor: "rgba(107, 114, 128, 0.2)",
+                        color: "var(--text-muted)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {EMPLOYMENT_STATUS_LABELS[user.employmentStatus]}
+                    </span>
+                  )}
                   {ROLE_CHANGE_ENABLED && user.uid !== currentUser?.uid && (
                     <button
                       className="btn btn-outline"
@@ -890,12 +935,21 @@ export default function AdminSettingsPage() {
           zIndex: 200,
           padding: "1rem",
         }}
-        onClick={() => setSelectedUser(null)}
+        onClick={() => {
+          setEmploymentChangeConfirm(null);
+          setSelectedUser(null);
+        }}
       >
         <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, padding: "1rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
             <h3 style={{ margin: 0 }}>ユーザー詳細</h3>
-            <button onClick={() => setSelectedUser(null)} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18 }}>
+            <button
+              onClick={() => {
+                setEmploymentChangeConfirm(null);
+                setSelectedUser(null);
+              }}
+              style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18 }}
+            >
               ×
             </button>
           </div>
@@ -912,6 +966,48 @@ export default function AdminSettingsPage() {
               {selectedUser!.role === "admin" ? "管理者" : "アルバイト"}
             </span>
           </div>
+          {selectedUser!.role === "staff" && (
+            <div style={{ marginBottom: "0.75rem" }}>
+              <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.35rem" }}>在籍状態</label>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.35rem", lineHeight: 1.45 }}>
+                在籍中・停職・退職を切り替えられます。停職・退職のスタッフはログインできません。削除せず履歴を残す場合に退職を選んでください。
+              </p>
+              <select
+                className="btn btn-outline"
+                style={{
+                  width: "100%",
+                  maxWidth: "280px",
+                  padding: "0.5rem 0.75rem",
+                  fontSize: "0.95rem",
+                  borderRadius: "var(--radius-md)",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                }}
+                value={selectedUser!.employmentStatus ?? "active"}
+                disabled={employmentUpdatingUid === selectedUser!.uid || employmentChangeConfirm !== null}
+                onChange={(e) => {
+                  const v = e.target.value as EmploymentStatus;
+                  const from = selectedUser!.employmentStatus ?? "active";
+                  if (v === from) return;
+                  setEmploymentChangeConfirm({
+                    uid: selectedUser!.uid,
+                    name: selectedUser!.name,
+                    from,
+                    to: v,
+                  });
+                }}
+              >
+                {(Object.keys(EMPLOYMENT_STATUS_LABELS) as EmploymentStatus[]).map((k) => (
+                  <option key={k} value={k}>
+                    {EMPLOYMENT_STATUS_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+              {employmentUpdatingUid === selectedUser!.uid && (
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginLeft: "0.5rem" }}>更新中…</span>
+              )}
+            </div>
+          )}
           <div style={{ marginBottom: "0.75rem" }}>
             <strong>Chatwork アカウントID:</strong>{" "}
             <span style={{ color: "var(--text-muted)" }}>{selectedUser!.chatworkAccountId || "未設定"}</span>
@@ -1130,11 +1226,98 @@ export default function AdminSettingsPage() {
                 {deletingUserId === selectedUser!.uid ? "削除中..." : "ユーザーを削除"}
               </button>
             )}
-            <button type="button" className="btn btn-primary" onClick={() => setSelectedUser(null)}>閉じる</button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setEmploymentChangeConfirm(null);
+                setSelectedUser(null);
+              }}
+            >
+              閉じる
+            </button>
           </div>
         </div>
       </div>
     )}
+
+      {employmentChangeConfirm && (
+        <div
+          role="dialog"
+          aria-label="在籍状態の変更確認"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 250,
+            padding: "1rem",
+          }}
+          onClick={() => !employmentUpdatingUid && setEmploymentChangeConfirm(null)}
+        >
+          <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 400, padding: "1.25rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.05rem" }}>在籍状態を変更しますか？</h3>
+            <p style={{ margin: "0 0 1rem 0", fontSize: "0.9rem", lineHeight: 1.55, color: "var(--text-main)" }}>
+              <strong>{employmentChangeConfirm.name}</strong> さんの在籍状態を次のとおり変更します。対象が正しいかご確認ください。
+            </p>
+            <div
+              style={{
+                marginBottom: "1rem",
+                padding: "0.65rem 0.75rem",
+                background: "var(--bg-secondary)",
+                borderRadius: "var(--radius-md)",
+                fontSize: "0.9rem",
+                lineHeight: 1.6,
+              }}
+            >
+              <div>
+                <span style={{ color: "var(--text-muted)" }}>変更前</span>　{EMPLOYMENT_STATUS_LABELS[employmentChangeConfirm.from]}
+              </div>
+              <div style={{ marginTop: "0.35rem" }}>
+                <span style={{ color: "var(--text-muted)" }}>変更後</span>　<strong>{EMPLOYMENT_STATUS_LABELS[employmentChangeConfirm.to]}</strong>
+              </div>
+            </div>
+            <p style={{ fontSize: "0.8rem", color: "var(--destructive)", marginBottom: "1rem", lineHeight: 1.5 }}>
+              {employmentChangeConfirm.to !== "active"
+                ? "停職・退職にするとログインできなくなります。"
+                : "在籍中に戻すとログインできるようになります。"}
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={employmentUpdatingUid === employmentChangeConfirm.uid}
+                onClick={() => setEmploymentChangeConfirm(null)}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={employmentUpdatingUid === employmentChangeConfirm.uid}
+                onClick={async () => {
+                  const { uid, to } = employmentChangeConfirm;
+                  setEmploymentUpdatingUid(uid);
+                  try {
+                    await updateUserEmploymentStatus(uid, to);
+                    setSelectedUser((prev) => (prev && prev.uid === uid ? { ...prev, employmentStatus: to } : prev));
+                    setUsers((prev) => prev.map((u) => (u.uid === uid ? { ...u, employmentStatus: to } : u)));
+                    setEmploymentChangeConfirm(null);
+                  } catch {
+                    alert("在籍状態の更新に失敗しました");
+                  } finally {
+                    setEmploymentUpdatingUid(null);
+                  }
+                }}
+              >
+                {employmentUpdatingUid === employmentChangeConfirm.uid ? "更新中…" : "変更する"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

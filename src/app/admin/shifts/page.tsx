@@ -39,7 +39,7 @@ import {
   shiftCountsTowardUserIdRow,
   normalizePersonNameForMatch,
 } from "@/lib/adminShiftRowMatch";
-import { getAllStaff, getUserProfile, StaffItem } from "@/services/userService";
+import { getAllStaff, getInactiveStaffForAdmin, getUserProfile, StaffItem } from "@/services/userService";
 import { isNotificationExcludedUserId } from "@/lib/notificationExclusions";
 import { createNotification, getShiftConfirmedNotifications, Notification } from "@/services/notificationService";
 import { getShiftSubmitComments, type ShiftSubmitCommentItem } from "@/services/shiftSubmitCommentService";
@@ -130,6 +130,8 @@ export default function AdminShiftGrid() {
   /** 一覧外UID → shiftArchiveUsers の退職時氏名（現行スタッフ行への紐づけ用） */
   const [orphanUidToArchivedName, setOrphanUidToArchivedName] = useState<Record<string, string>>({});
   const [staffList, setStaffList] = useState<StaffItem[]>([]);
+  /** 停職・退職（users に残っている）。管理シフト表の下段 */
+  const [inactiveStaffList, setInactiveStaffList] = useState<StaffItem[]>([]);
   const [unsubmitted, setUnsubmitted] = useState<StaffItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
@@ -184,7 +186,12 @@ export default function AdminShiftGrid() {
         archivedUserIdsRef.current = nextIds;
         archiveSnapshotPrimedRef.current = true;
         // 設定から削除された直後など、shiftArchiveUsers に新規 UID が載ったら現役一覧を同期（下段に退職行だけ出す）
-        if (hasNewArchiveUser) getAllStaff().then(setStaffList);
+        if (hasNewArchiveUser) {
+          Promise.all([getAllStaff(), getInactiveStaffForAdmin()]).then(([active, inactive]) => {
+            setStaffList(active);
+            setInactiveStaffList(inactive);
+          });
+        }
       },
       () => setArchivedShiftUsersList([])
     );
@@ -206,6 +213,17 @@ export default function AdminShiftGrid() {
 
   const staffIdSet = useMemo(() => new Set(staffList.map((s) => s.id)), [staffList]);
   const staffIdToName = useMemo(() => Object.fromEntries(staffList.map((s) => [s.id, s.name])), [staffList]);
+  const staffRowsForMatch = useMemo(() => [...staffList, ...inactiveStaffList], [staffList, inactiveStaffList]);
+  const inactiveStaffIdSet = useMemo(() => new Set(inactiveStaffList.map((s) => s.id)), [inactiveStaffList]);
+  const editingCellUserIsRetired = Boolean(editingCell && !staffIdSet.has(editingCell.userId));
+
+  /** 在籍中以外の行は一括選択の対象外のため、選択状態から外す */
+  useEffect(() => {
+    setSelectedUserIds((prev) => {
+      const next = new Set([...prev].filter((id) => staffIdSet.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [staffIdSet]);
 
   useEffect(() => {
     const orphanUids = [...new Set(shifts.map((s) => s.userId).filter((uid) => !staffIdSet.has(uid)))];
@@ -254,15 +272,17 @@ export default function AdminShiftGrid() {
     [shifts, staffList, staffIdSet, year, month, orphanNamesResolved]
   );
 
-  /** 表示する退職（一覧外）行: 当月シフトのある orphan + shiftArchiveUsers にいるが現役でない UID */
+  /** 削除済みアーカイブ用の行（users にいる停職・退職は inactiveStaffList で表示するため二重にしない） */
   const retiredRowUserIdsForDisplay = useMemo(() => {
     const s = new Set<string>();
-    orphanUserIdsInMonth.forEach((id) => s.add(id));
+    orphanUserIdsInMonth.forEach((id) => {
+      if (!inactiveStaffIdSet.has(id)) s.add(id);
+    });
     archivedShiftUsersList.forEach((a) => {
-      if (!staffIdSet.has(a.userId)) s.add(a.userId);
+      if (!staffIdSet.has(a.userId) && !inactiveStaffIdSet.has(a.userId)) s.add(a.userId);
     });
     return [...s];
-  }, [orphanUserIdsInMonth, archivedShiftUsersList, staffIdSet]);
+  }, [orphanUserIdsInMonth, archivedShiftUsersList, staffIdSet, inactiveStaffIdSet]);
 
   const retiredNameFromArchiveList = useMemo(() => {
     const m: Record<string, string> = {};
@@ -301,7 +321,7 @@ export default function AdminShiftGrid() {
     };
   }, [orphanUserIdsInMonth]);
 
-  /** 現役を上段（氏名順）、退職（一覧外 UID）は下段（氏名順）。退職行は名前に「（退職）」を付与 */
+  /** 在籍中を上段、停職・退職・削除済みアーカイブ由来を下段（各ブロック内は氏名順） */
   const displayStaffList = useMemo((): StaffItem[] => {
     const sortByDisplayName = (items: StaffItem[]) => {
       const copy = [...items];
@@ -319,9 +339,12 @@ export default function AdminShiftGrid() {
       name: orphanStaffNames[id] ?? retiredNameFromArchiveList[id] ?? "名前取得中…",
       photoURL: undefined,
     }));
-    // 現役を上段（氏名順）、退職済を下段（氏名順）に固定
-    return [...sortByDisplayName(staffList), ...sortByDisplayName(extras)];
-  }, [staffList, retiredRowUserIdsForDisplay, orphanStaffNames, retiredNameFromArchiveList]);
+    return [
+      ...sortByDisplayName(staffList),
+      ...sortByDisplayName(inactiveStaffList),
+      ...sortByDisplayName(extras),
+    ];
+  }, [staffList, inactiveStaffList, retiredRowUserIdsForDisplay, orphanStaffNames, retiredNameFromArchiveList]);
 
   useEffect(() => {
     if (!editingCell) {
@@ -331,7 +354,7 @@ export default function AdminShiftGrid() {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
     const staffRow = displayStaffList.find((s) => s.id === editingCell.userId);
     const shift = staffRow
-      ? findShiftForGridCell(staffRow, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+      ? findShiftForGridCell(staffRow, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       : undefined;
     setCellModalStart(shift?.startTime ?? "09:00");
     setCellModalEnd(shift?.endTime ?? "18:00");
@@ -353,6 +376,7 @@ export default function AdminShiftGrid() {
     staffIdSet,
     orphanNamesResolved,
     staffIdToName,
+    staffRowsForMatch,
     year,
     month,
   ]);
@@ -374,16 +398,19 @@ export default function AdminShiftGrid() {
       if (shiftCountsTowardUserIdRow(sh, staffIdSet, orphanNamesResolved, staffIdToName)) {
         add(sh.userId, sh);
       }
-      staffList.forEach((staff) => {
-        if (!shiftBelongsToStaffRow(sh, staff.id, staff.name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)) return;
+      staffRowsForMatch.forEach((staff) => {
+        if (!shiftBelongsToStaffRow(sh, staff.id, staff.name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)) return;
         add(staff.id, sh);
       });
     });
     return map;
-  }, [shifts, staffList, staffIdSet, orphanNamesResolved, staffIdToName]);
+  }, [shifts, staffRowsForMatch, staffIdSet, orphanNamesResolved, staffIdToName]);
 
   useEffect(() => {
-    getAllStaff().then(setStaffList);
+    Promise.all([getAllStaff(), getInactiveStaffForAdmin()]).then(([active, inactive]) => {
+      setStaffList(active);
+      setInactiveStaffList(inactive);
+    });
   }, []);
 
   useEffect(() => {
@@ -458,10 +485,10 @@ export default function AdminShiftGrid() {
         (s) =>
           s.status !== "draft" &&
           shiftModelInCalendarMonth(s, year, month) &&
-          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
     },
-    [shifts, year, month, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, year, month, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   /** 名前で旧UIDと紐づいたシフトがある人は「未提出」に出さない。通知除外 UID は一覧にも載せない */
@@ -481,10 +508,10 @@ export default function AdminShiftGrid() {
         (s) =>
           s.status === "submitted" &&
           shiftModelInCalendarMonth(s, year, month) &&
-          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
     },
-    [shifts, year, month, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, year, month, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   /** このユーザーの当月シフトがすべて確定済みで、確定後に編集されていなければ true（シフトなしは false） */
@@ -495,12 +522,12 @@ export default function AdminShiftGrid() {
         (s) =>
           s.status !== "draft" &&
           shiftModelInCalendarMonth(s, year, month) &&
-          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
       if (userShifts.length === 0) return false;
       return userShifts.every((s) => s.status === "confirmed" && !s.editedAfterConfirmed);
     },
-    [shifts, year, month, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, year, month, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   /** 指定ブロック内に未確定シフトがあるか */
@@ -521,12 +548,12 @@ export default function AdminShiftGrid() {
       const userShifts = shifts.filter(
         (s) =>
           s.status !== "draft" &&
-          shiftBelongsToStaffRow(s, uid, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(s, uid, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
       const inBlock = block === "all" ? userShifts : userShifts.filter((s) => isInBlock(s.date, block));
       return inBlock.some((s) => s.status === "confirmed");
     },
-    [shifts, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   useEffect(() => {
@@ -543,16 +570,17 @@ export default function AdminShiftGrid() {
       const userShifts = shifts.filter(
         (s) =>
           s.status !== "draft" &&
-          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
       const inBlock = confirmBlock === "all" ? userShifts : userShifts.filter((s) => isInBlock(s.date, confirmBlock));
       if (inBlock.length === 0) return false;
       return inBlock.every((s) => s.status === "confirmed" && !s.editedAfterConfirmed);
     },
-    [shifts, confirmBlock, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, confirmBlock, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   const toggleSelected = (userId: string) => {
+    if (!staffIdSet.has(userId)) return;
     setSelectedUserIds((prev) => {
       const next = new Set(prev);
       if (next.has(userId)) next.delete(userId);
@@ -624,11 +652,11 @@ export default function AdminShiftGrid() {
         staffIdSet,
         orphanNamesResolved,
         staffIdToName,
-        staffList
+        staffRowsForMatch
       );
       const hadEdited = shifts.some(
         (s) =>
-          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList) &&
+          shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch) &&
           s.editedAfterConfirmed &&
           (confirmBlock === "all" || isInBlock(s.date, confirmBlock))
       );
@@ -644,7 +672,7 @@ export default function AdminShiftGrid() {
       // 購読の反映を待たず、確定済み表示にすぐ切り替える
       setShifts((prev) =>
         prev.map((s) => {
-          if (!shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)) return s;
+          if (!shiftBelongsToStaffRow(s, userId, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)) return s;
           if (confirmBlock === "all" || isInBlock(s.date, confirmBlock)) {
             return { ...s, status: "confirmed" as const, editedAfterConfirmed: false };
           }
@@ -690,7 +718,7 @@ export default function AdminShiftGrid() {
         staffIdSet,
         orphanNamesResolved,
         staffIdToName,
-        staffList
+        staffRowsForMatch
       );
       const targetOwners = owners.length > 0 ? owners : [uid];
       let ok = false;
@@ -748,7 +776,7 @@ export default function AdminShiftGrid() {
         staffIdSet,
         orphanNamesResolved,
         staffIdToName,
-        staffList
+        staffRowsForMatch
       );
       const targetOwners = owners.length > 0 ? owners : [uid];
       let ok = false;
@@ -795,12 +823,12 @@ export default function AdminShiftGrid() {
       const userShifts = shifts.filter(
         (x) =>
           x.status !== "draft" &&
-          shiftBelongsToStaffRow(x, uid, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(x, uid, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
       const inBlock = confirmBlock === "all" ? userShifts : userShifts.filter((x) => isInBlock(x.date, confirmBlock));
       return inBlock.length > 0;
     },
-    [shifts, confirmBlock, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, confirmBlock, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   /** 指定ユーザーが前半 or 後半のどちらかにでも確定済みシフトを持つか（取り消し可能か） */
@@ -817,12 +845,12 @@ export default function AdminShiftGrid() {
       const userShifts = shifts.filter(
         (x) =>
           x.status !== "draft" &&
-          shiftBelongsToStaffRow(x, uid, name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+          shiftBelongsToStaffRow(x, uid, name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
       );
       const inBlock = block === "all" ? userShifts : userShifts.filter((x) => isInBlock(x.date, block));
       return inBlock.some((x) => x.status !== "confirmed");
     },
-    [shifts, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffList]
+    [shifts, isInBlock, rowDisplayName, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch]
   );
 
   /** 指定ユーザーが選択ブロック内に未確定シフトを持つか（一括・個別確定の実行時に使用） */
@@ -862,7 +890,7 @@ export default function AdminShiftGrid() {
         const nm = rowDisplayName(uid);
         const hadEdited = shifts.some(
           (s) =>
-            shiftBelongsToStaffRow(s, uid, nm, staffIdSet, orphanNamesResolved, staffIdToName, staffList) &&
+            shiftBelongsToStaffRow(s, uid, nm, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch) &&
             s.editedAfterConfirmed &&
             (confirmBlock === "all" || isInBlock(s.date, confirmBlock))
         );
@@ -875,7 +903,7 @@ export default function AdminShiftGrid() {
           staffIdSet,
           orphanNamesResolved,
           staffIdToName,
-          staffList
+          staffRowsForMatch
         );
         let anyOk = false;
         for (const ownerId of owners) {
@@ -897,7 +925,7 @@ export default function AdminShiftGrid() {
             const hit = ids.some((staffId) => {
               const sn = rowDisplayName(staffId);
               return (
-                shiftBelongsToStaffRow(s, staffId, sn, staffIdSet, orphanNamesResolved, staffIdToName, staffList) &&
+                shiftBelongsToStaffRow(s, staffId, sn, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch) &&
                 (confirmBlock === "all" || isInBlock(s.date, confirmBlock))
               );
             });
@@ -958,7 +986,7 @@ export default function AdminShiftGrid() {
           const xd = resolveShiftDateString(x.date, x.id ?? "", x.userId) || x.date;
           return (
             xd === dateStr &&
-            shiftBelongsToStaffRow(x, staff.id, staff.name, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+            shiftBelongsToStaffRow(x, staff.id, staff.name, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
           );
         });
         if (!s) return "";
@@ -1246,7 +1274,7 @@ export default function AdminShiftGrid() {
                           合計 {totalHours}h
                         </span>
                       </div>
-                      {hasShiftsInMonth(user.id) && (
+                      {hasShiftsInMonth(user.id) && !rowIsRetired && (
                         <div style={{ marginBottom: "0.5rem" }}>
                           <button
                             type="button"
@@ -1282,7 +1310,7 @@ export default function AdminShiftGrid() {
                           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                           const isHoliday = isJapaneseHoliday(date);
                           const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                          const shift = findShiftForGridCell(user, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffList);
+                          const shift = findShiftForGridCell(user, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch);
                           const h = shift ? calcHours(shift) : 0;
                           const numHours = h === "OFF" ? 0 : (h as number);
                           const isOver = isDailyOver(numHours);
@@ -1307,6 +1335,7 @@ export default function AdminShiftGrid() {
                                 color: isOver || isEditedLate ? "#B91C1C" : "inherit",
                                 cursor: hasData ? "pointer" : "default",
                               }}
+                              title={hasData && rowIsRetired ? "在籍外の行・閲覧のみ" : undefined}
                             >
                               <span style={{ fontSize: "0.6rem", opacity: 0.85, lineHeight: 1 }}>{day}</span>
                               {h === "OFF" ? "OFF" : numHours > 0 ? (
@@ -1441,16 +1470,25 @@ export default function AdminShiftGrid() {
                           display: "flex",
                           alignItems: "center",
                           gap: "0.35rem",
-                          cursor: !hasShiftsInMonth(user.id) ? "not-allowed" : "pointer",
-                          opacity: !hasShiftsInMonth(user.id) ? 0.7 : 1,
+                          cursor:
+                            rowIsRetired || !hasShiftsInMonth(user.id) ? "not-allowed" : "pointer",
+                          opacity: rowIsRetired || !hasShiftsInMonth(user.id) ? 0.7 : 1,
                         }}
-                        title={!hasShiftsInMonth(user.id) ? "シフトがありません" : "行を選択（確定・取り消しはモーダルで操作）"}
+                        title={
+                          rowIsRetired
+                            ? "在籍外の行は一括確定の選択対象外です"
+                            : !hasShiftsInMonth(user.id)
+                              ? "シフトがありません"
+                              : "行を選択（確定・取り消しはモーダルで操作）"
+                        }
                       >
                         <input
                           type="checkbox"
                           checked={selectedUserIds.has(user.id)}
-                          onChange={() => hasShiftsInMonth(user.id) && toggleSelected(user.id)}
-                          disabled={!hasShiftsInMonth(user.id)}
+                          onChange={() =>
+                            !rowIsRetired && hasShiftsInMonth(user.id) && toggleSelected(user.id)
+                          }
+                          disabled={rowIsRetired || !hasShiftsInMonth(user.id)}
                         />
                       </label>
                       {user.name}
@@ -1468,14 +1506,28 @@ export default function AdminShiftGrid() {
                       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                       const isHoliday = isJapaneseHoliday(date);
                       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                      const shift = findShiftForGridCell(user, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffList);
+                      const shift = findShiftForGridCell(user, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch);
                       const h = shift ? calcHours(shift) : 0;
                       const numHours = h === "OFF" ? 0 : (h as number);
                       const isOver = isDailyOver(numHours);
                       const hasData = !!shift;
                       const isEditedLate = !!shift?.editedAfterDeadline;
                       const isConfirmed = shift?.status === "confirmed";
-                      const cellTitle = isOver ? "1日8時間超過" : isEditedLate ? "締切後に管理者が編集" : isConfirmed ? (shift?.editedAfterConfirmed ? "確定済み（確定後に編集）・クリックで編集" : "確定済み・クリックで編集") : hasData ? "クリックで編集" : "クリックでシフトを追加";
+                      const cellTitle = rowIsRetired
+                        ? hasData
+                          ? "在籍外の行・閲覧のみ（クリックで内容を表示）"
+                          : "在籍外の行にシフトはありません"
+                        : isOver
+                          ? "1日8時間超過"
+                          : isEditedLate
+                            ? "締切後に管理者が編集"
+                            : isConfirmed
+                              ? shift?.editedAfterConfirmed
+                                ? "確定済み（確定後に編集）・クリックで編集"
+                                : "確定済み・クリックで編集"
+                              : hasData
+                                ? "クリックで編集"
+                                : "クリックでシフトを追加";
                       const baseCellBg = isOver
                         ? "#FEE2E2"
                         : numHours > 0
@@ -1486,17 +1538,18 @@ export default function AdminShiftGrid() {
                               ? "rgba(191, 219, 254, 0.8)"
                               : "var(--surface-hover)";
                       const cellBg = selectedUserIds.has(user.id) ? "rgba(79, 70, 229, 0.12)" : baseCellBg;
+                      const cellClickable = !rowIsRetired || hasData;
                       return (
                         <td
                           key={d}
-                          onClick={() => setEditingCell({ userId: user.id, day: d })}
+                          onClick={cellClickable ? () => setEditingCell({ userId: user.id, day: d }) : undefined}
                           style={{
                             border: "1px solid var(--border)",
                             borderLeft: selectedUserIds.has(user.id) ? "3px solid rgba(79, 70, 229, 0.5)" : isConfirmed ? "3px solid rgba(34, 197, 94, 0.7)" : undefined,
                             textAlign: "center",
                             backgroundColor: cellBg,
                             color: isOver || isEditedLate ? "#B91C1C" : "inherit",
-                            cursor: "pointer",
+                            cursor: cellClickable ? "pointer" : "default",
                           }}
                           title={cellTitle}
                         >
@@ -1535,6 +1588,8 @@ export default function AdminShiftGrid() {
                     >
                       {!hasShiftsInMonth(user.id) ? (
                         <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="シフトがありません">—</span>
+                      ) : rowIsRetired ? (
+                        <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }} title="在籍外の行は確定通知の操作対象外です">—</span>
                       ) : (
                         <button
                           type="button"
@@ -2022,6 +2077,65 @@ export default function AdminShiftGrid() {
               <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>
                 {month + 1}月{editingCell.day}日　{displayStaffList.find((s) => s.id === editingCell.userId)?.name ?? editingCell.userId}
               </h3>
+              {editingCellUserIsRetired ? (
+                <>
+                  <p
+                    style={{
+                      fontSize: "0.8rem",
+                      color: "var(--text-muted)",
+                      marginBottom: "0.85rem",
+                      padding: "0.5rem 0.65rem",
+                      background: "var(--bg-secondary)",
+                      borderRadius: "var(--radius-md)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    在籍外（停職・退職・削除済みなど）の行は<strong>閲覧のみ</strong>です。時間の変更や保存はできません。
+                  </p>
+                  {(() => {
+                    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
+                    const row = displayStaffList.find((s) => s.id === editingCell.userId);
+                    const sh = row
+                      ? findShiftForGridCell(row, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
+                      : undefined;
+                    if (!sh) {
+                      return <p style={{ fontSize: "0.95rem", marginBottom: "0.5rem" }}>この日にシフトはありません。</p>;
+                    }
+                    const statusLabel =
+                      sh.status === "confirmed" ? "確定" : sh.status === "submitted" ? "提出済" : "下書き";
+                    const off = sh.startTime === "00:00" && sh.endTime === "00:00";
+                    return (
+                      <div style={{ fontSize: "0.95rem", lineHeight: 1.65, marginBottom: "0.5rem" }}>
+                        <div style={{ fontSize: "1.05rem", fontWeight: 600, marginBottom: "0.35rem" }}>
+                          {off ? "OFF" : formatShiftCellLabel(sh)}
+                        </div>
+                        {!off && (
+                          <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                            {sh.startTime} ～ {sh.endTime}（{getShiftWorkTypeLabel(sh)}）
+                          </div>
+                        )}
+                        <div style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.35rem" }}>
+                          状態: {statusLabel}
+                        </div>
+                        {typeof sh.hourlyWage === "number" && (
+                          <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                            時給: ¥{sh.hourlyWage.toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ marginTop: "0.5rem", width: "100%" }}
+                    onClick={() => setEditingCell(null)}
+                  >
+                    閉じる
+                  </button>
+                </>
+              ) : (
+                <>
               {editingCellHourlyWage != null && (
                 <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
                   時給: <strong>¥{editingCellHourlyWage.toLocaleString()}</strong>
@@ -2041,7 +2155,7 @@ export default function AdminShiftGrid() {
                     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
                     const editRow = displayStaffList.find((s) => s.id === editingCell.userId);
                     const existingShift = editRow
-                      ? findShiftForGridCell(editRow, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+                      ? findShiftForGridCell(editRow, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
                       : undefined;
                     const firestoreUserId = existingShift?.userId ?? editingCell.userId;
                     const editedAfterConfirmed = existingShift?.status === "confirmed";
@@ -2071,7 +2185,7 @@ export default function AdminShiftGrid() {
                     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(editingCell.day).padStart(2, "0")}`;
                     const editRow2 = displayStaffList.find((s) => s.id === editingCell.userId);
                     const existingShiftOff = editRow2
-                      ? findShiftForGridCell(editRow2, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffList)
+                      ? findShiftForGridCell(editRow2, dateStr, shifts, staffIdSet, orphanNamesResolved, staffIdToName, staffRowsForMatch)
                       : undefined;
                     const firestoreUserIdOff = existingShiftOff?.userId ?? editingCell.userId;
                     const editedAfterConfirmed = existingShiftOff?.status === "confirmed";
@@ -2216,6 +2330,8 @@ export default function AdminShiftGrid() {
               >
                 キャンセル
               </button>
+                </>
+              )}
             </div>
           </div>
       )}

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from "r
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/firebase";
 import { DEFAULT_HOURLY_WAGE } from "@/lib/app-config";
-import { getUserProfile, getUserProfileFromServer, createUser } from "@/services/userService";
+import { getUserProfile, getUserProfileFromServer, createUser, isStaffEmploymentBlocked } from "@/services/userService";
 
 export type UserRole = "admin" | "staff";
 
@@ -185,6 +185,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                     }
                     if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                        if (profile.role === "staff" && isStaffEmploymentBlocked(profile.employmentStatus)) {
+                            try {
+                                await signOut(auth);
+                            } catch {
+                                // ignore
+                            }
+                            userRef.current = null;
+                            setUser(null);
+                            devWarn("[Auth] onAuthStateChanged: signOut (staff employment blocked)", {
+                                uid: firebaseUser.uid,
+                                totalMs: Math.round(nowMs() - t0),
+                            });
+                            return;
+                        }
                         const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                         const u: User = {
                             uid: firebaseUser.uid,
@@ -300,6 +314,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
             devInfo("[Auth] login: getUserProfile", { ms: Math.round(nowMs() - tProfile0), uid: firebaseUser.uid, found: !!profile });
             if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                if (profile.role === "staff" && isStaffEmploymentBlocked(profile.employmentStatus)) {
+                    try {
+                        await signOut(auth);
+                    } catch {
+                        // ignore
+                    }
+                    userRef.current = null;
+                    setUser(null);
+                    const blocked = new Error("employment-blocked");
+                    (blocked as { code?: string }).code = "employment-blocked";
+                    throw blocked;
+                }
                 const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                 const u: User = {
                     uid: firebaseUser.uid,
@@ -442,6 +468,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             const profile = await getUserProfileFromServer(firebaseUser.uid);
             if (profile && (profile.role === "admin" || profile.role === "staff")) {
+                if (profile.role === "staff" && isStaffEmploymentBlocked(profile.employmentStatus)) {
+                    try {
+                        await signOut(auth);
+                    } catch {
+                        // ignore
+                    }
+                    userRef.current = null;
+                    setUser(null);
+                    return;
+                }
                 const isGoogleUser = firebaseUser.providerData?.some((p) => p.providerId === "google.com") ?? false;
                 const u: User = {
                     uid: firebaseUser.uid,

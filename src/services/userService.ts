@@ -4,6 +4,26 @@ import { getDoc, getDocs } from "@/lib/firebase/firestoreHelpers";
 import { collection, doc, setDoc, updateDoc, deleteDoc, query, where, getDocFromCache, getDocsFromServer, onSnapshot, deleteField } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
+/** スタッフの在籍状態。未設定は active とみなす */
+export type EmploymentStatus = "active" | "suspended" | "retired";
+
+export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, string> = {
+    active: "在籍中",
+    suspended: "停職",
+    retired: "退職",
+};
+
+export function normalizeEmploymentStatus(value: unknown): EmploymentStatus {
+    if (value === "suspended" || value === "retired") return value;
+    return "active";
+}
+
+/** ログイン・スタッフ画面を止める状態 */
+export function isStaffEmploymentBlocked(status: EmploymentStatus | undefined): boolean {
+    const s = status ?? "active";
+    return s === "suspended" || s === "retired";
+}
+
 export interface UserProfile {
     uid: string;
     name: string;
@@ -14,6 +34,8 @@ export interface UserProfile {
     hourlyWageRemote?: number;
     photoURL?: string;
     chatworkAccountId?: string; // Chatwork のアカウントID（数字。通知の [To:xxx] メンション用）
+    /** 在籍状態。未設定は在籍中 */
+    employmentStatus?: EmploymentStatus;
 }
 
 /** Firestore の users ドキュメント data を UserProfile に正規化（role の大文字・欠損を吸収） */
@@ -29,6 +51,7 @@ function parseUserProfileDoc(uid: string, data: Record<string, unknown>): UserPr
         hourlyWageRemote: data.hourlyWageRemote as number | undefined,
         photoURL: (data.photoURL as string) ?? undefined,
         chatworkAccountId: (data.chatworkAccountId as string) ?? undefined,
+        employmentStatus: normalizeEmploymentStatus(data.employmentStatus),
     };
 }
 
@@ -157,6 +180,8 @@ export interface StaffItem {
     id: string;
     name: string;
     photoURL?: string;
+    /** 管理シフト表の下段など。未設定は在籍扱い */
+    employmentStatus?: EmploymentStatus;
 }
 
 const STAFF_FALLBACK_LIST: StaffItem[] = [
@@ -180,10 +205,13 @@ export const getAllStaff = async (): Promise<StaffItem[]> => {
         const list: StaffItem[] = [];
         snap.forEach((d) => {
             const data = d.data();
+            const st = normalizeEmploymentStatus(data.employmentStatus);
+            if (st !== "active") return;
             list.push({
                 id: d.id,
                 name: data.name || "（名前なし）",
                 photoURL: data.photoURL ?? undefined,
+                employmentStatus: "active",
             });
         });
         return list;
@@ -205,6 +233,38 @@ export const getAllStaff = async (): Promise<StaffItem[]> => {
     }
 };
 
+/** 停職・退職のスタッフ（管理シフト表の下段用）。管理者のみ取得可想定 */
+export const getInactiveStaffForAdmin = async (): Promise<StaffItem[]> => {
+    if (!auth.currentUser) return [];
+    try {
+        const q = query(collection(db, "users"), where("role", "==", "staff"));
+        const snap = await getDocs(q);
+        const list: StaffItem[] = [];
+        snap.forEach((d) => {
+            const data = d.data();
+            const st = normalizeEmploymentStatus(data.employmentStatus);
+            if (st !== "suspended" && st !== "retired") return;
+            const base = (data.name as string) || "（名前なし）";
+            const suffix = st === "suspended" ? "（停職）" : "（退職）";
+            list.push({
+                id: d.id,
+                name: `${base}${suffix}`,
+                photoURL: data.photoURL ?? undefined,
+                employmentStatus: st,
+            });
+        });
+        return list;
+    } catch {
+        return [];
+    }
+};
+
+/** 管理者がスタッフの在籍状態を更新 */
+export const updateUserEmploymentStatus = async (uid: string, status: EmploymentStatus): Promise<void> => {
+    const docRef = doc(db, "users", uid);
+    await updateDoc(docRef, { employmentStatus: status });
+};
+
 function mapDocToUserProfile(d: { id: string; data: () => Record<string, unknown> }): UserProfile {
     const data = d.data();
     return {
@@ -216,6 +276,7 @@ function mapDocToUserProfile(d: { id: string; data: () => Record<string, unknown
         hourlyWageRemote: data.hourlyWageRemote as number | undefined,
         photoURL: (data.photoURL as string) ?? undefined,
         chatworkAccountId: (data.chatworkAccountId as string) ?? undefined,
+        employmentStatus: normalizeEmploymentStatus(data.employmentStatus),
     };
 }
 
