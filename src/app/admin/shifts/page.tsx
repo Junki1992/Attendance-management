@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from "react";
 import { doc, getDocFromServer } from "firebase/firestore";
 import { db } from "@/lib/firebase/firebase";
 import {
@@ -86,17 +86,58 @@ function getConfirmMessage(block: ConfirmBlock, month: number, hadEdited: boolea
   return `${m}月16日～月末のシフトが確定しました。確認してください。`;
 }
 
-/** 表のセル用：勤務時間を「11-19」「11-19 在宅」のように表示（ぱっと見で何時～何時か分かるように） */
-function formatShiftCellLabel(shift: Shift | null | undefined): string {
-  if (!shift || (shift.startTime === "00:00" && shift.endTime === "00:00")) return "OFF";
-  const sH = parseInt(shift.startTime.slice(0, 2), 10);
-  const eH = parseInt(shift.endTime.slice(0, 2), 10);
-  const timeStr = `${sH}-${eH}`;
-  const workLabel = getShiftWorkType(shift) !== "office" ? ` ${getShiftWorkTypeLabel(shift)}` : "";
-  return timeStr + workLabel;
+/** セル表記用：:00 は時のみ、それ以外は h:mm（10:30 は見える、10:00 は 10 のまま） */
+function formatShiftClockPartForCell(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10));
+  if (Number.isNaN(h)) return hhmm;
+  if (m === 0) return String(h);
+  return `${h}:${String(m).padStart(2, "0")}`;
 }
 
-/** スプレッドシート用のセル表記（例: 10-18\n（出社/休憩1h）、13-18\n(在宅)） */
+/** 表のセル用：時刻は分ありなら2行、在宅等は必ずその下の行（語の途中改行を防ぐ） */
+function ShiftCellTableBody({ shift, compact }: { shift: Shift; compact?: boolean }) {
+  if (shift.startTime === "00:00" && shift.endTime === "00:00") return <>OFF</>;
+  const a = formatShiftClockPartForCell(shift.startTime);
+  const b = formatShiftClockPartForCell(shift.endTime);
+  const splitTime = a.includes(":") || b.includes(":");
+  const workLabel = getShiftWorkType(shift) !== "office" ? getShiftWorkTypeLabel(shift) : null;
+  const timeStyle: CSSProperties = { lineHeight: 1.25, textAlign: "center" };
+  const workStyle: CSSProperties = {
+    fontSize: compact ? "0.58em" : "0.68em",
+    opacity: 0.88,
+    lineHeight: 1.1,
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+  };
+  const gap = compact ? "0.08rem" : "0.1rem";
+  return (
+    <span
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap,
+        width: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      {splitTime ? (
+        <>
+          <span style={timeStyle}>{a}-</span>
+          <span style={timeStyle}>{b}</span>
+        </>
+      ) : (
+        <span style={timeStyle}>
+          {a}-{b}
+        </span>
+      )}
+      {workLabel ? <span style={workStyle}>{workLabel}</span> : null}
+    </span>
+  );
+}
+
+/** スプレッドシート用のセル表記（例: 10-18\n（出社/休憩1h）、10:30-18:15\n(在宅)） */
 function formatShiftForSheet(s: Shift): string {
   if (s.startTime === "00:00" && s.endTime === "00:00") return "";
   const loc = getShiftWorkTypeLabel(s);
@@ -104,7 +145,8 @@ function formatShiftForSheet(s: Shift): string {
   const [eH, eM] = s.endTime.split(":").map(Number);
   const durationHours = eH + eM / 60 - (sH + sM / 60);
   const breakNote = durationHours >= 6 ? "/休憩1h" : "";
-  return `${sH}-${eH}\n（${loc}${breakNote}）`;
+  const range = `${formatShiftClockPartForCell(s.startTime)}-${formatShiftClockPartForCell(s.endTime)}`;
+  return `${range}\n（${loc}${breakNote}）`;
 }
 
 function escapeCsvCell(val: string): string {
@@ -1340,7 +1382,7 @@ export default function AdminShiftGrid() {
                               <span style={{ fontSize: "0.6rem", opacity: 0.85, lineHeight: 1 }}>{day}</span>
                               {h === "OFF" ? "OFF" : numHours > 0 ? (
                                 <>
-                                  {formatShiftCellLabel(shift)}
+                                  <ShiftCellTableBody shift={shift!} compact />
                                   {isOver && <span style={{ fontSize: "0.5rem", fontWeight: 600, color: "#B91C1C", display: "block" }}>8h超</span>}
                                   {isEditedLate && !isOver && <span style={{ fontSize: "0.5rem", fontWeight: 600, color: "#B91C1C", display: "block" }}>締切後</span>}
                                 </>
@@ -1555,7 +1597,7 @@ export default function AdminShiftGrid() {
                         >
                           {h === "OFF" ? "OFF" : numHours > 0 ? (
                             <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem" }}>
-                              <span>{formatShiftCellLabel(shift)}</span>
+                              <ShiftCellTableBody shift={shift!} />
                               {isOver && <span style={{ fontSize: "0.55rem", fontWeight: 600, color: "#B91C1C" }}>8h超</span>}
                               {isEditedLate && !isOver && <span style={{ fontSize: "0.55rem", fontWeight: 600, color: "#B91C1C" }}>締切後</span>}
                             </span>
@@ -2107,7 +2149,7 @@ export default function AdminShiftGrid() {
                     return (
                       <div style={{ fontSize: "0.95rem", lineHeight: 1.65, marginBottom: "0.5rem" }}>
                         <div style={{ fontSize: "1.05rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                          {off ? "OFF" : formatShiftCellLabel(sh)}
+                          {off ? "OFF" : <ShiftCellTableBody shift={sh} />}
                         </div>
                         {!off && (
                           <div style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
