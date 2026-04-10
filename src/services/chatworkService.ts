@@ -27,6 +27,43 @@ const CHATWORK_CONFIG_DOC = "chatwork";
 const DEFAULT_NOTIFY_HOUR = 21;
 const DEFAULT_NOTIFY_MINUTE = 0;
 
+/** Firestore の notifyHour/notifyMinute（scripts/resolveChatworkNotifySchedule.js と同じ規則） */
+function resolveNotifyFromDoc(d: Record<string, unknown>): { notifyHour: number; notifyMinute: number } {
+  const rawHour = d?.notifyHour;
+  const rawMin = d?.notifyMinute;
+
+  let notifyHour: number | null = null;
+  let minuteFromCombined: number | null = null;
+
+  if (typeof rawHour === "string" && rawHour.includes(":")) {
+    const parts = rawHour.trim().split(":").map((x) => x.trim());
+    const h = parseInt(parts[0], 10);
+    const mi = parts[1] != null && parts[1] !== "" ? parseInt(parts[1], 10) : NaN;
+    if (!Number.isNaN(h) && h >= 0 && h <= 23) notifyHour = h;
+    if (!Number.isNaN(mi) && mi >= 0 && mi <= 59) minuteFromCombined = mi;
+    else if (notifyHour != null && Number.isNaN(mi)) minuteFromCombined = 0;
+  } else if (typeof rawHour === "number" && !Number.isNaN(rawHour)) {
+    const h = Math.floor(rawHour);
+    if (h >= 0 && h <= 23) notifyHour = h;
+  } else if (typeof rawHour === "string" && /^\d+$/.test(rawHour.trim())) {
+    const h = parseInt(rawHour.trim(), 10);
+    if (h >= 0 && h <= 23) notifyHour = h;
+  }
+
+  let notifyMinute: number | null = null;
+  if (typeof rawMin === "number" && !Number.isNaN(rawMin)) {
+    const mm = Math.floor(rawMin);
+    if (mm >= 0 && mm <= 59) notifyMinute = mm;
+  } else if (typeof rawMin === "string" && /^\d+$/.test(String(rawMin).trim())) {
+    const mm = parseInt(String(rawMin).trim(), 10);
+    if (mm >= 0 && mm <= 59) notifyMinute = mm;
+  }
+  if (notifyMinute === null) notifyMinute = minuteFromCombined !== null ? minuteFromCombined : DEFAULT_NOTIFY_MINUTE;
+  if (notifyHour === null) notifyHour = DEFAULT_NOTIFY_HOUR;
+
+  return { notifyHour, notifyMinute };
+}
+
 /** Firestore の生データを取得（chatwork-notify.js が読むのと同じドキュメント） */
 export const getChatworkConfigRaw = async (): Promise<Record<string, unknown> | null> => {
   const ref = doc(db, "settings", CHATWORK_CONFIG_DOC);
@@ -58,12 +95,7 @@ export const getChatworkConfig = async (): Promise<ChatworkConfig | null> => {
   if (!d?.apiToken || typeof d.apiToken !== "string" || !d.apiToken.trim()) return null;
   const notificationDestinations = parseDestinations(d);
   if (notificationDestinations.length === 0) return null;
-  const rawHour = d?.notifyHour;
-  const notifyHour =
-    typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23 ? rawHour : DEFAULT_NOTIFY_HOUR;
-  const rawMin = d?.notifyMinute;
-  const notifyMinute =
-    typeof rawMin === "number" && rawMin >= 0 && rawMin <= 59 ? Math.floor(rawMin) : DEFAULT_NOTIFY_MINUTE;
+  const { notifyHour, notifyMinute } = resolveNotifyFromDoc(d);
   return {
     apiToken: d.apiToken.trim(),
     notificationDestinations,

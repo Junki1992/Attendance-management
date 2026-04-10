@@ -8,6 +8,7 @@
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
+const { resolveChatworkNotifySchedule } = require("./resolveChatworkNotifySchedule");
 
 function loadNotificationExcludedUids() {
   try {
@@ -17,6 +18,31 @@ function loadNotificationExcludedUids() {
   } catch {
     return new Set();
   }
+}
+
+/** 日本時間の時・分（GitHub Actions は UTC のため Intl で明示） */
+function getJstHourMinute(d) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+  return { hour, minute };
+}
+
+/** 日本時間の「翌日」の shifts.date 用 YYYY-MM-DD */
+function jstTomorrowDateStr(now = new Date()) {
+  const ymd = now.toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
 }
 
 async function sendErrorToChatwork(token, roomId, accountId, errorMessage) {
@@ -82,38 +108,36 @@ async function main() {
     process.exit(1);
   }
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dateStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+  const now = new Date();
+  const dateStr = jstTomorrowDateStr(now);
 
   const forceSend = process.env.CHATWORK_NOTIFY_FORCE === "1";
+  const schedule = resolveChatworkNotifySchedule(cfgData);
   if (!forceSend) {
-    const rawHour = cfgData?.notifyHour;
-    const notifyHour =
-      typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23
-        ? Math.floor(rawHour)
-        : typeof rawHour === "string" && /^\d+$/.test(rawHour)
-          ? Math.min(23, Math.max(0, parseInt(rawHour, 10)))
-          : 21;
-    const rawMin = cfgData?.notifyMinute;
-    const notifyMinute =
-      typeof rawMin === "number" && rawMin >= 0 && rawMin <= 59
-        ? Math.floor(rawMin)
-        : typeof rawMin === "string" && /^\d+$/.test(rawMin)
-          ? Math.min(59, Math.max(0, parseInt(rawMin, 10)))
-          : 0;
-    const now = new Date();
-    const jstHour = (now.getUTCHours() + 9) % 24;
-    const jstMinute = now.getUTCMinutes();
+    const { notifyHour, notifyMinute, rawHour, rawMin } = schedule;
+    const { hour: jstHour, minute: jstMinute } = getJstHourMinute(now);
+    console.log(
+      "[chatwork-notify] schedule raw notifyHour=%s notifyMinute=%s → effective %s:%s JST; now %s:%s",
+      JSON.stringify(rawHour),
+      JSON.stringify(rawMin),
+      notifyHour,
+      String(notifyMinute).padStart(2, "0"),
+      jstHour,
+      String(jstMinute).padStart(2, "0")
+    );
     const configuredMin = notifyHour * 60 + notifyMinute;
     const currentMin = jstHour * 60 + jstMinute;
-    const windowMinutes = 60;
-    const windowEnd = (configuredMin + windowMinutes) % 1440;
-    const inWindow = configuredMin + windowMinutes <= 1440
-      ? currentMin >= configuredMin && currentMin < configuredMin + windowMinutes
-      : currentMin >= configuredMin || currentMin < windowEnd;
+    // 画面で設定した時刻（JST）以降〜当日 23:59 まで送る。GitHub のスケジュール遅延で「60分窓」を逃しても届くようにする。
+    const endOfJstDayMin = 23 * 60 + 59;
+    const inWindow = currentMin >= configuredMin && currentMin <= endOfJstDayMin;
     if (!inWindow) {
-      console.log("[chatwork-notify] Skip: JST", jstHour + ":" + String(jstMinute).padStart(2, "0"), "not in window", notifyHour + ":" + String(notifyMinute).padStart(2, "0"), "+" + windowMinutes + "min");
+      console.log(
+        "[chatwork-notify] Skip: JST",
+        jstHour + ":" + String(jstMinute).padStart(2, "0"),
+        "before notify time",
+        notifyHour + ":" + String(notifyMinute).padStart(2, "0"),
+        "(sends from that time through 23:59 JST same day)"
+      );
       process.exit(0);
     }
     const lastSent = cfgData?.lastNotificationDate;
@@ -142,7 +166,8 @@ async function main() {
     entries.push({ name, start, end, chatworkAccountId });
   }
 
-  const dateLabel = `${tomorrow.getMonth() + 1}/${tomorrow.getDate()}`;
+  const [, mPart, dPart] = dateStr.split("-");
+  const dateLabel = `${parseInt(mPart, 10)}/${parseInt(dPart, 10)}`;
   const lines =
     entries.length > 0
       ? entries.map((e) => {

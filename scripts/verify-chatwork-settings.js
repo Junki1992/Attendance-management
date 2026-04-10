@@ -10,6 +10,19 @@
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
+const { resolveChatworkNotifySchedule } = require("./resolveChatworkNotifySchedule");
+
+function getJstHourMinute(d) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const hour = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+  const minute = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+  return { hour, minute };
+}
 
 async function main() {
   let cred;
@@ -52,30 +65,14 @@ async function main() {
   }
 
   const data = cfgSnap.data();
-  const rawHour = data?.notifyHour;
-  const notifyHour =
-    typeof rawHour === "number" && rawHour >= 0 && rawHour <= 23
-      ? Math.floor(rawHour)
-      : typeof rawHour === "string" && /^\d+$/.test(rawHour)
-        ? Math.min(23, Math.max(0, parseInt(rawHour, 10)))
-        : 21;
-  const rawMin = data?.notifyMinute;
-  const notifyMinute =
-    typeof rawMin === "number" && rawMin >= 0 && rawMin <= 59
-      ? Math.floor(rawMin)
-      : typeof rawMin === "string" && /^\d+$/.test(rawMin)
-        ? Math.min(59, Math.max(0, parseInt(rawMin, 10)))
-        : 0;
+  const { notifyHour, notifyMinute, rawHour, rawMin } = resolveChatworkNotifySchedule(data);
 
   const now = new Date();
-  const jstHour = (now.getUTCHours() + 9) % 24;
-  const jstMinute = now.getUTCMinutes();
+  const { hour: jstHour, minute: jstMinute } = getJstHourMinute(now);
   const configuredMin = notifyHour * 60 + notifyMinute;
   const currentMin = jstHour * 60 + jstMinute;
-  const windowEnd = (configuredMin + 30) % 1440;
-  const inWindow = configuredMin + 30 <= 1440
-    ? currentMin >= configuredMin && currentMin < configuredMin + 30
-    : currentMin >= configuredMin || currentMin < windowEnd;
+  const endOfJstDayMin = 23 * 60 + 59;
+  const inWindow = currentMin >= configuredMin && currentMin <= endOfJstDayMin;
   const lastSent = data?.lastNotificationDate;
 
   console.log("=== Chatwork 設定（Firestore settings/chatwork）===");
@@ -86,10 +83,10 @@ async function main() {
   console.log("");
   console.log("=== 通知判定（chatwork-notify.js と同じロジック）===");
   console.log("現在の日本時間: ", jstHour + ":" + String(jstMinute).padStart(2, "0"));
-  console.log("設定された時刻: ", notifyHour + ":" + String(notifyMinute).padStart(2, "0"), "（30分の窓）");
-  console.log("窓内で送信可能: ", inWindow ? "✅ はい" : "❌ いいえ（スキップ）");
+  console.log("設定時刻以降〜23:59 JST の間、まだその日付分を送っていなければ送信");
+  console.log("いま送信可能: ", inWindow ? "✅ はい" : "❌ いいえ（設定時刻前＝スキップ）");
   console.log("");
-  console.log("GitHub Actions は5分ごとに実行。設定時刻から30分以内なら送信（遅延対策）。");
+  console.log("GitHub Actions は5分ごとに実行。遅延しても当日中なら送信される。");
 }
 
 main().catch((e) => {

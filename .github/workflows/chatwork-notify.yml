@@ -1,15 +1,27 @@
-# スケジュールは UTC。18:00 JST = 9:00 UTC。実行一覧の「9:xx」= 18:xx JST。
-# 正時(9:00)は GitHub が混雑してスキップされやすいため 9:02 と 9:05 を明示。5分ごとも継続。
+# スケジュールは UTC。chatwork-notify.js が Firestore の notifyHour（JST）以降なら送信する。
+#
+# 以前は複数の schedule（例: 9:05 の固定と */5）が同一分に重なり、2本同時起動→
+# lastNotificationDate 更新前に並列で送信しうるレースや、キュー詰まりの原因になった。
+# 単一の cron に統一し、concurrency で常に 1 実行に限定する。
 name: Chatwork 翌日出勤通知
 on:
   schedule:
-    - cron: "2 9 * * *"
-    - cron: "5 9 * * *"
-    - cron: "*/5 * * * *"
+    # 約10分間隔・毎時7,17,27,37,47,57分（:00台の混雑を避ける）。1日144回。
+    - cron: "7,17,27,37,47,57 * * * *"
   workflow_dispatch:
+
+# 同時に複数ジョブを走らせない（送信重複・キュー占有の防止）
+concurrency:
+  group: chatwork-notify
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   notify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       # Node.js 20 非推奨対応: 2026年6月以降のデフォルトに先行してオプトイン
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
