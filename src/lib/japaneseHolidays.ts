@@ -2,6 +2,7 @@
  * 日本の祝日・休日判定
  * - 国民の祝日（内閣府）、ハッピーマンデー、春分・秋分、振替休日
  * - 一般的な休日: 三が日（1/2, 1/3）、年末（12/29〜31）
+ * - 振替休日: 日曜と重なった祝日の翌日以降で、既に祝日として占められていない最初の日（GWの 5/6、年またぎの振替など）
  */
 
 /** 第n月曜の日付（1日が何曜かから算出） */
@@ -22,8 +23,99 @@ function autumnEquinoxDay(year: number): number {
   return 23;
 }
 
-function dateMatch(d: Date, month: number, day: number): boolean {
-  return d.getMonth() === month && d.getDate() === day;
+const FIXED_HOLIDAYS: [number, number][] = [
+  [0, 1], [0, 2], [0, 3], // 元日、三が日（1/2, 1/3）
+  [1, 11], [1, 23], // 建国記念の日、天皇誕生日
+  [3, 29], [4, 3], [4, 4], [4, 5], [7, 11], [10, 3], [10, 23],
+  [11, 29], [11, 30], [11, 31], // 年末休み（12/29〜31）
+];
+
+const NTH_MONDAYS: [number, number][] = [
+  [0, 2], // 成人の日 1月第2月曜
+  [6, 3], // 海の日 7月第3月曜
+  [8, 3], // 敬老の日 9月第3月曜
+  [9, 2], // スポーツの日 10月第2月曜
+];
+
+/** month は Date と同様 0 始まり */
+function holidayKey(y: number, month0: number, day: number): string {
+  return `${y}-${month0}-${day}`;
+}
+
+function parseHolidayKey(k: string): Date {
+  const [ys, ms, ds] = k.split("-").map(Number);
+  return new Date(ys, ms, ds);
+}
+
+function collectBaseHolidayKeys(year: number): Set<string> {
+  const base = new Set<string>();
+  for (const [mm, dd] of FIXED_HOLIDAYS) {
+    base.add(holidayKey(year, mm, dd));
+  }
+  base.add(holidayKey(year, 2, vernalEquinoxDay(year)));
+  base.add(holidayKey(year, 8, autumnEquinoxDay(year)));
+  for (const [month, n] of NTH_MONDAYS) {
+    const h = getNthMonday(year, month, n);
+    base.add(holidayKey(h.getFullYear(), h.getMonth(), h.getDate()));
+  }
+  return base;
+}
+
+const holidayKeysByYear = new Map<number, Set<string>>();
+const builtYears = new Set<number>();
+/** 振替をすでに割り当てた「日曜の祝日」（重複処理防止） */
+const processedSundayHolidayKeys = new Set<string>();
+
+function getSet(year: number): Set<string> {
+  if (!holidayKeysByYear.has(year)) {
+    holidayKeysByYear.set(year, new Set(collectBaseHolidayKeys(year)));
+  }
+  return holidayKeysByYear.get(year)!;
+}
+
+function isBusy(ck: string): boolean {
+  const y = parseHolidayKey(ck).getFullYear();
+  return getSet(y).has(ck);
+}
+
+function findSubstituteHolidayKey(sun: Date): string | null {
+  const cursor = new Date(sun.getFullYear(), sun.getMonth(), sun.getDate() + 1);
+  for (let i = 0; i < 400; i++) {
+    const ck = holidayKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+    if (!isBusy(ck)) return ck;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return null;
+}
+
+function processSundayHolidaysInBaseYear(baseYear: number): void {
+  const base = collectBaseHolidayKeys(baseYear);
+  const sundays = Array.from(base)
+    .map(parseHolidayKey)
+    .filter((dt) => dt.getFullYear() === baseYear && dt.getDay() === 0)
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  for (const sun of sundays) {
+    const sk = holidayKey(sun.getFullYear(), sun.getMonth(), sun.getDate());
+    if (processedSundayHolidayKeys.has(sk)) continue;
+    const ck = findSubstituteHolidayKey(sun);
+    if (!ck) continue;
+    processedSundayHolidayKeys.add(sk);
+    const ty = parseHolidayKey(ck).getFullYear();
+    getSet(ty).add(ck);
+  }
+}
+
+const MIN_BUILD_YEAR = 1970;
+
+function ensureYearBuilt(year: number): void {
+  if (builtYears.has(year)) return;
+  getSet(year);
+  if (year - 1 >= MIN_BUILD_YEAR) {
+    processSundayHolidaysInBaseYear(year - 1);
+  }
+  processSundayHolidaysInBaseYear(year);
+  builtYears.add(year);
 }
 
 /**
@@ -33,46 +125,6 @@ export function isJapaneseHoliday(d: Date): boolean {
   const y = d.getFullYear();
   const m = d.getMonth();
   const day = d.getDate();
-
-  const fixed: [number, number][] = [
-    [0, 1], [0, 2], [0, 3],   // 元日、三が日（1/2, 1/3）
-    [1, 11], [1, 23],         // 建国記念の日、天皇誕生日
-    [3, 29], [4, 3], [4, 4], [4, 5], [7, 11], [10, 3], [10, 23],
-    [11, 29], [11, 30], [11, 31], // 年末休み（12/29〜31）
-  ];
-  if (fixed.some(([mm, dd]) => m === mm && day === dd)) return true;
-
-  if (dateMatch(d, 2, vernalEquinoxDay(y))) return true;  // 春分の日（3月）
-  if (dateMatch(d, 8, autumnEquinoxDay(y))) return true; // 秋分の日（9月=month 8）
-
-  const nthMondays: [number, number][] = [
-    [0, 2],  // 成人の日 1月第2月曜
-    [6, 3],  // 海の日 7月第3月曜
-    [8, 3],  // 敬老の日 9月第3月曜
-    [9, 2],  // スポーツの日 10月第2月曜
-  ];
-  for (const [month, n] of nthMondays) {
-    const h = getNthMonday(y, month, n);
-    if (dateMatch(d, h.getMonth(), h.getDate())) return true;
-  }
-
-  // 振替休日: 日曜と重なった祝日の翌日（月曜）が休み。簡易に「前日が祝日かつ日曜」なら当日を祝日扱い
-  const prev = new Date(y, m, day - 1);
-  if (prev.getDay() === 0) {
-    const prevY = prev.getFullYear();
-    const prevM = prev.getMonth();
-    const prevD = prev.getDate();
-    const prevFixed: [number, number][] = [
-      [0, 1], [1, 11], [1, 23], [3, 29], [4, 3], [4, 4], [4, 5], [7, 11], [10, 3], [10, 23],
-    ];
-    if (prevFixed.some(([mm, dd]) => prevM === mm && prevD === dd)) return true;
-    if (prevM === 2 && prevD === vernalEquinoxDay(prevY)) return true;
-    if (prevM === 8 && prevD === autumnEquinoxDay(prevY)) return true;
-    for (const [pMonth, pN] of nthMondays) {
-      const h = getNthMonday(prevY, pMonth, pN);
-      if (prevM === h.getMonth() && prevD === h.getDate()) return true;
-    }
-  }
-
-  return false;
+  ensureYearBuilt(y);
+  return getSet(y).has(holidayKey(y, m, day));
 }
