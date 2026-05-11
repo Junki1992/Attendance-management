@@ -33,6 +33,11 @@ function getJstHourMinute(d) {
   return { hour, minute };
 }
 
+/** 日本時間の「今日」の shifts.date 用 YYYY-MM-DD */
+function jstTodayDateStr(now = new Date()) {
+  return now.toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+}
+
 /** 日本時間の「翌日」の shifts.date 用 YYYY-MM-DD */
 function jstTomorrowDateStr(now = new Date()) {
   const ymd = now.toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
@@ -43,6 +48,19 @@ function jstTomorrowDateStr(now = new Date()) {
   const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(dt.getUTCDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
+}
+
+/** Firestore の lastNotificationDate を YYYY-MM-DD 文字列に正規化 */
+function normalizeLastNotificationDate(value) {
+  if (value == null || value === "") return "";
+  if (typeof value === "string") {
+    const t = value.trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : "";
+  }
+  if (typeof value === "object" && typeof value.toDate === "function") {
+    return jstTodayDateStr(value.toDate());
+  }
+  return "";
 }
 
 async function sendErrorToChatwork(token, roomId, accountId, errorMessage) {
@@ -109,45 +127,68 @@ async function main() {
   }
 
   const now = new Date();
-  const dateStr = jstTomorrowDateStr(now);
+  const todayStr = jstTodayDateStr(now);
+  const tomorrowStr = jstTomorrowDateStr(now);
 
   const forceSend = process.env.CHATWORK_NOTIFY_FORCE === "1";
   const schedule = resolveChatworkNotifySchedule(cfgData);
-  if (!forceSend) {
+
+  let dateStr;
+  let isCatchUp = false;
+
+  if (forceSend) {
+    dateStr = tomorrowStr;
+  } else {
+    const lastSentNorm = normalizeLastNotificationDate(cfgData?.lastNotificationDate);
+    // 前夜〜23:59 に一度も「翌日」分が記録されず進んだ場合、0:00〜設定時刻前はウィンドウ外で永遠に送れない。
+    // last が JST の今日より古いときは「当日シフト」一覧を朝から再送する（取りこぼし回収）。
+    if (lastSentNorm && lastSentNorm < todayStr) {
+      isCatchUp = true;
+      dateStr = todayStr;
+      console.log(
+        "[chatwork-notify] Catch-up: lastNotificationDate=%s < today JST %s → shift date %s",
+        lastSentNorm,
+        todayStr,
+        dateStr
+      );
+    } else {
+      dateStr = tomorrowStr;
+    }
+
     const { notifyHour, notifyMinute, rawHour, rawMin } = schedule;
     const { hour: jstHour, minute: jstMinute } = getJstHourMinute(now);
     console.log(
-      "[chatwork-notify] schedule raw notifyHour=%s notifyMinute=%s → effective %s:%s JST; now %s:%s",
+      "[chatwork-notify] schedule raw notifyHour=%s notifyMinute=%s → effective %s:%s JST; now %s:%s catchUp=%s",
       JSON.stringify(rawHour),
       JSON.stringify(rawMin),
       notifyHour,
       String(notifyMinute).padStart(2, "0"),
       jstHour,
-      String(jstMinute).padStart(2, "0")
+      String(jstMinute).padStart(2, "0"),
+      isCatchUp
     );
     const configuredMin = notifyHour * 60 + notifyMinute;
     const currentMin = jstHour * 60 + jstMinute;
     // 画面で設定した時刻（JST）以降〜当日 23:59 まで送る。GitHub のスケジュール遅延で「60分窓」を逃しても届くようにする。
     const endOfJstDayMin = 23 * 60 + 59;
-    const inWindow = currentMin >= configuredMin && currentMin <= endOfJstDayMin;
-    if (!inWindow) {
+    const inEveningWindow = currentMin >= configuredMin && currentMin <= endOfJstDayMin;
+    if (!isCatchUp && !inEveningWindow) {
       console.log(
         "[chatwork-notify] Skip: JST",
         jstHour + ":" + String(jstMinute).padStart(2, "0"),
         "before notify time",
         notifyHour + ":" + String(notifyMinute).padStart(2, "0"),
-        "(sends from that time through 23:59 JST same day)"
+        "(sends from that time through 23:59 JST same day; missed digest retries next morning if lastNotificationDate is stale)"
       );
       process.exit(0);
     }
-    const lastSent = cfgData?.lastNotificationDate;
-    if (lastSent === dateStr) {
+    if (lastSentNorm === dateStr) {
       console.log("[chatwork-notify] Skip: already sent for", dateStr);
       process.exit(0);
     }
   }
 
-  console.log("[chatwork-notify] Sending for date:", dateStr, "destinations:", destinations.length);
+  console.log("[chatwork-notify] Sending for date:", dateStr, "destinations:", destinations.length, isCatchUp ? "(catch-up)" : "");
   const excludedUids = loadNotificationExcludedUids();
   const shiftsSnap = await db.collection("shifts").where("date", "==", dateStr).where("status", "==", "confirmed").get();
   const entries = [];
