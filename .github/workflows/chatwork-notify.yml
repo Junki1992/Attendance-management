@@ -6,14 +6,17 @@
 name: Chatwork 翌日出勤通知
 on:
   schedule:
-    # 約10分間隔・毎時7,17,27,37,47,57分（:00台の混雑を避ける）。1日144回。
-    - cron: "7,17,27,37,47,57 * * * *"
+    # 約5分間隔（:00/:05 台の混雑を避け 2,7,12… にオフセット）。1日288回。
+    # concurrency で同時実行は1本に限定（旧 */5 + 固定時刻の二重起動は廃止済み）。
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+    # JST 17:00〜23:59（UTC 8〜14時）は5分おきに追加起動し、GitHub のスケジュール遅延・スキップを吸収
+    - cron: "3,8,13,18,23,28,33,38,43,48,53,58 8-14 * * *"
   workflow_dispatch:
 
-# 同時に複数ジョブを走らせない（送信重複・キュー占有の防止）
+# 同時に複数ジョブを走らせない。古い実行がハングすると数時間遅れるため新規実行でキャンセル
 concurrency:
   group: chatwork-notify
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -21,7 +24,7 @@ permissions:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     env:
       # Node.js 20 非推奨対応: 2026年6月以降のデフォルトに先行してオプトイン
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
