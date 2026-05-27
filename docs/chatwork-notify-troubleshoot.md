@@ -35,7 +35,7 @@
 | `Skip: ... before notify time`（定時前） | 当日分は既に通知済みで夕方待ち（正常） | 設定時刻以降のログを確認 |
 | `Catch-up:` | 前夜の取りこぼしを朝〜夕方前に回収 | 前夜の Actions 失敗を調査 |
 | `Skip: already sent for` | そのシフト日付は送信済み | 上記 2 で lastNotification* を確認 |
-| `Overdue:` / Chatwork の【エラー】遅延 | 設定+45分経過しても未送信 | Actions の遅延・停止・Secrets を確認 |
+| `Overdue:` / Chatwork の【エラー】遅延 | 設定+45分経過しても未送信 | Actions ログで **cancelled** が連続していないか確認（旧設定の二重 cron + cancel-in-progress が原因になり得る） |
 | `Sending for date:` のあと `Sent OK:` | 送信処理は成功 | 届いていないなら通知先 ID を確認 |
 | `Send error` / `Chatwork API 403` 等 | API エラー | トークン・ルームID・Chatwork 権限を確認 |
 | 実行自体が少ない・無い | GitHub スケジュール未実行 | リポジトリの更新・Actions 有効化を確認 |

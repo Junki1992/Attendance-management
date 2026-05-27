@@ -177,20 +177,6 @@ async function main() {
     process.env.CHATWORK_ROOM_ID ||
     cfgData?.roomId?.trim();
 
-  if (
-    !plan.isCatchUp &&
-    plan.inEveningWindow &&
-    plan.dateStr === plan.tomorrowStr &&
-    plan.minutesPastNotify >= OVERDUE_ALERT_MINUTES &&
-    normalizeOverdueAlertDay(cfgData) !== plan.todayStr &&
-    firstRoomId
-  ) {
-    const msg = `翌日出勤通知が設定時刻から約${plan.minutesPastNotify}分経過しても未送信です。GitHub Actions の「Chatwork 翌日出勤通知」の実行・遅延を確認してください。`;
-    console.warn("[chatwork-notify] Overdue:", msg);
-    await sendErrorToChatwork(token, firstRoomId, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, msg);
-    await db.doc("settings/chatwork").set({ lastOverdueAlertJstDay: plan.todayStr }, { merge: true });
-  }
-
   const { dateStr, isCatchUp } = plan;
   console.log("[chatwork-notify] Sending for date:", dateStr, "destinations:", destinations.length, isCatchUp ? "(catch-up)" : "");
 
@@ -271,7 +257,6 @@ async function main() {
   if (lastError && firstRoomIdForError) {
     await sendErrorToChatwork(token, firstRoomIdForError, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, lastError);
   }
-  if (lastError) process.exit(1);
 
   if (sentCount > 0) {
     const sentOnJst = jstTodayDateStr(now);
@@ -293,9 +278,31 @@ async function main() {
       "destinations:",
       sentCount
     );
-  } else {
-    console.log("[chatwork-notify] No message sent (all destinations skipped or failed). Not updating lastNotificationDate.");
+    if (lastError) process.exit(1);
+    return;
   }
+
+  const overdueTargetRoom = firstRoomIdForError || firstRoomId;
+  if (shouldAlertOverdue(plan, cfgData) && overdueTargetRoom) {
+    const detail = lastError ? `\n原因: ${lastError}` : "";
+    const msg = `翌日出勤通知が設定時刻から約${plan.minutesPastNotify}分経過しても未送信です。${detail}\nGitHub Actions「Chatwork 翌日出勤通知」のログを確認してください。`;
+    console.warn("[chatwork-notify] Overdue:", msg);
+    await sendErrorToChatwork(token, overdueTargetRoom, process.env.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID, msg);
+    await db.doc("settings/chatwork").set({ lastOverdueAlertJstDay: plan.todayStr }, { merge: true });
+  }
+
+  console.log("[chatwork-notify] No message sent (all destinations skipped or failed). Not updating lastNotificationDate.");
+  if (lastError) process.exit(1);
+}
+
+function shouldAlertOverdue(plan, cfgData) {
+  return (
+    !plan.isCatchUp &&
+    plan.inEveningWindow &&
+    plan.dateStr === plan.tomorrowStr &&
+    plan.minutesPastNotify >= OVERDUE_ALERT_MINUTES &&
+    normalizeOverdueAlertDay(cfgData) !== plan.todayStr
+  );
 }
 
 function normalizeOverdueAlertDay(cfgData) {

@@ -1,22 +1,18 @@
 # スケジュールは UTC。chatwork-notify.js が Firestore の notifyHour（JST）以降なら送信する。
 #
-# 以前は複数の schedule（例: 9:05 の固定と */5）が同一分に重なり、2本同時起動→
-# lastNotificationDate 更新前に並列で送信しうるレースや、キュー詰まりの原因になった。
-# 単一の cron に統一し、concurrency で常に 1 実行に限定する。
+# schedule は1本のみ（複数 cron + cancel-in-progress だと npm ci 中に次ジョブが起動し、
+# 送信完了前にキャンセルされ続けて数時間「未送信」になる）。
 name: Chatwork 翌日出勤通知
 on:
   schedule:
     # 約5分間隔（:00/:05 台の混雑を避け 2,7,12… にオフセット）。1日288回。
-    # concurrency で同時実行は1本に限定（旧 */5 + 固定時刻の二重起動は廃止済み）。
     - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
-    # JST 17:00〜23:59（UTC 8〜14時）は5分おきに追加起動し、GitHub のスケジュール遅延・スキップを吸収
-    - cron: "3,8,13,18,23,28,33,38,43,48,53,58 8-14 * * *"
   workflow_dispatch:
 
-# 同時に複数ジョブを走らせない。古い実行がハングすると数時間遅れるため新規実行でキャンセル
+# 同時実行は1本に限定。キャンセルせずキュー待ち（キャンセルすると送信途中で止まる）
 concurrency:
   group: chatwork-notify
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -24,9 +20,8 @@ permissions:
 jobs:
   notify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
-      # Node.js 20 非推奨対応: 2026年6月以降のデフォルトに先行してオプトイン
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +29,9 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-      - run: npm ci
+      - run: npm ci --prefer-offline
       - run: node scripts/chatwork-notify.js
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
-          # エラー時のメンション先。GitHub Secrets に CHATWORK_ERROR_NOTIFY_ACCOUNT_ID を追加
           CHATWORK_ERROR_NOTIFY_ACCOUNT_ID: ${{ secrets.CHATWORK_ERROR_NOTIFY_ACCOUNT_ID }}
           CHATWORK_NOTIFY_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
