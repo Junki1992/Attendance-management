@@ -5,8 +5,10 @@
 name: Chatwork 翌日出勤通知
 on:
   schedule:
-    # 約5分間隔（:00/:05 台の混雑を避け 2,7,12… にオフセット）。1日288回。
-    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
+    # 18時台（JST=UTC 9時）は毎分実行して到達率を最大化
+    - cron: "* 9 * * *"
+    # それ以外は約5分間隔（:00/:05 台の混雑を避け 2,7,12… にオフセット）
+    - cron: "2,7,12,17,22,27,32,37,42,47,52,57 0-8,10-23 * * *"
   workflow_dispatch:
 
 # 同時実行は1本に限定。キャンセルせずキュー待ち（キャンセルすると送信途中で止まる）
@@ -29,7 +31,13 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-      - run: npm ci --prefer-offline
+      - uses: actions/cache@v4
+        id: node-modules-cache
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node22-modules-${{ hashFiles('package-lock.json') }}
+      - if: steps.node-modules-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefer-offline --no-audit --no-fund
       - run: node scripts/chatwork-notify.js
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
