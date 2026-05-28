@@ -23,15 +23,13 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: "npm"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         id: node-modules-cache
         with:
           path: node_modules
