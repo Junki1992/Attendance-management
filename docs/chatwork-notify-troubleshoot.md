@@ -55,5 +55,5 @@
 |----------|------|
 | Actions が動いているか | 設定時刻前後 2 時間で実行が複数あるか |
 | `CHATWORK_ERROR_NOTIFY_ACCOUNT_ID` | 遅延45分超で管理者に Chatwork 警告が届くか |
-| リポジトリの更新 | 60日以上無更新だとスケジュールが止まることがある |
+| リポジトリの更新 | 60日以上無更新だとスケジュールが `disabled_inactivity` になる。`.github/workflows/keep-alive.yml` が約2週間ごとにコミットして再発を防ぐ。止まっていたら Actions 画面で **Enable workflow** |
 | `lastNotificationJstDay` | 空のまま `lastNotificationDate` だけあると旧データ。2の手順でリセット可 |

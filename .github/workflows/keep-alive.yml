@@ -1,0 +1,42 @@
+# GitHub はリポジトリに約60日コミット等の活動がないと、
+# schedule 付きワークフローを disabled_inactivity にする。
+# このジョブが定期的に空でないコミットを作り、自動停止を防ぐ。
+name: Keep Actions alive
+
+on:
+  schedule:
+    # 毎月 1日・15日 12:00 UTC（JST 21:00）= 約2週間ごと
+    - cron: "0 12 1,15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          # 既定の GITHUB_TOKEN で push できるよう履歴を取得
+          fetch-depth: 1
+      - name: Commit keepalive marker
+        run: |
+          set -euo pipefail
+          mkdir -p .github
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > .github/last-keepalive
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/last-keepalive
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "chore: keep Actions schedules alive"
+          git push origin HEAD:main
