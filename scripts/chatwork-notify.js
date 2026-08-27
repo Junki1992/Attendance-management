@@ -71,6 +71,10 @@ async function buildShiftEntries(db, dateStr, excludedUids) {
   const entries = [];
   for (const { data, uid } of docs) {
     const userData = userMap.get(String(uid)) ?? null;
+    if (userData?.employmentStatus === "retired") {
+      console.log("[chatwork-notify] Skip retired user:", userData?.name || uid);
+      continue;
+    }
     const name = userData?.name || uid;
     const raw = userData?.chatworkAccountId;
     const chatworkAccountId = (raw != null ? String(raw).trim() : "") || undefined;

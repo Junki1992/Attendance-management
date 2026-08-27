@@ -144,7 +144,7 @@ async function createChatworkPrivateRoom(apiToken: string, accountId: string): P
   return json.room_id;
 }
 
-/** 翌日出勤を Chatwork に送信（管理者が手動実行）。通知先一覧に送信 */
+/** 翌日出勤を Chatwork に送信（管理者が手動実行）。通知先一覧に送信。employmentStatus が退職のユーザーは名簿・メンションから除外 */
 export const sendNextDayAttendanceToChatwork = async (): Promise<{ ok: boolean; count: number; error?: string }> => {
   const config = await getChatworkConfig();
   if (!config || config.notificationDestinations.length === 0) {
@@ -174,6 +174,7 @@ export const sendNextDayAttendanceToChatwork = async (): Promise<{ ok: boolean; 
     const userRef = doc(db, "users", data.userId);
     const userSnap = await getDoc(userRef);
     const userData = userSnap.exists() ? userSnap.data() : null;
+    if (userData?.employmentStatus === "retired") continue;
     const name = userData?.name || data.userId;
     const chatworkAccountId = (userData?.chatworkAccountId || "").trim() || undefined;
     entries.push({ name, start, end, chatworkAccountId });
